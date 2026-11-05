@@ -95,7 +95,7 @@ export const projects: Project[] = [
     ],
     status:
       'Phases 1–5 done. Monitoring, patrol and the one-command demo are code-complete and awaiting test.',
-    repo: 'https://github.com/m1ssmee/isro_lunar',
+    repo: 'https://github.com/m1ssmee/ISRO_Lunar',
     cover: ['#0f172a', '#f59e0b'],
   },
   {
@@ -119,7 +119,7 @@ export const projects: Project[] = [
       { label: 'ROC-AUC (macro)', value: '0.990' },
       { label: 'Inference', value: '49.6 ms' },
     ],
-    repo: 'https://github.com/m1ssmee/cropscan',
+    repo: 'https://github.com/m1ssmee/CropScan',
     cover: ['#14532d', '#a3e635'],
   },
 ]
