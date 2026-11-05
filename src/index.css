@@ -144,7 +144,8 @@ kbd {
   color: #cfcac0;
 }
 .is-projecting .corner.tr,
-.is-projecting .corner.br {
+.is-projecting .corner.br,
+.is-projecting .corner.bl {
   opacity: 0;
   pointer-events: none;
 }
