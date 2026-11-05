@@ -15,11 +15,11 @@ export type Ambience = {
 }
 
 export const HOME: Ambience = {
-  base: '#dccdbd',
-  a: '#f4b48a',
-  b: '#b9c6dc',
-  ink: '#1f1b17',
-  accent: '#ff7a45',
+  base: '#d6d9df',
+  a: '#b7c8e8',
+  b: '#ecc9cf',
+  ink: '#15171b',
+  accent: '#ff4a3d',
   dark: false,
   word: profile.name.toUpperCase(),
 }

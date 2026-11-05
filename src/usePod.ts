@@ -1,24 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { cam } from './camera'
 import { contact, projects } from './content'
 import { rig } from './rig'
-import { buzz, click } from './sound'
+import { buzz, click, plugSound, shutterSound } from './sound'
 
 export type MenuId = 'main' | 'projects' | 'contact' | 'settings'
 export type View =
   | { kind: 'menu'; id: MenuId }
   | { kind: 'about' }
   | { kind: 'toolkit' }
+  | { kind: 'camera' }
   | { kind: 'project'; index: number }
 
 export type Frame = { view: View; sel: number; scroll: number; key: number }
 
-export const BODIES = ['sand', 'graphite', 'sage', 'ember'] as const
+export const BODIES = ['clear', 'smoke', 'frost', 'ice'] as const
 export type Body = (typeof BODIES)[number]
 export const BODY_LABEL: Record<Body, string> = {
-  sand: 'Sand',
-  graphite: 'Graphite',
-  sage: 'Sage',
-  ember: 'Ember',
+  clear: 'Clear',
+  smoke: 'Smoke',
+  frost: 'Frost',
+  ice: 'Ice',
 }
 
 export type Settings = { clicks: boolean; body: Body }
@@ -56,13 +58,13 @@ function openExternal(href: string) {
 
 function loadSettings(): Settings {
   try {
-    const s = JSON.parse(localStorage.getItem('pod-settings-v2') || '{}')
+    const s = JSON.parse(localStorage.getItem('pod-settings-v3') || '{}')
     return {
       clicks: s.clicks !== false,
-      body: BODIES.includes(s.body) ? s.body : 'sand',
+      body: BODIES.includes(s.body) ? s.body : 'clear',
     }
   } catch {
-    return { clicks: true, body: 'sand' }
+    return { clicks: true, body: 'clear' }
   }
 }
 
@@ -90,7 +92,7 @@ export function usePod() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('pod-settings-v2', JSON.stringify(settings))
+      localStorage.setItem('pod-settings-v3', JSON.stringify(settings))
     } catch {
       /* storage can be unavailable; settings just won't persist */
     }
@@ -164,17 +166,8 @@ export function usePod() {
             { id: 'projects', label: 'Projects', arrow: true, run: () => push({ kind: 'menu', id: 'projects' }) },
             { id: 'about', label: 'About', arrow: true, run: () => push({ kind: 'about' }) },
             { id: 'toolkit', label: 'Toolkit', arrow: true, run: () => push({ kind: 'toolkit' }) },
+            { id: 'camera', label: 'Camera', arrow: true, run: () => push({ kind: 'camera' }) },
             { id: 'contact', label: 'Contact', arrow: true, run: () => push({ kind: 'menu', id: 'contact' }) },
-            {
-              id: 'shuffle',
-              label: 'Shuffle',
-              run: () => {
-                const cur = state.current.lastPlayed
-                let i = Math.floor(Math.random() * projects.length)
-                if (i === cur) i = (i + 1) % projects.length
-                openProject(i)
-              },
-            },
             { id: 'settings', label: 'Settings', arrow: true, run: () => push({ kind: 'menu', id: 'settings' }) },
           ]
         case 'projects':
@@ -214,6 +207,27 @@ export function usePod() {
     [push, openProject, boot],
   )
 
+  /** The side button: sleep when on, wake when off. */
+  const togglePower = useCallback(() => {
+    rig.powerAt = performance.now()
+    const { power, settings } = state.current
+    if (settings.clicks) plugSound('in', 0.5)
+    buzz(12)
+    if (power === 'off') boot()
+    else {
+      setOpened(null)
+      setPowerState('off')
+    }
+  }, [boot])
+
+  // the camera runs only while its screen is showing
+  const topKind = stack[stack.length - 1].view.kind
+  useEffect(() => {
+    if (topKind === 'camera' && power === 'on') void cam.start()
+    else cam.stop()
+  }, [topKind, power])
+  useEffect(() => () => cam.stop(), [])
+
   /** Jump straight to a project (from a click on its album cover). Opens it if it is already in front. */
   const focusProject = useCallback(
     (i: number) => {
@@ -252,7 +266,11 @@ export function usePod() {
   const act = useCallback(
     (a: Action) => {
       const { stack, opened, power } = state.current
-      if (power === 'off') return
+      if (power === 'off') {
+        // pressing the wheel wakes it up, like any device
+        if (a !== 'scrollUp' && a !== 'scrollDown') togglePower()
+        return
+      }
       if (power === 'booting') {
         // any input skips the boot animation
         setPowerState('on')
@@ -283,7 +301,19 @@ export function usePod() {
           setVolume((x) => Math.max(0, Math.min(1, Math.round((x + d * 0.05) * 100) / 100)))
           setVolumeShownAt(performance.now())
           sound('tick')
+        } else if (v.kind === 'camera') {
+          cam.next(d)
+          setTop({ sel: cam.filter })
+          sound('tick')
         }
+        return
+      }
+
+      if (v.kind === 'camera' && (a === 'select' || a === 'play')) {
+        cam.shoot(performance.now())
+        if (state.current.settings.clicks) shutterSound()
+        buzz(20)
+        setTop({ scroll: top.scroll + 1 }) // re-render so the screen shows the new photo
         return
       }
 
@@ -314,7 +344,10 @@ export function usePod() {
       if (a === 'next' || a === 'prev') {
         const d = a === 'next' ? 1 : -1
         const n = projects.length
-        if (v.kind === 'project') {
+        if (v.kind === 'camera') {
+          cam.next(d)
+          setTop({ sel: cam.filter })
+        } else if (v.kind === 'project') {
           const index = (v.index + d + n) % n
           setDir(d as 1 | -1)
           setLastPlayed(index)
@@ -330,13 +363,14 @@ export function usePod() {
         }
       }
     },
-    [items, pop, push, openProject, sound],
+    [items, pop, push, openProject, sound, togglePower],
   )
 
   return {
     power,
     bootAt,
     setPower,
+    togglePower,
     boot,
     stack,
     dir,

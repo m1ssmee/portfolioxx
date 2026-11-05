@@ -24,6 +24,10 @@ export const rig = {
   pressed: null as Zone | 'center' | null,
   /** 0..1: the port glows while a loose plug hovers near it */
   portGlow: 0,
+  /** light-ring pulses waiting to be shown (one per wheel tick) */
+  ledPulse: 0,
+  /** when the side power button was last pressed (performance.now) */
+  powerAt: -1e9,
 
   /** Called on every scroll detent. dir is +1 / -1. */
   kick(dir: number, strength = 1) {
@@ -32,6 +36,7 @@ export const rig = {
     this.kickYaw += 0.008 * s
     this.kickY -= 0.0035 * s
     this.gust += s
+    this.ledPulse += 1
   },
 
   /** Button press: a small push into the screen. */

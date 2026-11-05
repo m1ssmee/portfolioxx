@@ -1,7 +1,7 @@
 :root {
-  --ink: #1f1b17;
-  --room: #dccdbd;
-  --accent: #ff7a45;
+  --ink: #15171b;
+  --room: #d6d9df;
+  --accent: #ff4a3d;
   --font: 'Inter Variable', system-ui, sans-serif;
   --display: 'Bricolage Grotesque Variable', 'Inter Variable', system-ui, sans-serif;
   --mono: 'JetBrains Mono Variable', ui-monospace, monospace;
@@ -21,7 +21,7 @@ html {
   overscroll-behavior: none;
 }
 body {
-  background: #dccdbd;
+  background: #d6d9df;
   color: var(--ink);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
@@ -157,7 +157,7 @@ kbd {
   z-index: 5;
   left: 52vw;
   right: 5vw;
-  bottom: 9vh;
+  bottom: 15vh; /* clear of the earbuds lying on the floor */
   max-width: 560px;
   pointer-events: none;
 }

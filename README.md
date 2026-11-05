@@ -1,6 +1,6 @@
 # krish. — portfolio
 
-A portfolio you play like a music player. A 3D pod floats in a colour-washed photo studio, with USB-C earphones plugged in. Scroll to spin its wheel. Projects are albums: browse them on an arc of covers, then "play" one to open its live site.
+A portfolio you play like a music player. A see-through 3D pod stands in a colour-washed photo studio, with white wired earbuds plugged into its USB-C port and an ashtray smouldering next to it. Scroll to spin its wheel. Projects are albums: browse them on an arc of covers, then "play" one to open its live site.
 
 ## Run
 
@@ -24,20 +24,26 @@ Room colours per project are in `src/three/ambience.ts`, and the generated cover
 | Select | centre button | Enter / Space | tap centre |
 | Back | MENU | Esc / Backspace | tap MENU |
 | Next / previous album | ⏭ ⏮ | → ← | tap ⏭ ⏮ |
+| Power | side button | P | tap the side button |
 
-- Drag the earbuds or the cable around. They have weight, rest on the floor and don't pass through each other.
-- Pull the plug out of the top of the pod. The OS notices. Carry it back to the port and it clicks back in.
+- Drag the earbuds or the cable around. They have weight, tumble, rest on the floor and don't pass through each other.
+- Pull the plug out of the bottom of the pod. The OS notices. Carry it back to the port and it clicks back in.
+- Camera: a squeezed, low-res selfie cam with Squish, Mono and Night filters. Scroll to change filter, press the centre button to take a photo. Nothing leaves the browser.
+- Click the cigarette for a drag. Move the cursor through the smoke to push it around.
 - Click an album cover to play it.
-- Settings: click sound on/off, and four finishes (Sand, Graphite, Sage, Ember).
+- Settings: click sound on/off, and four finishes for the clear shell (Clear, Smoke, Frost, Ice).
 - `#plain` is a normal scrolling page with the same content, for recruiters and search engines.
 
 ## How it's built
 
 - Vite + React + TypeScript, with three.js through React Three Fiber, drei and postprocessing.
-- `src/three/Pod.tsx`: the pod (aluminium shell, glass front, turned-metal wheel, USB-C port) and its wheel input.
-- `src/three/os.ts`: the pod's OS, drawn into a canvas that becomes the screen texture.
-- `src/three/cable.ts`: earphone physics. Position-based dynamics with stretch and bending constraints, floor friction, self-collision, collision with the pod, and pull-out/plug-in of the plug.
-- `src/three/Earphones.tsx`: the earbuds, inline remote, right-angle USB-C plug and cable meshes.
+- `src/three/Pod.tsx`: the pod (metal frame, clear glass shell, clear wheel, satin centre button, side power button, USB-C port) and its wheel input.
+- `src/three/Internals.tsx` and `src/three/internals.ts`: everything visible through the glass: battery, logic board with chips, shield cans and passives, flex cables, wheel sensor ring with LEDs, screws. All the textures are drawn in code.
+- `src/three/os.ts`: the pod's OS, a monochrome dot-matrix UI drawn into a canvas that becomes the screen texture.
+- `src/camera.ts`: the camera app's feed, squeeze and filters.
+- `src/three/cable.ts`: earphone physics. Position-based dynamics: the cable is a chain of particles with stretch and bending constraints, and the earbuds and plug are rigid bodies kept in shape by shape matching. Floor friction, self-collision, collision with the pod, and pull-out/plug-in of the plug.
+- `src/three/Earphones.tsx`: the earbuds, inline remote, USB-C plug and cable meshes.
+- `src/three/Ashtray.tsx`: the glass ashtray, the cigarette and its smoke.
 - `src/three/Backdrop.tsx`: the studio sweep with drifting colour glows and the giant scrolling type.
 - `src/three/Albums.tsx`: the projects as album covers on an arc.
 - `src/usePod.ts`: menus, navigation and what each button does.

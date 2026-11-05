@@ -118,7 +118,7 @@ export function Backdrop({ d, aspect, focusX, word }: Props) {
     () =>
       new THREE.ShadowMaterial({
         color: '#2a2017',
-        opacity: 0.34,
+        opacity: 0.26,
         transparent: true,
         depthWrite: false,
       }),

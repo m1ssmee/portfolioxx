@@ -8,6 +8,7 @@ import { rig } from '../rig'
 import { focusIndex, type Pod } from '../usePod'
 import { Albums } from './Albums'
 import { ambienceFor } from './ambience'
+import { Ashtray, ASHTRAY_Y } from './Ashtray'
 import { room } from './room'
 import { Backdrop } from './Backdrop'
 import { Earphones } from './Earphones'
@@ -28,6 +29,7 @@ export default function Scene({ pod, onReady }: Props) {
     >
       <PerformanceMonitor onDecline={() => setDpr((d) => Math.max(1, d - 0.5))} />
       <World pod={pod} onReady={onReady} />
+      {import.meta.env.DEV && <DevHooks />}
     </Canvas>
   )
 }
@@ -66,7 +68,7 @@ function World({ pod, onReady }: Props) {
   return (
     <>
       <SoftShadows size={22} samples={12} focus={0.55} />
-      <hemisphereLight args={['#ffffff', '#b7ada1', 0.7]} />
+      <hemisphereLight args={['#ffffff', '#b9bdc5', 0.7]} />
       <directionalLight
         castShadow
         position={[-2.4, 4.2, 3.4]}
@@ -83,18 +85,19 @@ function World({ pod, onReady }: Props) {
       <Environment resolution={256} frames={1}>
         <mesh scale={40}>
           <sphereGeometry args={[1, 32, 16]} />
-          <meshBasicMaterial color="#77716a" side={THREE.BackSide} />
+          <meshBasicMaterial color="#6f737a" side={THREE.BackSide} />
         </mesh>
         <Lightformer form="rect" intensity={3.2} position={[0, 5, 2]} scale={[10, 3]} />
         <Lightformer form="rect" intensity={2.4} position={[-6, 1, 3]} scale={[2, 10]} />
         <Lightformer form="rect" intensity={3.6} position={[6, 0.5, 1]} scale={[1.2, 10]} />
         <Lightformer form="rect" intensity={1} position={[0, -1.5, 7]} scale={[8, 3]} />
-        <Lightformer form="circle" color="#ffd8b8" intensity={2} position={[3, -3, -4]} scale={3} />
+        <Lightformer form="circle" color="#e8eefc" intensity={2} position={[3, -3, -4]} scale={3} />
       </Environment>
 
       <Backdrop d={L.d} aspect={aspect} focusX={L.panX * 0.4} word={amb.word} />
-      <PodModel pod={pod} x={0} split={L.split} accent={amb.accent} groupRef={podRef} />
-      <Earphones podRef={podRef} body={pod.settings.body} sound={pod.settings.clicks} onPlug={pod.setPlugged} />
+      <PodModel pod={pod} x={0} split={L.split} accent={amb.accent} roomA={amb.a} roomB={amb.b} groupRef={podRef} />
+      <Earphones podRef={podRef} sound={pod.settings.clicks} onPlug={pod.setPlugged} />
+      <Ashtray position={[-0.82, ASHTRAY_Y, 0.1]} />
       <Albums show={L.split && pod.opened === null} focus={focus} x={L.albumsX} onPick={pod.focusProject} />
 
       <EffectComposer multisampling={4}>
@@ -105,4 +108,17 @@ function World({ pod, onReady }: Props) {
       </EffectComposer>
     </>
   )
+}
+
+/** Dev only: lets automated tests read renderer stats and sample each finished frame. */
+function DevHooks() {
+  const { gl, scene } = useThree()
+  useEffect(() => {
+    ;(window as unknown as Record<string, unknown>).__three = { gl, scene }
+  }, [gl, scene])
+  useFrame(() => {
+    const probe = (window as unknown as { __probe?: (g: THREE.WebGLRenderer) => void }).__probe
+    if (probe) probe(gl)
+  }, 10)
+  return null
 }

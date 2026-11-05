@@ -1,11 +1,22 @@
+import { RoundedBox } from '@react-three/drei'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import * as THREE from 'three'
 import { rig, type Zone } from '../rig'
 import type { Pod } from '../usePod'
 import { UI } from './fonts'
+import { Internals } from './Internals'
 import { POD_Y } from './layout'
-import { bodyGeometries, buttonGeometry, POD, roundedRect, stadiumGeometry } from './model'
+import {
+  backGlassGeometry,
+  buttonGeometry,
+  frameGeometry,
+  frontGlassGeometry,
+  POD,
+  roundedRect,
+  stadiumGeometry,
+  wheelGeometry,
+} from './model'
 import { PodOS, screenMaterial } from './os'
 import { FINISHES, type Finish } from './palette'
 
@@ -27,8 +38,8 @@ export function roundedPlane(w: number, h: number, r: number) {
   return g
 }
 
-/** Etched labels on the wheel, drawn into its colour map. */
-function wheelFace() {
+/** The printing on the clear wheel (transparent everywhere else). */
+function wheelPrint() {
   const S = 1024
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = S
@@ -46,61 +57,49 @@ function wheelFace() {
   }
   const draw = (f: Finish, pressed: Zone | 'center' | null) => {
     const c = S / 2
-    ctx.fillStyle = f.metal
-    ctx.fillRect(0, 0, S, S)
-    // the turned finish also shows faintly in the colour
-    for (let r = 30; r < c; r += 5) {
-      ctx.strokeStyle = `rgba(255,255,255,${r % 15 === 0 ? 0.045 : 0.02})`
-      ctx.lineWidth = 1.4
-      ctx.beginPath()
-      ctx.arc(c, c, r, 0, Math.PI * 2)
-      ctx.stroke()
-    }
+    ctx.clearRect(0, 0, S, S)
     if (pressed && pressed !== 'center') {
       const from = { menu: -135, next: -45, play: 45, prev: 135 }[pressed]
-      ctx.fillStyle = 'rgba(0,0,0,0.12)'
+      ctx.fillStyle = 'rgba(255,255,255,0.12)'
       ctx.beginPath()
       ctx.moveTo(c, c)
       ctx.arc(c, c, c, (from * Math.PI) / 180, ((from + 90) * Math.PI) / 180)
       ctx.fill()
     }
     ctx.fillStyle = f.ink
+    ctx.globalAlpha = 0.92
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.font = `650 ${S * 0.062}px ${UI}`
-    if ('letterSpacing' in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = `${S * 0.012}px`
-    ctx.fillText('MENU', c + S * 0.006, S * 0.135)
-    const w = S * 0.11
-    icon('M1 1l7 5-7 5zM9 1l7 5-7 5zM17 1h2.4v10H17z', S - S * 0.135, c, w)
-    icon('M4.6 1H7v10H4.6zM15 1l-7 5 7 5zM23 1l-7 5 7 5z', S * 0.135, c, w)
-    icon('M2 1l8 5-8 5zM13 1h2.6v10H13zM18 1h2.6v10H18z', c, S - S * 0.13, w)
+    ctx.font = `650 ${S * 0.058}px ${UI}`
+    if ('letterSpacing' in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = `${S * 0.014}px`
+    ctx.fillText('MENU', c + S * 0.007, S * 0.125)
+    const w = S * 0.1
+    icon('M1 1l7 5-7 5zM9 1l7 5-7 5zM17 1h2.4v10H17z', S - S * 0.125, c, w)
+    icon('M4.6 1H7v10H4.6zM15 1l-7 5 7 5zM23 1l-7 5 7 5z', S * 0.125, c, w)
+    icon('M2 1l8 5-8 5zM13 1h2.6v10H13zM18 1h2.6v10H18z', c, S - S * 0.12, w)
+    // a red dot, because why not
+    ctx.fillStyle = '#ff3b30'
+    ctx.beginPath()
+    ctx.arc(c + S * 0.27, S * 0.255, S * 0.009, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.globalAlpha = 1
     tex.needsUpdate = true
   }
   return { tex, draw }
 }
 
-/** Tangential brushing directions, so the wheel catches light like turned metal. */
-function turnedAnisotropy() {
-  const S = 256
-  const canvas = document.createElement('canvas')
-  canvas.width = canvas.height = S
-  const ctx = canvas.getContext('2d')!
-  const img = ctx.createImageData(S, S)
-  for (let y = 0; y < S; y++)
-    for (let x = 0; x < S; x++) {
-      const u = (x + 0.5) / S - 0.5
-      const v = 0.5 - (y + 0.5) / S
-      const l = Math.hypot(u, v) || 1
-      const k = (y * S + x) * 4
-      img.data[k] = (-v / l) * 127.5 + 127.5
-      img.data[k + 1] = (u / l) * 127.5 + 127.5
-      img.data[k + 2] = 255
-      img.data[k + 3] = 255
-    }
-  ctx.putImageData(img, 0, 0)
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.colorSpace = THREE.NoColorSpace
-  return tex
+function glass(f: Finish, rough: number, thickness: number) {
+  return new THREE.MeshPhysicalMaterial({
+    color: f.glass,
+    transmission: 1,
+    roughness: rough,
+    thickness,
+    ior: 1.5,
+    attenuationColor: f.attenuation,
+    attenuationDistance: f.attenuationDistance,
+    specularIntensity: 1,
+    envMapIntensity: 1.2,
+  })
 }
 
 type Props = {
@@ -108,46 +107,43 @@ type Props = {
   x: number
   split: boolean
   accent: string
+  roomA: string
+  roomB: string
   groupRef: RefObject<THREE.Group | null>
 }
 
-export function PodModel({ pod, x, split, accent, groupRef }: Props) {
+export function PodModel({ pod, x, split, accent, roomA, roomB, groupRef }: Props) {
   const { camera, gl } = useThree()
   const finish = FINISHES[pod.settings.body]
   const os = useMemo(() => new PodOS(), [])
   useEffect(() => {
     if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__os = os
   }, [os])
-  const face = useMemo(() => wheelFace(), [])
+  const print = useMemo(() => wheelPrint(), [])
   const geo = useMemo(() => {
-    const port = stadiumGeometry(0.088, 0.03)
-    const tongue = stadiumGeometry(0.062, 0.008)
-    const glow = stadiumGeometry(0.12, 0.055)
+    const port = stadiumGeometry(0.09, 0.032)
+    port.rotateX(Math.PI)
     return {
-      ...bodyGeometries(),
+      frame: frameGeometry(),
+      front: frontGlassGeometry(),
+      back: backGlassGeometry(),
+      wheel: wheelGeometry(),
       button: buttonGeometry(),
       panel: roundedPlane(POD.display.w, POD.display.h, POD.display.r),
       active: new THREE.PlaneGeometry(POD.active.w, POD.active.h),
       port,
-      tongue,
-      glow,
     }
   }, [])
   const mats = useMemo(() => {
-    const aniso = turnedAnisotropy()
+    const f = FINISHES.clear
     return {
-      glass: new THREE.MeshPhysicalMaterial({ roughness: 0.1, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03 }),
-      metal: new THREE.MeshPhysicalMaterial({ metalness: 1, roughness: 0.35 }),
-      wheel: new THREE.MeshPhysicalMaterial({
-        metalness: 1,
-        roughness: 0.27,
-        map: face.tex,
-        anisotropy: 0.85,
-        anisotropyMap: aniso,
-      }),
-      button: new THREE.MeshPhysicalMaterial({ roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.02 }),
+      frame: new THREE.MeshPhysicalMaterial({ metalness: 1, roughness: 0.32, color: f.frame }),
+      glass: glass(f, f.glassRough, 0.006),
+      acrylic: glass(f, 0.16, 0.007),
+      // a satin button, so it reads as something to press against the clear wheel
+      button: new THREE.MeshPhysicalMaterial({ color: f.button, roughness: 0.36, clearcoat: 0.7, clearcoatRoughness: 0.22 }),
+      print: new THREE.MeshBasicMaterial({ map: print.tex, transparent: true, depthWrite: false }),
       panel: new THREE.MeshPhysicalMaterial({ color: '#020203', roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 }),
-      // reflections on the glass over the display: black base, additive, so only highlights show
       cover: new THREE.MeshStandardMaterial({
         color: '#000000',
         roughness: 0.05,
@@ -155,40 +151,49 @@ export function PodModel({ pod, x, split, accent, groupRef }: Props) {
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
-        envMapIntensity: 2.4,
+        envMapIntensity: 2.2,
       }),
       screen: screenMaterial(os.texture),
-      port: new THREE.MeshBasicMaterial({ color: '#030303' }),
-      tongue: new THREE.MeshStandardMaterial({ color: '#3c3c3e', metalness: 0.6, roughness: 0.4 }),
-      groove: new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.3, depthWrite: false }),
-      glow: new THREE.MeshBasicMaterial({
-        color: '#ffffff',
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        toneMapped: false,
+      lensRing: new THREE.MeshPhysicalMaterial({ color: '#050506', roughness: 0.2, clearcoat: 1 }),
+      lens: new THREE.MeshPhysicalMaterial({
+        color: '#0c1020',
+        roughness: 0.04,
+        metalness: 0.3,
+        clearcoat: 1,
+        iridescence: 1,
+        iridescenceIOR: 1.7,
       }),
+      lensInner: new THREE.MeshStandardMaterial({ color: '#4c525b', metalness: 1, roughness: 0.3 }),
+      port: new THREE.MeshBasicMaterial({ color: '#030303' }),
+      insert: new THREE.MeshStandardMaterial({ color: '#2a2d32', roughness: 0.6 }),
+      red: new THREE.MeshStandardMaterial({ color: '#ff3b30', roughness: 0.4 }),
     }
-  }, [face, os])
+  }, [print, os])
 
   useEffect(() => {
-    mats.glass.color.set(finish.glass)
-    mats.glass.roughness = finish.glassDark ? 0.08 : 0.12
-    mats.metal.color.set(finish.metal)
-    mats.metal.roughness = finish.metalRough
-    mats.wheel.roughness = finish.metalRough - 0.08
+    mats.frame.color.set(finish.frame)
+    mats.frame.roughness = finish.frameRough
+    for (const [m, rough] of [
+      [mats.glass, finish.glassRough],
+      [mats.acrylic, Math.max(0.16, finish.glassRough)],
+    ] as const) {
+      m.color.set(finish.glass)
+      m.attenuationColor.set(finish.attenuation)
+      m.attenuationDistance = finish.attenuationDistance
+      m.roughness = rough
+    }
     mats.button.color.set(finish.button)
-    face.draw(finish, rig.pressed)
-  }, [finish, mats, face])
+    print.draw(finish, rig.pressed)
+  }, [finish, mats, print])
 
   // ------------------------------------------------------------ motion
   const motion = useRef({ x: 0, y: POD_Y, yaw: -0.2, pitch: 0.05, vx: 0, vy: 0, vyaw: 0, vpitch: 0 })
   const wheelRef = useRef<THREE.Group>(null)
   const buttonRef = useRef<THREE.Group>(null)
+  const powerRef = useRef<THREE.Group>(null)
   const lastPressed = useRef<Zone | 'center' | null>(null)
-  const live = useRef({ pod, accent, finish, x, split })
-  live.current = { pod, accent, finish, x, split }
+  const live = useRef({ pod, accent, finish, x, split, roomA, roomB })
+  live.current = { pod, accent, finish, x, split, roomA, roomB }
 
   useFrame((state, dt) => {
     const g = groupRef.current
@@ -199,9 +204,8 @@ export function PodModel({ pod, x, split, accent, groupRef }: Props) {
     const still = rig.reducedMotion
     const px = rig.pointer.x - 0.5
     const py = rig.pointer.y - 0.5
-    const tx = L.x
     const ty = POD_Y + (still ? 0 : Math.sin(t * 0.9) * 0.008)
-    const tyaw = (L.split ? 0.18 : -0.2) + (still ? 0 : px * 0.26 + Math.sin(t * 0.45) * 0.02)
+    const tyaw = (L.split ? 0.18 : -0.22) + (still ? 0 : px * 0.26 + Math.sin(t * 0.45) * 0.02)
     const tpitch = 0.05 + (still ? 0 : py * 0.12)
     m.vpitch += rig.kickPitch
     m.vyaw += rig.kickYaw
@@ -209,7 +213,7 @@ export function PodModel({ pod, x, split, accent, groupRef }: Props) {
     rig.kickPitch = rig.kickYaw = rig.kickY = 0
     const steps = Math.max(1, Math.min(4, Math.round(dt * 60)))
     for (let i = 0; i < steps; i++) {
-      m.vx = (m.vx + (tx - m.x) * 0.035) * 0.86
+      m.vx = (m.vx + (L.x - m.x) * 0.035) * 0.86
       m.vy = (m.vy + (ty - m.y) * 0.05) * 0.84
       m.vyaw = (m.vyaw + (tyaw - m.yaw) * 0.04) * 0.86
       m.vpitch = (m.vpitch + (tpitch - m.pitch) * 0.05) * 0.84
@@ -221,31 +225,36 @@ export function PodModel({ pod, x, split, accent, groupRef }: Props) {
     g.position.set(m.x, m.y, 0)
     g.rotation.set(m.pitch, m.yaw, 0)
 
-    // wheel and button press animation
+    // wheel tilt, button travel, power button travel
     const pr = rig.pressed
     const wg = wheelRef.current
     if (wg) {
-      const rx = pr === 'menu' ? -0.045 : pr === 'play' ? 0.045 : 0
-      const ry = pr === 'next' ? 0.045 : pr === 'prev' ? -0.045 : 0
+      const rx = pr === 'menu' ? -0.04 : pr === 'play' ? 0.04 : 0
+      const ry = pr === 'next' ? 0.04 : pr === 'prev' ? -0.04 : 0
       wg.rotation.x += (rx - wg.rotation.x) * 0.35
       wg.rotation.y += (ry - wg.rotation.y) * 0.35
     }
     const bg = buttonRef.current
-    if (bg) bg.position.z += ((pr === 'center' ? -0.0024 : 0) - bg.position.z) * 0.4
+    if (bg) bg.position.z += ((pr === 'center' ? -0.0013 : 0) - bg.position.z) * 0.45
+    const pw = powerRef.current
+    if (pw) {
+      const down = performance.now() - rig.powerAt < 140
+      pw.position.x += ((down ? -0.0045 : 0) - pw.position.x) * 0.5
+    }
     if (pr !== lastPressed.current) {
-      face.draw(L.finish, pr)
+      print.draw(L.finish, pr)
       lastPressed.current = pr
     }
 
     // the display
     const now = performance.now()
     const p = L.pod
+    os.roomA = L.roomA
+    os.roomB = L.roomB
     os.update(p, now, L.accent)
     const u = mats.screen.uniforms.uPower
     const target = p.power === 'off' ? 0 : p.power === 'booting' ? Math.min(1, (now - p.bootAt) / 420) : 1
     u.value += (target - u.value) * 0.25
-
-    mats.glow.opacity += (rig.portGlow * 0.85 - mats.glow.opacity) * 0.2
   }, -3)
 
   // ------------------------------------------------------------ input
@@ -255,7 +264,7 @@ export function PodModel({ pod, x, split, accent, groupRef }: Props) {
     const wg = wheelRef.current
     if (!wg) return
     const local = wg.worldToLocal(e.point.clone())
-    if (Math.hypot(local.x, local.y) < POD.wheel.button + 0.004) return
+    if (Math.hypot(local.x, local.y) < POD.wheel.hole) return
     e.stopPropagation()
     const zone = zoneOf(Math.atan2(-local.y, local.x))
     const c = new THREE.Vector3()
@@ -326,40 +335,51 @@ export function PodModel({ pod, x, split, accent, groupRef }: Props) {
     if (!drag.current) document.body.style.cursor = c
   }
 
+  const { W, H, FRONT, ZC, display, lens, wheel, power } = POD
+
   return (
     <group ref={groupRef}>
-      <mesh geometry={geo.front} material={[mats.glass, mats.metal]} castShadow receiveShadow />
-      <mesh geometry={geo.back} material={mats.metal} castShadow receiveShadow />
+      {/* the metal frame and the clear shell */}
+      <mesh geometry={geo.frame} material={mats.frame} castShadow receiveShadow />
+      <mesh geometry={geo.front} material={mats.glass} />
+      <mesh geometry={geo.back} material={mats.glass} />
+      <Internals finish={finish} />
 
-      {/* display: black panel, lit area, reflections on the cover glass */}
-      <mesh geometry={geo.panel} material={mats.panel} position={[0, POD.display.y, POD.FRONT + 0.0004]} />
-      <mesh geometry={geo.active} material={mats.screen} position={[0, POD.display.y, POD.FRONT + 0.0008]} />
-      <mesh geometry={geo.panel} material={mats.cover} position={[0, POD.display.y, POD.FRONT + 0.0014]} />
+      {/* display: black panel, lit area, reflections on its cover glass */}
+      <mesh geometry={geo.panel} material={mats.panel} position={[0, display.y, FRONT - 0.0006]} />
+      <mesh geometry={geo.active} material={mats.screen} position={[0, display.y, FRONT - 0.0003]} />
+      <mesh geometry={geo.panel} material={mats.cover} position={[0, display.y, FRONT + 0.0003]} />
 
-      {/* click wheel */}
-      <group ref={wheelRef} position={[0, POD.wheel.y, POD.FRONT]}>
-        <mesh material={mats.groove} position-z={0.0003}>
-          <ringGeometry args={[POD.wheel.r - 0.001, POD.wheel.r + 0.0045, 128]} />
+      {/* punch-hole camera */}
+      <group position={[0, lens.y, FRONT - 0.0001]}>
+        <mesh material={mats.lensRing}>
+          <circleGeometry args={[lens.r, 48]} />
         </mesh>
+        <mesh material={mats.lensInner} position-z={0.0001}>
+          <ringGeometry args={[lens.r * 0.56, lens.r * 0.66, 48]} />
+        </mesh>
+        <mesh material={mats.lens} position-z={0.0002}>
+          <circleGeometry args={[lens.r * 0.56, 48]} />
+        </mesh>
+      </group>
+
+      {/* clear wheel with printed labels, and the clear centre button */}
+      <group ref={wheelRef} position={[0, wheel.y, 0]}>
         <mesh
-          material={mats.wheel}
-          position-z={0.0011}
-          receiveShadow
+          geometry={geo.wheel}
+          material={mats.acrylic}
           onPointerDown={onWheelDown}
           onPointerOver={cursor('grab')}
           onPointerOut={cursor('')}
-        >
-          <circleGeometry args={[POD.wheel.r, 128]} />
-        </mesh>
-        <mesh material={mats.groove} position-z={0.0014}>
-          <ringGeometry args={[POD.wheel.button - 0.0005, POD.wheel.button + 0.0038, 96]} />
+        />
+        <mesh material={mats.print} position-z={FRONT + 0.0018} renderOrder={2}>
+          <ringGeometry args={[wheel.hole, wheel.r, 128]} />
         </mesh>
         <group ref={buttonRef}>
           <mesh
             geometry={geo.button}
             material={mats.button}
-            position-z={0.0014}
-            castShadow
+            position-z={FRONT - 0.0006}
             onPointerDown={onButtonDown}
             onClick={(e) => {
               e.stopPropagation()
@@ -371,12 +391,39 @@ export function PodModel({ pod, x, split, accent, groupRef }: Props) {
         </group>
       </group>
 
-      {/* USB-C port on the top edge */}
-      <group position={[POD.port.x, POD.H / 2, POD.port.z]}>
-        <mesh geometry={geo.port} material={mats.port} position-y={0.0006} />
-        <mesh geometry={geo.tongue} material={mats.tongue} position-y={0.0009} />
-        <mesh geometry={geo.glow} material={mats.glow} position-y={0.0013} />
+      {/* side power button (P on the keyboard presses it too) */}
+      <group ref={powerRef}>
+        <RoundedBox
+          args={[0.014, power.len, 0.026]}
+          radius={0.006}
+          smoothness={3}
+          position={[W / 2 + 0.0025, power.y, ZC]}
+          material={mats.frame}
+          castShadow
+          onClick={(e) => {
+            e.stopPropagation()
+            live.current.pod.togglePower()
+          }}
+          onPointerOver={cursor('pointer')}
+          onPointerOut={cursor('')}
+        />
+        <mesh position={[W / 2 + 0.0098, power.y, ZC]} material={mats.red}>
+          <boxGeometry args={[0.0008, power.len * 0.42, 0.004]} />
+        </mesh>
       </group>
+
+      {/* antenna breaks in the frame, and the USB-C port at the bottom */}
+      {[
+        [W / 2 + 0.0004, 0.43],
+        [W / 2 + 0.0004, -0.38],
+        [-W / 2 - 0.0004, 0.43],
+        [-W / 2 - 0.0004, -0.38],
+      ].map(([x, y], i) => (
+        <mesh key={i} position={[x, y, ZC]} material={mats.insert}>
+          <boxGeometry args={[0.002, 0.006, 0.07]} />
+        </mesh>
+      ))}
+      <mesh geometry={geo.port} material={mats.port} position={[POD.port.x, -H / 2 - 0.0004, POD.port.z]} />
     </group>
   )
 }

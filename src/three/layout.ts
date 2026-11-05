@@ -5,15 +5,16 @@ export const FOV = 25 // vertical field of view: a long lens, like a product sho
 export const FLOOR = -0.64
 export const WALL = -1.05
 export const SWEEP_R = 0.75 // radius of the curve where the floor meets the wall
-export const POD_Y = -0.02
-export const CAM_Y = -0.17
+export const POD_Y = 0.25 // floats high enough for the plug hanging from its bottom edge
+export const CAM_Y = 0.0
 
 const T = Math.tan((FOV * Math.PI) / 360)
 
-/** Distance from camera to the pod's plane so the pod fills about 64% of the height (78% of the width on tall screens). */
+/** Distance from camera to the pod's plane so the pod fills about 57% of the height (72% of the width on tall screens). */
 export function cameraDistance(aspect: number) {
-  const byHeight = 1 / 0.64 / (2 * T)
-  const byWidth = 0.6 / 0.78 / (2 * T * aspect)
+  // a touch smaller on phones, so it clears the name in the corner
+  const byHeight = 1 / (aspect < 0.8 ? 0.53 : 0.57) / (2 * T)
+  const byWidth = 0.6 / 0.72 / (2 * T * aspect)
   return Math.max(byHeight, byWidth)
 }
 

@@ -47,7 +47,7 @@ function describe(pod: Pod) {
 
 export default function App() {
   const pod = usePod()
-  const { act, plain, setPower } = pod
+  const { act, plain, setPower, togglePower } = pod
   const [webgl] = useState(hasWebGL)
   const [fonts, setFonts] = useState(false)
   const [ready, setReady] = useState(false)
@@ -97,6 +97,12 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if ((e.target as HTMLElement)?.closest?.('a, button')) return
+      if (e.key === 'p' || e.key === 'P') {
+        // the side button
+        e.preventDefault()
+        togglePower()
+        return
+      }
       const a = KEYS[e.key]
       if (!a) return
       e.preventDefault()
@@ -104,7 +110,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [act, plain])
+  }, [act, plain, togglePower])
 
   // mouse wheel / trackpad spins the click wheel
   useEffect(() => {
@@ -222,7 +228,9 @@ export default function App() {
           <kbd>scroll</kbd> or <kbd>↑</kbd>
           <kbd>↓</kbd> to spin · <kbd>enter</kbd> select · <kbd>esc</kbd> back
         </span>
-        <span>drag the earbuds · pull the plug</span>
+        <span>
+          <kbd>p</kbd> power · drag the earbuds · pull the plug
+        </span>
       </div>
       <nav className="corner br">
         <a href={`https://github.com/${profile.handle}`} target="_blank" rel="noopener">

@@ -78,3 +78,23 @@ export function buzz(ms: number) {
     }
   }
 }
+
+/** Camera shutter: a quick double click. */
+export function shutterSound(volume = 0.7) {
+  const a = audio()
+  if (!a || !noise || volume <= 0) return
+  for (const [delay, freq, gain] of [
+    [0, 2400, 0.9],
+    [0.07, 1500, 0.6],
+  ]) {
+    const src = a.createBufferSource()
+    src.buffer = noise
+    const f = a.createBiquadFilter()
+    f.type = 'bandpass'
+    f.frequency.value = freq
+    const g = a.createGain()
+    g.gain.value = gain * volume
+    src.connect(f).connect(g).connect(a.destination)
+    src.start(a.currentTime + delay)
+  }
+}

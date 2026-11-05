@@ -62,7 +62,7 @@ export function Albums({ show, focus, x, onPick }: Props) {
       const R = 0.95
       const front = Math.max(0, 1 - Math.abs(slot))
       const tx = L.x + Math.sin(a) * R * 0.9 + (1 - vis) * 1.6
-      const ty = 0.1 + (rig.reducedMotion ? 0 : Math.sin(t * 0.8 + i) * 0.008) - (1 - vis) * 0.3 + front * 0.02
+      const ty = 0.2 + (rig.reducedMotion ? 0 : Math.sin(t * 0.8 + i) * 0.008) - (1 - vis) * 0.3 + front * 0.02
       const tz = (Math.cos(a) - 1) * R + (hover.current === i ? 0.05 : 0) - (1 - vis) * 0.6
       const s = Math.max(0.001, (1 - Math.min(Math.abs(slot), 2.6) * 0.15) * vis)
       g.position.x += (tx - g.position.x) * ease

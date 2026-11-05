@@ -1,23 +1,28 @@
 import * as THREE from 'three'
 
-// Pod dimensions in model units: 0.6 wide, 1 tall, ~0.09 thick. Front glass at z = FRONT.
+// Pod dimensions in model units: 0.6 wide, 1 tall, ~0.09 thick.
+// It's built like a clear phone: a metal frame band, glass front and back, parts inside.
 export const POD = {
   W: 0.6,
   H: 1,
   R: 0.085, // corner radius of the outline
-  FRONT: 0.046,
+  FRONT: 0.046, // outer face of the front glass
   ZC: 0.002, // middle of the body's depth
   HALF_Z: 0.044,
-  display: { y: 0.185, w: 0.52, h: 0.56, r: 0.036 }, // black panel under the glass
-  active: { w: 0.496, h: 0.536, r: 0.026 }, // the lit area
-  wheel: { y: -0.3, r: 0.15, button: 0.056 },
-  port: { x: 0.06, z: 0.02 }, // USB-C on the top edge
+  frame: { t: 0.012, z0: -0.036, z1: 0.04 }, // the metal band and its wall thickness
+  display: { y: 0.176, w: 0.548, h: 0.6, r: 0.066 }, // black panel, flush with the glass
+  active: { w: 0.53, h: 0.582, r: 0.058 }, // the lit area
+  lens: { y: 0.434, r: 0.017 }, // punch-hole camera at the top of the display
+  wheel: { y: -0.312, r: 0.146, hole: 0.058, button: 0.053 },
+  port: { x: 0, z: 0.002 }, // USB-C on the bottom edge
+  power: { y: 0.3, len: 0.09 }, // side button
 }
 
-export function roundedRect(w: number, h: number, r: number) {
-  const s = new THREE.Shape()
-  const x = -w / 2
-  const y = -h / 2
+/** Rounded rectangle centred at (cx, cy). Pass `hole` to wind it the other way. */
+export function roundedRect(w: number, h: number, r: number, cx = 0, cy = 0, hole = false) {
+  const s = hole ? new THREE.Path() : new THREE.Shape()
+  const x = cx - w / 2
+  const y = cy - h / 2
   s.moveTo(x + r, y)
   s.lineTo(x + w - r, y)
   s.absarc(x + w - r, y + r, r, -Math.PI / 2, 0, false)
@@ -27,51 +32,73 @@ export function roundedRect(w: number, h: number, r: number) {
   s.absarc(x + r, y + h - r, r, Math.PI / 2, Math.PI, false)
   s.lineTo(x, y + r)
   s.absarc(x + r, y + r, r, Math.PI, Math.PI * 1.5, false)
-  return s
+  return s as THREE.Shape
 }
 
-/**
- * The body is two extrusions:
- *  - front: a slab whose front cap is the glass (material group 0) with aluminium sides (group 1)
- *  - back: a softly rounded aluminium shell
- */
-export function bodyGeometries() {
-  const { W, H, R } = POD
-  const fb = 0.005
-  const depth = 0.042
-  const front = new THREE.ExtrudeGeometry(roundedRect(W - 2 * fb, H - 2 * fb, R - fb), {
-    depth,
+function slab(shape: THREE.Shape, z0: number, z1: number, bevel: number, segs = 48) {
+  const g = new THREE.ExtrudeGeometry(shape, {
+    depth: z1 - z0 - 2 * bevel,
     bevelEnabled: true,
-    bevelThickness: fb,
-    bevelSize: fb,
-    bevelSegments: 6,
-    curveSegments: 48,
+    bevelThickness: bevel,
+    bevelSize: bevel * 0.9,
+    bevelSegments: 4,
+    curveSegments: segs,
   })
-  front.translate(0, 0, POD.FRONT - depth - fb) // front cap lands on z = FRONT
+  g.translate(0, 0, z0 + bevel)
+  return g
+}
 
-  const bb = 0.036
-  const back = new THREE.ExtrudeGeometry(roundedRect(W - 2 * bb, H - 2 * bb, R - bb), {
-    depth: 0.002,
-    bevelEnabled: true,
-    bevelThickness: 0.034,
-    bevelSize: bb,
-    bevelSegments: 16,
-    curveSegments: 48,
-  })
-  back.translate(0, 0, -0.008)
-  return { front, back }
+/** The metal band around the edge. */
+export function frameGeometry() {
+  const { W, H, R, frame } = POD
+  const b = 0.0035
+  const outer = roundedRect(W - 2 * b * 0.9, H - 2 * b * 0.9, R - b * 0.9)
+  outer.holes.push(roundedRect(W - 2 * frame.t, H - 2 * frame.t, R - frame.t, 0, 0, true))
+  return slab(outer, frame.z0, frame.z1, b)
+}
+
+/** Front glass with windows for the display and the wheel. */
+export function frontGlassGeometry() {
+  const { W, H, R, display, wheel, frame, FRONT } = POD
+  const inset = 0.004
+  const s = roundedRect(W - 2 * inset, H - 2 * inset, R - inset)
+  s.holes.push(roundedRect(display.w + 0.002, display.h + 0.002, display.r, 0, display.y, true))
+  const hole = new THREE.Path()
+  hole.absarc(0, wheel.y, wheel.r + 0.003, 0, Math.PI * 2, true)
+  s.holes.push(hole)
+  return slab(s, frame.z1, FRONT, 0.0016, 64)
+}
+
+/** Back glass. */
+export function backGlassGeometry() {
+  const { W, H, R, frame } = POD
+  const inset = 0.004
+  return slab(roundedRect(W - 2 * inset, H - 2 * inset, R - inset), frame.z0 - 0.006, frame.z0, 0.0016)
+}
+
+/** The clear acrylic wheel: a ring around the centre button. */
+export function wheelGeometry() {
+  const { wheel, frame } = POD
+  const s = new THREE.Shape()
+  s.absarc(0, 0, wheel.r, 0, Math.PI * 2, false)
+  const h = new THREE.Path()
+  h.absarc(0, 0, wheel.hole, 0, Math.PI * 2, true)
+  s.holes.push(h)
+  return slab(s, frame.z1 + 0.0004, POD.FRONT + 0.0016, 0.0016, 96)
 }
 
 /** Domed centre button, facing +z. */
 export function buttonGeometry() {
   const r = POD.wheel.button
   const pts = [
-    new THREE.Vector2(0, 0.0036),
-    new THREE.Vector2(r * 0.5, 0.0034),
-    new THREE.Vector2(r * 0.8, 0.0028),
-    new THREE.Vector2(r * 0.94, 0.0018),
-    new THREE.Vector2(r * 0.99, 0.0008),
+    new THREE.Vector2(0, 0.0042),
+    new THREE.Vector2(r * 0.5, 0.004),
+    new THREE.Vector2(r * 0.8, 0.0033),
+    new THREE.Vector2(r * 0.94, 0.0021),
+    new THREE.Vector2(r * 0.99, 0.001),
     new THREE.Vector2(r, 0),
+    new THREE.Vector2(r, -0.004),
+    new THREE.Vector2(0, -0.004),
   ]
   const g = new THREE.LatheGeometry(pts, 96)
   g.rotateX(Math.PI / 2)

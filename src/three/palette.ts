@@ -1,61 +1,66 @@
 import type { Body } from '../usePod'
 
-/** Materials for each body finish: anodised aluminium shell, glass front, matching earphones. */
+/** A finish: the metal frame, the clear glass shell, and the colour of the board inside. */
 export type Finish = {
-  metal: string // anodised aluminium (shell, wheel, plug housing)
-  metalRough: number
-  glass: string // front glass
-  glassDark: boolean
-  button: string
-  ink: string // etched wheel labels
-  buds: string // earphone plastic and cable
-  tips: string // silicone ear tips
+  frame: string
+  frameRough: number
+  glass: string // base tint of the glass
+  attenuation: string // colour light picks up travelling through it
+  attenuationDistance: number
+  glassRough: number // 0 = crystal clear, higher = frosted
+  pcb: 'black' | 'white'
+  ink: string // printing on the clear wheel
+  button: string // the satin centre button
   swatch: [string, string, string] // light, mid, dark (Settings preview)
 }
 
 export const FINISHES: Record<Body, Finish> = {
-  sand: {
-    metal: '#cbbba7',
-    metalRough: 0.36,
-    glass: '#f2efe9',
-    glassDark: false,
-    button: '#f5f3ee',
-    ink: '#85796a',
-    buds: '#f1f0ec',
-    tips: '#d9d8d3',
-    swatch: ['#e7dccd', '#cbbba7', '#9e8f7c'],
+  clear: {
+    frame: '#c9ccd1',
+    frameRough: 0.32,
+    glass: '#ffffff',
+    attenuation: '#eef5f6',
+    attenuationDistance: 0.9,
+    glassRough: 0.03,
+    pcb: 'black',
+    ink: '#ffffff',
+    button: '#f2f2ef',
+    swatch: ['#f2f4f6', '#c9ccd1', '#8d9198'],
   },
-  graphite: {
-    metal: '#4a4c52',
-    metalRough: 0.34,
-    glass: '#0c0d0f',
-    glassDark: true,
-    button: '#131416',
-    ink: '#a5a7ad',
-    buds: '#1f2023',
-    tips: '#3a3b3f',
-    swatch: ['#73757c', '#4a4c52', '#25262a'],
+  smoke: {
+    frame: '#3f4247',
+    frameRough: 0.34,
+    glass: '#9aa0a8',
+    attenuation: '#50545b',
+    attenuationDistance: 0.09,
+    glassRough: 0.04,
+    pcb: 'black',
+    ink: '#e8eaed',
+    button: '#2b2d31',
+    swatch: ['#7d8189', '#4a4d53', '#232528'],
   },
-  sage: {
-    metal: '#9daf98',
-    metalRough: 0.38,
-    glass: '#eef1ec',
-    glassDark: false,
-    button: '#f3f5f1',
-    ink: '#5f6f5b',
-    buds: '#f1f2ee',
-    tips: '#d5dbd2',
-    swatch: ['#c6d3c1', '#9daf98', '#6f8269'],
+  frost: {
+    frame: '#e6e7ea',
+    frameRough: 0.3,
+    glass: '#ffffff',
+    attenuation: '#f4f6f8',
+    attenuationDistance: 1.2,
+    glassRough: 0.3,
+    pcb: 'white',
+    ink: '#2a2d33',
+    button: '#dfe1e5',
+    swatch: ['#ffffff', '#e6e7ea', '#b9bcc2'],
   },
-  ember: {
-    metal: '#cf6538',
-    metalRough: 0.34,
-    glass: '#0e0e10',
-    glassDark: true,
-    button: '#151517',
-    ink: '#f4c3a8',
-    buds: '#1d1d20',
-    tips: '#38383c',
-    swatch: ['#ec9a74', '#cf6538', '#93401c'],
+  ice: {
+    frame: '#aab3bf',
+    frameRough: 0.3,
+    glass: '#eef8fc',
+    attenuation: '#b7dff0',
+    attenuationDistance: 0.22,
+    glassRough: 0.035,
+    pcb: 'black',
+    ink: '#ffffff',
+    button: '#f4f7f9',
+    swatch: ['#dff1f9', '#aab3bf', '#6f7a88'],
   },
 }
