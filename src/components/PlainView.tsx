@@ -1,11 +1,15 @@
 import { contact, profile, projects, toolkit } from '../content'
 
-export function PlainView() {
+export function PlainView({ notice }: { notice?: string }) {
   return (
     <main className="plain">
-      <a className="plain-back" href="#">
-        ← Back to the pod
-      </a>
+      {notice ? (
+        <p className="plain-notice">{notice}</p>
+      ) : (
+        <a className="plain-back" href="#">
+          ← Back to the pod
+        </a>
+      )}
       <header>
         <h1>{profile.name}</h1>
         <p className="plain-role">{profile.role}</p>

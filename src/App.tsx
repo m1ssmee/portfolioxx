@@ -1,13 +1,15 @@
 import { AnimatePresence } from 'motion/react'
-import { useEffect, useRef } from 'react'
-import { ClickWheel } from './components/ClickWheel'
-import { Earphones } from './components/Earphones'
+import { lazy, Suspense, useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { Caption } from './components/Caption'
 import { PlainView } from './components/PlainView'
-import { Projector } from './components/Projector'
-import { Screen } from './components/Screen'
+import { ProjectPanel } from './components/ProjectPanel'
 import { profile, projects, YEAR } from './content'
 import { rig } from './rig'
-import { usePod, type Action } from './usePod'
+import { ambienceFor } from './three/ambience'
+import { fontsReady } from './three/fonts'
+import { focusIndex, usePod, type Action, type Pod } from './usePod'
+
+const Scene = lazy(() => import('./three/Scene'))
 
 const KEYS: Record<string, Action> = {
   ArrowUp: 'scrollUp',
@@ -20,19 +22,54 @@ const KEYS: Record<string, Action> = {
   ArrowLeft: 'prev',
 }
 
+function hasWebGL() {
+  try {
+    const c = document.createElement('canvas')
+    return !!(c.getContext('webgl2') || c.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
+
+/** One line for screen readers describing what the pod shows. */
+function describe(pod: Pod) {
+  if (pod.power !== 'on') return ''
+  const top = pod.stack[pod.stack.length - 1]
+  const v = top.view
+  if (pod.opened !== null) return `Playing ${projects[pod.opened].title}. Escape to close.`
+  if (v.kind === 'menu') {
+    const it = pod.items(v.id)[top.sel]
+    return it ? `${it.label}${it.value ? `, ${it.value}` : ''}` : ''
+  }
+  if (v.kind === 'project') return `Now playing ${projects[v.index].title}. Enter to open.`
+  return v.kind === 'about' ? 'About' : 'Toolkit'
+}
+
 export default function App() {
   const pod = usePod()
   const { act, plain, setPower } = pod
-  const frameRef = useRef<HTMLDivElement>(null)
-  const deviceRef = useRef<HTMLDivElement>(null)
-  const beamRef = useRef<SVGPolygonElement>(null)
+  const [webgl] = useState(hasWebGL)
+  const [fonts, setFonts] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
+  const markReady = useCallback(() => setReady(true), [])
 
-  // power on shortly after load
   useEffect(() => {
-    if (plain) return
-    const t = window.setTimeout(() => setPower((p) => (p === 'off' ? 'booting' : p)), 350)
+    fontsReady.then(() => setFonts(true))
+  }, [])
+
+  useEffect(() => {
+    const r = () => setVp({ w: window.innerWidth, h: window.innerHeight })
+    window.addEventListener('resize', r)
+    return () => window.removeEventListener('resize', r)
+  }, [])
+
+  // power on once the scene has drawn
+  useEffect(() => {
+    if (!ready || plain) return
+    const t = window.setTimeout(() => setPower('booting'), 300)
     return () => window.clearTimeout(t)
-  }, [plain, setPower])
+  }, [ready, plain, setPower])
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -42,22 +79,24 @@ export default function App() {
     return () => mq.removeEventListener('change', set)
   }, [])
 
-  // register DOM nodes with the animation loop
+  // pointer position drives the parallax
   useEffect(() => {
-    rig.frameEl = frameRef.current
-    rig.deviceEl = deviceRef.current
-    rig.beamEl = beamRef.current
-    return () => {
-      rig.frameEl = rig.deviceEl = null
-      rig.beamEl = null
+    const m = (e: PointerEvent) => {
+      rig.pointer.x = e.clientX / window.innerWidth
+      rig.pointer.y = e.clientY / window.innerHeight
+      rig.pointer.cx = e.clientX
+      rig.pointer.cy = e.clientY
     }
-  }, [plain])
+    window.addEventListener('pointermove', m, { passive: true })
+    return () => window.removeEventListener('pointermove', m)
+  }, [])
 
   // keyboard
   useEffect(() => {
     if (plain) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      if ((e.target as HTMLElement)?.closest?.('a, button')) return
       const a = KEYS[e.key]
       if (!a) return
       e.preventDefault()
@@ -73,7 +112,7 @@ export default function App() {
     let acc = 0
     const STEP = 48
     const onWheel = (e: WheelEvent) => {
-      if ((e.target as Element).closest?.('.projector')) return
+      if ((e.target as Element).closest?.('.panel')) return
       e.preventDefault()
       acc += e.deltaMode === 1 ? e.deltaY * 32 : e.deltaY
       let n = 0
@@ -93,21 +132,20 @@ export default function App() {
     return () => window.removeEventListener('wheel', onWheel)
   }, [act, plain])
 
-  // touch: swipe anywhere outside the wheel to scroll
+  // touch: swipe anywhere that isn't the wheel or an earbud to scroll
   useEffect(() => {
     if (plain) return
     let last: number | null = null
     let acc = 0
     const STEP = 34
     const down = (e: PointerEvent) => {
-      if (e.pointerType !== 'touch') return
-      const t = e.target as Element
-      if (t.closest('.wheel, .projector, a, button')) return
+      if (e.pointerType !== 'touch' || rig.busy) return
+      if ((e.target as Element).closest('.panel, a, button')) return
       last = e.clientY
       acc = 0
     }
     const move = (e: PointerEvent) => {
-      if (last === null || e.pointerType !== 'touch') return
+      if (last === null || e.pointerType !== 'touch' || rig.busy) return
       acc += last - e.clientY
       last = e.clientY
       while (acc >= STEP) {
@@ -132,64 +170,69 @@ export default function App() {
     }
   }, [act, plain])
 
-  if (plain) return <PlainView />
+  if (plain || !webgl) return <PlainView notice={!plain ? 'This browser can’t show the 3D version, so here is the plain one.' : undefined} />
 
-  const projecting = pod.projecting !== null
+  const focus = focusIndex(pod)
+  const amb = ambienceFor(focus)
+  const split = focus !== null && vp.w / vp.h > 1.15
+  const n = projects.length
+  const style = { '--ink': amb.ink, '--room': amb.base, '--accent': amb.accent } as CSSProperties
+
   return (
-    <div className={`stage body-${pod.settings.body} ${projecting ? 'is-projecting' : ''}`}>
-      <div className="backdrop" aria-hidden="true">
-        <span className="giant">{profile.short}</span>
+    <div
+      className={`stage${amb.dark ? ' is-dark' : ''}${split ? ' is-split' : ''}${pod.opened !== null ? ' is-open' : ''}`}
+      style={style}
+    >
+      {fonts && (
+        <Suspense fallback={null}>
+          <Scene pod={pod} onReady={markReady} />
+        </Suspense>
+      )}
+      <div className={`loading${ready ? ' done' : ''}`} aria-hidden={ready}>
+        <span className="loading-dot" />
+        tuning in…
       </div>
-
-      <div className="frame" ref={frameRef}>
-        <div className="pod" ref={deviceRef}>
-          <Screen pod={pod} />
-          <ClickWheel act={act} />
-        </div>
-      </div>
-
-      <svg className={`beam ${projecting ? 'on' : ''}`} aria-hidden="true">
-        <defs>
-          <linearGradient id="beam-g" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0" stopColor="#fff3df" stopOpacity="0.32" />
-            <stop offset="1" stopColor="#fff3df" stopOpacity="0.05" />
-          </linearGradient>
-        </defs>
-        <polygon ref={beamRef} fill="url(#beam-g)" />
-      </svg>
 
       <AnimatePresence>
-        {pod.projecting !== null && (
-          <Projector key="projector" index={pod.projecting} onClose={() => act('menu')} />
+        {split && pod.opened === null && focus !== null && ready && <Caption key="caption" index={focus} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {pod.opened !== null && (
+          <ProjectPanel
+            key="panel"
+            index={pod.opened}
+            onClose={() => pod.setOpened(null)}
+            onPrev={() => pod.focusProject((pod.opened! - 1 + n) % n)}
+            onNext={() => pod.focusProject((pod.opened! + 1) % n)}
+          />
         )}
       </AnimatePresence>
 
-      <Earphones />
-
-      <div className="corner tl">
+      <header className="corner tl">
         <strong>{profile.name}</strong>
         <span>{profile.role}</span>
-      </div>
+      </header>
       <div className="corner tr">
         <span>Portfolio ’{YEAR}</span>
-        <span>{projects.length} projects</span>
+        <span>{n} projects</span>
       </div>
       <div className="corner bl hints">
         <span>
           <kbd>scroll</kbd> or <kbd>↑</kbd>
-          <kbd>↓</kbd> spin
+          <kbd>↓</kbd> to spin · <kbd>enter</kbd> select · <kbd>esc</kbd> back
         </span>
-        <span>
-          <kbd>enter</kbd> select · <kbd>esc</kbd> menu
-        </span>
-        <span>grab the earbuds</span>
+        <span>drag the earbuds · pull the plug</span>
       </div>
-      <div className="corner br">
+      <nav className="corner br">
         <a href={`https://github.com/${profile.handle}`} target="_blank" rel="noopener">
           github/{profile.handle} ↗
         </a>
         <a href="#plain">plain view</a>
-      </div>
+      </nav>
+      <p className="sr-only" aria-live="polite">
+        {describe(pod)}
+      </p>
     </div>
   )
 }

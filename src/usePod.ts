@@ -12,61 +12,88 @@ export type View =
 
 export type Frame = { view: View; sel: number; scroll: number; key: number }
 
-export const BODIES = ['cream', 'graphite', 'ember', 'lunar'] as const
+export const BODIES = ['sand', 'graphite', 'sage', 'ember'] as const
 export type Body = (typeof BODIES)[number]
 export const BODY_LABEL: Record<Body, string> = {
-  cream: 'Cream',
+  sand: 'Sand',
   graphite: 'Graphite',
+  sage: 'Sage',
   ember: 'Ember',
-  lunar: 'Lunar',
 }
 
 export type Settings = { clicks: boolean; body: Body }
 
 export type MenuItem = {
+  id: string
   label: string
   value?: string
   arrow?: boolean
   run: () => void
 }
 
+export type Toast = { text: string; icon: 'earbuds' | 'off'; at: number }
+
 export type Action = 'scrollUp' | 'scrollDown' | 'select' | 'menu' | 'next' | 'prev' | 'play'
 
 let keySeq = 0
 const frame = (view: View, sel = 0): Frame => ({ view, sel, scroll: 0, key: ++keySeq })
 
+/** How far one wheel detent scrolls a text page, in screen-texture pixels. */
+export const SCROLL_STEP = 70
+/** Length of the power-on animation. */
+export const BOOT_MS = 1900
+
+// window.open is blocked in some embeds (sandboxed previews); a real link click is not.
+function openExternal(href: string) {
+  const a = document.createElement('a')
+  a.href = href
+  a.target = '_blank'
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
 function loadSettings(): Settings {
   try {
-    const s = JSON.parse(localStorage.getItem('pod-settings') || '{}')
+    const s = JSON.parse(localStorage.getItem('pod-settings-v2') || '{}')
     return {
       clicks: s.clicks !== false,
-      body: BODIES.includes(s.body) ? s.body : 'cream',
+      body: BODIES.includes(s.body) ? s.body : 'sand',
     }
   } catch {
-    return { clicks: true, body: 'cream' }
+    return { clicks: true, body: 'sand' }
   }
 }
 
 export function usePod() {
-  const [power, setPower] = useState<'off' | 'booting' | 'on'>('off')
+  const [power, setPowerState] = useState<'off' | 'booting' | 'on'>('off')
+  const [bootAt, setBootAt] = useState(0)
   const [stack, setStack] = useState<Frame[]>([frame({ kind: 'menu', id: 'main' })])
   const [dir, setDir] = useState<1 | -1>(1)
-  const [projecting, setProjecting] = useState<number | null>(null)
+  /** project whose panel is open (the album being "played") */
+  const [opened, setOpened] = useState<number | null>(null)
   const [lastPlayed, setLastPlayed] = useState<number | null>(null)
   const [volume, setVolume] = useState(0.6)
   const [volumeShownAt, setVolumeShownAt] = useState(0)
   const [settings, setSettings] = useState<Settings>(loadSettings)
+  const [plugged, setPluggedState] = useState(true)
+  const [toast, setToast] = useState<Toast | null>(null)
   const [plain, setPlain] = useState(() => location.hash === '#plain')
 
   // text screens report how far they can scroll
   const scrollMax = useRef(0)
 
   // keep a ref copy so event handlers always see fresh state
-  const state = useRef({ stack, projecting, settings, volume, power, lastPlayed })
-  state.current = { stack, projecting, settings, volume, power, lastPlayed }
+  const state = useRef({ stack, opened, settings, volume, power, lastPlayed, plugged })
+  state.current = { stack, opened, settings, volume, power, lastPlayed, plugged }
 
   useEffect(() => {
-    localStorage.setItem('pod-settings', JSON.stringify(settings))
+    try {
+      localStorage.setItem('pod-settings-v2', JSON.stringify(settings))
+    } catch {
+      /* storage can be unavailable; settings just won't persist */
+    }
   }, [settings])
 
   useEffect(() => {
@@ -75,10 +102,33 @@ export function usePod() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  const setPower = useCallback((p: 'off' | 'booting' | 'on') => {
+    if (p === 'booting') setBootAt(performance.now())
+    setPowerState(p)
+  }, [])
+
+  // the boot sequence finishes by itself; any input skips it (see act)
+  useEffect(() => {
+    if (power !== 'booting') return
+    const t = window.setTimeout(() => setPowerState('on'), rig.reducedMotion ? 700 : BOOT_MS)
+    return () => window.clearTimeout(t)
+  }, [power, bootAt])
+
   const sound = useCallback((kind: 'tick' | 'press') => {
     const { settings, volume } = state.current
     if (settings.clicks) click(kind, kind === 'tick' ? volume : Math.max(0.3, volume))
     buzz(kind === 'tick' ? 4 : 10)
+  }, [])
+
+  /** Called by the 3D scene when the earphones are pulled out or clicked back in. */
+  const setPlugged = useCallback((v: boolean) => {
+    if (state.current.plugged === v) return
+    setPluggedState(v)
+    setToast({
+      text: v ? 'Earphones connected' : 'Earphones disconnected',
+      icon: v ? 'earbuds' : 'off',
+      at: performance.now(),
+    })
   }, [])
 
   const push = useCallback((view: View, sel = 0) => {
@@ -100,23 +150,24 @@ export function usePod() {
   )
 
   const boot = useCallback(() => {
-    setProjecting(null)
+    setOpened(null)
     setDir(1)
     setStack([frame({ kind: 'menu', id: 'main' })])
     setPower('booting')
-  }, [])
+  }, [setPower])
 
   const items = useCallback(
     (id: MenuId): MenuItem[] => {
       switch (id) {
         case 'main':
           return [
-            { label: 'Projects', arrow: true, run: () => push({ kind: 'menu', id: 'projects' }) },
-            { label: 'About', arrow: true, run: () => push({ kind: 'about' }) },
-            { label: 'Toolkit', arrow: true, run: () => push({ kind: 'toolkit' }) },
-            { label: 'Contact', arrow: true, run: () => push({ kind: 'menu', id: 'contact' }) },
+            { id: 'projects', label: 'Projects', arrow: true, run: () => push({ kind: 'menu', id: 'projects' }) },
+            { id: 'about', label: 'About', arrow: true, run: () => push({ kind: 'about' }) },
+            { id: 'toolkit', label: 'Toolkit', arrow: true, run: () => push({ kind: 'toolkit' }) },
+            { id: 'contact', label: 'Contact', arrow: true, run: () => push({ kind: 'menu', id: 'contact' }) },
             {
-              label: 'Shuffle Projects',
+              id: 'shuffle',
+              label: 'Shuffle',
               run: () => {
                 const cur = state.current.lastPlayed
                 let i = Math.floor(Math.random() * projects.length)
@@ -124,38 +175,38 @@ export function usePod() {
                 openProject(i)
               },
             },
-            { label: 'Settings', arrow: true, run: () => push({ kind: 'menu', id: 'settings' }) },
-            ...(state.current.lastPlayed !== null
-              ? [{ label: 'Now Playing', arrow: true, run: () => openProject(state.current.lastPlayed!) }]
-              : []),
+            { id: 'settings', label: 'Settings', arrow: true, run: () => push({ kind: 'menu', id: 'settings' }) },
           ]
         case 'projects':
-          return projects.map((p, i) => ({ label: p.title, arrow: true, run: () => openProject(i) }))
+          return projects.map((p, i) => ({ id: p.slug, label: p.title, arrow: true, run: () => openProject(i) }))
         case 'contact':
           return [
             ...contact.map((c) => ({
+              id: c.label.toLowerCase(),
               label: c.label,
               value: c.value,
-              run: () => window.open(c.href, '_blank', 'noopener'),
+              run: () => openExternal(c.href),
             })),
-            { label: 'Plain view', arrow: true, run: () => (location.hash = 'plain') },
+            { id: 'plain', label: 'Plain view', arrow: true, run: () => (location.hash = 'plain') },
           ]
         case 'settings': {
           const s = state.current.settings
           return [
             {
-              label: 'Clicker',
+              id: 'clicks',
+              label: 'Click sound',
               value: s.clicks ? 'On' : 'Off',
               run: () => setSettings((x) => ({ ...x, clicks: !x.clicks })),
             },
             {
-              label: 'Body',
+              id: 'finish',
+              label: 'Finish',
               value: BODY_LABEL[s.body],
               run: () =>
                 setSettings((x) => ({ ...x, body: BODIES[(BODIES.indexOf(x.body) + 1) % BODIES.length] })),
             },
-            { label: 'Restart', run: boot },
-            { label: 'Plain view', arrow: true, run: () => (location.hash = 'plain') },
+            { id: 'restart', label: 'Restart', run: boot },
+            { id: 'plain', label: 'Plain view', arrow: true, run: () => (location.hash = 'plain') },
           ]
         }
       }
@@ -163,13 +214,48 @@ export function usePod() {
     [push, openProject, boot],
   )
 
+  /** Jump straight to a project (from a click on its album cover). Opens it if it is already in front. */
+  const focusProject = useCallback(
+    (i: number) => {
+      const { stack, opened } = state.current
+      const top = stack[stack.length - 1]
+      const v = top.view
+      sound('press')
+      if (opened !== null) {
+        setOpened(i)
+        setLastPlayed(i)
+        return
+      }
+      if (v.kind === 'menu' && v.id === 'projects') {
+        if (top.sel === i) {
+          // clicking the album in front plays it
+          openProject(i)
+          setOpened(i)
+        } else setStack((s) => [...s.slice(0, -1), { ...s[s.length - 1], sel: i }])
+        return
+      }
+      if (v.kind === 'project') {
+        if (v.index === i) {
+          setOpened(i)
+          return
+        }
+        setDir(i > v.index ? 1 : -1)
+        setLastPlayed(i)
+        setStack((s) => [...s.slice(0, -1), frame({ kind: 'project', index: i })])
+        return
+      }
+      openProject(i)
+    },
+    [openProject, sound],
+  )
+
   const act = useCallback(
     (a: Action) => {
-      const { stack, projecting, power } = state.current
+      const { stack, opened, power } = state.current
       if (power === 'off') return
       if (power === 'booting') {
         // any input skips the boot animation
-        setPower('on')
+        setPowerState('on')
         return
       }
       const top = stack[stack.length - 1]
@@ -188,7 +274,7 @@ export function usePod() {
             sound('tick')
           }
         } else if (v.kind === 'about' || v.kind === 'toolkit') {
-          const scroll = Math.max(0, Math.min(scrollMax.current, top.scroll + d * 28))
+          const scroll = Math.max(0, Math.min(scrollMax.current, top.scroll + d * SCROLL_STEP))
           if (scroll !== top.scroll) {
             setTop({ scroll })
             sound('tick')
@@ -205,7 +291,7 @@ export function usePod() {
       rig.bump()
 
       if (a === 'menu') {
-        if (projecting !== null) setProjecting(null)
+        if (opened !== null) setOpened(null)
         else pop()
         return
       }
@@ -220,20 +306,23 @@ export function usePod() {
           }
           items(v.id)[top.sel]?.run()
         } else if (v.kind === 'project') {
-          setProjecting((p) => (p === v.index ? null : v.index))
+          setOpened((p) => (p === v.index ? null : v.index))
         }
         return
       }
 
       if (a === 'next' || a === 'prev') {
         const d = a === 'next' ? 1 : -1
+        const n = projects.length
         if (v.kind === 'project') {
-          const n = projects.length
           const index = (v.index + d + n) % n
           setDir(d as 1 | -1)
           setLastPlayed(index)
           setStack((s) => [...s.slice(0, -1), frame({ kind: 'project', index })])
-          if (projecting !== null) setProjecting(index)
+          if (opened !== null) setOpened(index)
+        } else if (v.kind === 'menu' && v.id === 'projects') {
+          // skip through the albums without leaving the list
+          setTop({ sel: (top.sel + d + n) % n })
         } else if (a === 'next' && v.kind === 'menu') {
           items(v.id)[top.sel]?.run()
         } else if (a === 'prev') {
@@ -246,21 +335,35 @@ export function usePod() {
 
   return {
     power,
+    bootAt,
     setPower,
     boot,
     stack,
     dir,
-    projecting,
-    setProjecting,
+    opened,
+    setOpened,
     lastPlayed,
     volume,
     volumeShownAt,
     settings,
+    plugged,
+    setPlugged,
+    toast,
     items,
     act,
+    focusProject,
     scrollMax,
     plain,
   }
 }
 
 export type Pod = ReturnType<typeof usePod>
+
+/** The project the room is "about" right now (selected album, playing, or open), if any. */
+export function focusIndex(pod: Pick<Pod, 'stack' | 'opened'>): number | null {
+  if (pod.opened !== null) return pod.opened
+  const top = pod.stack[pod.stack.length - 1]
+  if (top.view.kind === 'project') return top.view.index
+  if (top.view.kind === 'menu' && top.view.id === 'projects') return top.sel
+  return null
+}

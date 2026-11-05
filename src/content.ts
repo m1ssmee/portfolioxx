@@ -24,8 +24,8 @@ export type Project = {
 export const YEAR = String(new Date().getFullYear() % 100)
 
 export const profile = {
-  name: 'Santosh P.',
-  short: 'santosh',
+  name: 'Krish P.',
+  short: 'krish',
   handle: 'm1ssmee',
   role: 'AI engineer · builder',
   tagline:
