@@ -13,7 +13,7 @@ import {
   SCREWS,
   sensorTextures,
   shieldTextures,
-} from './internals'
+} from './circuitry'
 import { POD } from './model'
 import type { Finish } from './palette'
 
