@@ -535,3 +535,11 @@ kbd {
 .plain-tk dd {
   margin: 0;
 }
+
+.plain-why {
+  display: block;
+  margin-top: 4px;
+  font: 500 11px var(--mono);
+  opacity: 0.6;
+  word-break: break-word;
+}

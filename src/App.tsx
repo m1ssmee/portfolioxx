@@ -54,8 +54,11 @@ export default function App() {
   const pod = usePod()
   const { act, plain, setPower, togglePower } = pod
   const [webgl] = useState(hasWebGL)
-  const [failed, setFailed] = useState(false) // the 3D view crashed or lost its GPU context for good
-  const fail = useCallback(() => setFailed(true), [])
+  // why the 3D view gave up, if it did: shown in small print so it can be reported
+  const [failed, setFailed] = useState<string | null>(null)
+  const fail = useCallback((why: unknown) => {
+    setFailed((prev) => prev ?? (why instanceof Error ? why.message : String(why)).slice(0, 160))
+  }, [])
   const [fonts, setFonts] = useState(false)
   const [ready, setReady] = useState(false)
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
@@ -183,7 +186,10 @@ export default function App() {
     }
   }, [act, plain])
 
-  if (plain || !webgl || failed) return <PlainView notice={!plain ? FALLBACK_NOTICE : undefined} />
+  if (plain || !webgl || failed) {
+    const why = !webgl ? 'WebGL 2 is not available' : failed
+    return <PlainView notice={!plain ? FALLBACK_NOTICE : undefined} detail={!plain ? (why ?? undefined) : undefined} />
+  }
 
   const focus = focusIndex(pod)
   const amb = ambienceFor(focus)

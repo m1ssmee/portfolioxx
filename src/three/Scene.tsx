@@ -24,7 +24,7 @@ const LITE =
   typeof window !== 'undefined' &&
   (window.matchMedia('(pointer: coarse)').matches || Math.min(window.screen.width, window.screen.height) < 600)
 
-export default function Scene({ pod, onReady, onFail }: Props & { onFail: () => void }) {
+export default function Scene({ pod, onReady, onFail }: Props & { onFail: (why: string) => void }) {
   const [dpr, setDpr] = useState(() => Math.min(LITE ? 1.5 : 2, window.devicePixelRatio || 1))
   return (
     <Canvas
@@ -43,7 +43,7 @@ export default function Scene({ pod, onReady, onFail }: Props & { onFail: () => 
 }
 
 /** If the GPU context is lost and doesn't come back, give up on 3D instead of leaving an empty canvas. */
-function ContextWatch({ onFail }: { onFail: () => void }) {
+function ContextWatch({ onFail }: { onFail: (why: string) => void }) {
   const gl = useThree((s) => s.gl)
   useEffect(() => {
     const canvas = gl.domElement
@@ -51,7 +51,7 @@ function ContextWatch({ onFail }: { onFail: () => void }) {
     const check = () => {
       // a hidden tab may legitimately wait for its context: only judge while it's on screen
       if (document.visibilityState === 'hidden') timer = window.setTimeout(check, 1000)
-      else if (gl.getContext().isContextLost()) onFail()
+      else if (gl.getContext().isContextLost()) onFail('the graphics context was lost and did not come back')
     }
     const lost = () => {
       window.clearTimeout(timer)
