@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { rig } from '../rig'
 import { FLOOR } from './layout'
 import { room } from './room'
+import { quality } from './quality'
 
 const NOTCHES = [-0.55, -0.55 + (Math.PI * 2) / 3, -0.55 + (Math.PI * 4) / 3]
 
@@ -96,17 +97,29 @@ export function Ashtray({ position }: { position: [number, number, number] }) {
   const geo = useMemo(() => ashtrayGeometry(), [])
   const mats = useMemo(
     () => ({
-      glass: new THREE.MeshPhysicalMaterial({
-        color: '#ffffff',
-        transmission: 1,
-        roughness: 0.04,
-        thickness: 0.05,
-        ior: 1.52,
-        attenuationColor: '#cfe6e0',
-        attenuationDistance: 0.32,
-        specularIntensity: 1,
-        envMapIntensity: 1.3,
-      }),
+      glass:
+        quality.tier === 'high'
+          ? new THREE.MeshPhysicalMaterial({
+              color: '#ffffff',
+              transmission: 1,
+              roughness: 0.04,
+              thickness: 0.05,
+              ior: 1.52,
+              attenuationColor: '#cfe6e0',
+              attenuationDistance: 0.32,
+              specularIntensity: 1,
+              envMapIntensity: 1.3,
+            })
+          : // light budget: tinted see-through with strong reflections instead of refraction
+            new THREE.MeshPhysicalMaterial({
+              color: '#c4d9d3',
+              transparent: true,
+              opacity: 0.5,
+              roughness: 0.04,
+              clearcoat: 1,
+              envMapIntensity: 3.5,
+              depthWrite: false,
+            }),
       paper: new THREE.MeshStandardMaterial({ color: '#f3f1ec', roughness: 0.85 }),
       filter: new THREE.MeshStandardMaterial({ map: filterTexture(), roughness: 0.8 }),
       char: new THREE.MeshStandardMaterial({ color: '#2b2622', roughness: 1 }),

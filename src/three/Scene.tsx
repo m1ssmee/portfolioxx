@@ -1,9 +1,10 @@
 import { Environment, Lightformer, PerformanceMonitor, SoftShadows } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Bloom, EffectComposer, Noise, ToneMapping, Vignette } from '@react-three/postprocessing'
+import { Bloom, EffectComposer, FXAA, Noise, ToneMapping, Vignette } from '@react-three/postprocessing'
 import { BlendFunction, ToneMappingMode } from 'postprocessing'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { rememberLowTier, type Tier } from '../gpu'
 import { rig } from '../rig'
 import { focusIndex, type Pod } from '../usePod'
 import { Albums } from './Albums'
@@ -14,36 +15,84 @@ import { Backdrop } from './Backdrop'
 import { Earphones } from './Earphones'
 import { CAM_Y, FOV, layoutFor } from './layout'
 import { PodModel } from './Pod'
+import { quality } from './quality'
 
 type Props = { pod: Pod; onReady: () => void }
+type SceneProps = Props & {
+  tier: Tier
+  onFail: (why: string) => void // the 3D view can't go on: show the plain one
+  onStruggle: () => void // rebuild with the light budget
+}
 
-// Phones and tablets get a lighter GPU budget: fewer pixels, no multisampled buffers and a smaller
-// shadow map. Together that roughly halves the graphics memory, which matters because a mobile
-// browser that runs out simply drops the page.
-const LITE =
-  typeof window !== 'undefined' &&
-  (window.matchMedia('(pointer: coarse)').matches || Math.min(window.screen.width, window.screen.height) < 600)
+// What each budget costs. 'low' is for built-in laptop graphics, phones and software renderers:
+// no second render pass for refracting glass, plain soft shadows instead of contact-hardening
+// ones, no multisampled buffers (a cheap edge-smoothing pass instead) and fewer pixels.
+const BUDGET = {
+  high: { maxDpr: 2, minDpr: 1, msaa: 4, shadowMap: 2048 },
+  low: { maxDpr: 1.25, minDpr: 0.75, msaa: 0, shadowMap: 1024 },
+} as const
 
-export default function Scene({ pod, onReady, onFail }: Props & { onFail: (why: string) => void }) {
-  const [dpr, setDpr] = useState(() => Math.min(LITE ? 1.5 : 2, window.devicePixelRatio || 1))
+export default function Scene({ pod, tier, onReady, onFail, onStruggle }: SceneProps) {
+  quality.tier = tier // read by the components below while they build their materials
+  const B = BUDGET[tier]
+  const [dpr, setDpr] = useState(() => Math.min(B.maxDpr, window.devicePixelRatio || 1))
+  // nothing is drawn until every shader is compiled, so a slow laptop shows the loading line
+  // instead of freezing on the first frame
+  const [loop, setLoop] = useState<'never' | 'always'>('never')
+  const start = useCallback(() => setLoop('always'), [])
+  const since = useRef(0)
+  const decline = () => {
+    if (performance.now() - since.current < 4000) return // the first seconds are always slow
+    if (dpr > B.minDpr) setDpr((d) => Math.max(B.minDpr, d - 0.25))
+    else if (tier === 'high') onStruggle()
+  }
   return (
     <Canvas
       className="scene"
       shadows
       dpr={dpr}
+      frameloop={loop}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
       camera={{ fov: FOV, near: 0.1, far: 40, position: [0, CAM_Y, 3.4] }}
     >
-      <PerformanceMonitor onDecline={() => setDpr((d) => Math.max(1, d - 0.5))} />
-      <ContextWatch onFail={onFail} />
+      <Warmup onDone={start} since={since} />
+      {loop === 'always' && <PerformanceMonitor onDecline={decline} />}
+      <ContextWatch tier={tier} onFail={onFail} onStruggle={onStruggle} />
       <World pod={pod} onReady={onReady} />
       {import.meta.env.DEV && <DevHooks />}
     </Canvas>
   )
 }
 
-/** If the GPU context is lost and doesn't come back, give up on 3D instead of leaving an empty canvas. */
-function ContextWatch({ onFail }: { onFail: (why: string) => void }) {
+/** Compile every shader up front, in the background where the browser supports it, then start drawing. */
+function Warmup({ onDone, since }: { onDone: () => void; since: { current: number } }) {
+  const { gl, scene, camera } = useThree()
+  useEffect(() => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      since.current = performance.now()
+      onDone()
+    }
+    const limit = window.setTimeout(finish, 8000) // never wait forever
+    // one frame later, so every component has mounted and built its materials
+    const raf = requestAnimationFrame(() => {
+      gl.compileAsync(scene, camera).then(finish, finish)
+    })
+    return () => {
+      window.clearTimeout(limit)
+      cancelAnimationFrame(raf)
+    }
+  }, [gl, scene, camera, onDone, since])
+  return null
+}
+
+/**
+ * If the GPU drops the context: on the full budget, rebuild with the light one; on the light one,
+ * wait for it to come back, and if it doesn't, give up on 3D instead of leaving an empty canvas.
+ */
+function ContextWatch({ tier, onFail, onStruggle }: { tier: Tier; onFail: (why: string) => void; onStruggle: () => void }) {
   const gl = useThree((s) => s.gl)
   useEffect(() => {
     const canvas = gl.domElement
@@ -54,8 +103,10 @@ function ContextWatch({ onFail }: { onFail: (why: string) => void }) {
       else if (gl.getContext().isContextLost()) onFail('the graphics context was lost and did not come back')
     }
     const lost = () => {
+      rememberLowTier()
       window.clearTimeout(timer)
-      timer = window.setTimeout(check, 4000)
+      if (tier === 'high') onStruggle()
+      else timer = window.setTimeout(check, 4000)
     }
     const restored = () => window.clearTimeout(timer)
     canvas.addEventListener('webglcontextlost', lost)
@@ -65,7 +116,7 @@ function ContextWatch({ onFail }: { onFail: (why: string) => void }) {
       canvas.removeEventListener('webglcontextlost', lost)
       canvas.removeEventListener('webglcontextrestored', restored)
     }
-  }, [gl, onFail])
+  }, [gl, tier, onFail, onStruggle])
   return null
 }
 
@@ -89,26 +140,21 @@ function World({ pod, onReady }: Props) {
     camera.position.z += (L.d - camera.position.z) * k
   }, -4)
 
-  useEffect(() => {
-    let n = 0
-    let raf = 0
-    const tick = () => {
-      if (++n > 3) onReady()
-      else raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [onReady])
+  // ready once a few real frames are on screen
+  const drawn = useRef(0)
+  useFrame(() => {
+    if (drawn.current <= 3 && ++drawn.current === 3) onReady()
+  })
 
   return (
     <>
-      <SoftShadows size={22} samples={12} focus={0.55} />
+      {quality.tier === 'high' && <SoftShadows size={22} samples={12} focus={0.55} />}
       <hemisphereLight args={['#ffffff', '#b9bdc5', 0.7]} />
       <directionalLight
         castShadow
         position={[-2.4, 4.2, 3.4]}
         intensity={2.5}
-        shadow-mapSize={LITE ? [1024, 1024] : [2048, 2048]}
+        shadow-mapSize={[BUDGET[quality.tier].shadowMap, BUDGET[quality.tier].shadowMap]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
       >
@@ -135,9 +181,10 @@ function World({ pod, onReady }: Props) {
       <Ashtray position={[-0.82, ASHTRAY_Y, 0.1]} />
       <Albums show={L.split && pod.opened === null} focus={focus} x={L.albumsX} onPick={pod.focusProject} />
 
-      <EffectComposer multisampling={LITE ? 0 : 4}>
+      <EffectComposer multisampling={BUDGET[quality.tier].msaa}>
         <Bloom mipmapBlur intensity={0.35} luminanceThreshold={1} luminanceSmoothing={0.2} />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
+        {quality.tier === 'low' ? <FXAA /> : <></>}
         <Vignette offset={0.3} darkness={0.42} />
         <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.08} />
       </EffectComposer>

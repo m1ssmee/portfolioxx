@@ -1,11 +1,12 @@
 // The pod's operating system, drawn into a canvas that becomes the screen texture.
-// Monochrome: black, white and greys, dot-matrix type for the big things, a red dot for what's selected.
+// A colourful music-player look: each screen is washed in the colours of the cover in focus,
+// rows sit on a frosted highlight that glides between them, and the menu has little app tiles.
 import * as THREE from 'three'
 import { cam, FILTERS } from '../camera'
 import { profile, projects, toolkit, YEAR } from '../content'
 import { BODIES, BOOT_MS, type Frame, type MenuId, type MenuItem, type Pod } from '../usePod'
 import { cover } from './art'
-import { fontsReady, UI } from './fonts'
+import { DISPLAY, fontsReady, UI } from './fonts'
 import { POD } from './model'
 import { FINISHES } from './palette'
 
@@ -19,18 +20,25 @@ export const LENS = {
   r: POD.lens.r * PX,
 }
 
-const DOT = '"Doto Variable", "JetBrains Mono Variable", monospace'
 const MONO = '"JetBrains Mono Variable", ui-monospace, monospace'
 const W = '#ffffff'
-const G1 = 'rgba(255,255,255,0.62)'
-const G2 = 'rgba(255,255,255,0.36)'
-const G3 = 'rgba(255,255,255,0.13)'
-const RED = '#ff3b30'
-const PAD = 58
+const G1 = 'rgba(255,255,255,0.66)'
+const G2 = 'rgba(255,255,255,0.42)'
+const G3 = 'rgba(255,255,255,0.16)'
+const INK = '#0c0d11' // the screen's base colour
+const GREEN = '#30d158'
+const PAD = 54
 
 const easeOut = (t: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3)
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
 type Ctx = CanvasRenderingContext2D
+
+function rgba(hex: string, a: number) {
+  const h = hex.replace('#', '')
+  const full = h.length === 3 ? [...h].map((c) => c + c).join('') : h.slice(0, 6)
+  const n = parseInt(full, 16) || 0
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
+}
 
 function wrap(ctx: Ctx, text: string, maxW: number) {
   const words = text.split(/\s+/)
@@ -48,75 +56,191 @@ function wrap(ctx: Ctx, text: string, maxW: number) {
   return out
 }
 
-function dot(ctx: Ctx, x: number, y: number, r: number, color: string) {
-  ctx.fillStyle = color
+function pill(ctx: Ctx, x: number, y: number, w: number, h: number, r: number, fill: string, stroke?: string) {
   ctx.beginPath()
-  ctx.arc(x, y, r, 0, Math.PI * 2)
+  ctx.roundRect(x, y, w, h, r)
+  ctx.fillStyle = fill
   ctx.fill()
+  if (stroke) {
+    ctx.strokeStyle = stroke
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
 }
 
-/** Thin line icons. */
-function icon(ctx: Ctx, name: string, x: number, y: number, s: number, color = W) {
+/** Small glyphs: the menu tiles, the transport controls and the status bar. */
+function glyph(ctx: Ctx, name: string, x: number, y: number, s: number, color = W) {
   ctx.save()
   ctx.translate(x, y)
   ctx.strokeStyle = color
   ctx.fillStyle = color
-  ctx.lineWidth = Math.max(2, s * 0.08)
+  ctx.lineWidth = Math.max(2.5, s * 0.1)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   const u = s / 2
   ctx.beginPath()
-  if (name === 'earbuds') {
-    for (const sx of [-1, 1]) {
-      ctx.beginPath()
-      ctx.arc(sx * u * 0.42, -u * 0.3, u * 0.3, 0, Math.PI * 2)
-      ctx.moveTo(sx * u * 0.42, 0)
-      ctx.lineTo(sx * u * 0.42, u * 0.8)
+  switch (name) {
+    case 'projects': // a record
+      ctx.arc(0, 0, u * 0.86, 0, Math.PI * 2)
       ctx.stroke()
-    }
-  } else if (name === 'unplugged') {
-    ctx.moveTo(0, -u * 0.8)
-    ctx.lineTo(0, u * 0.8)
-    ctx.moveTo(-u * 0.6, -u * 0.6)
-    ctx.lineTo(u * 0.6, u * 0.6)
-    ctx.stroke()
-  } else if (name === 'prev' || name === 'next') {
-    const d = name === 'next' ? 1 : -1
-    for (const o of [0, u * 0.7]) {
       ctx.beginPath()
-      ctx.moveTo(d * (o - u * 0.7), -u * 0.5)
-      ctx.lineTo(d * o, 0)
-      ctx.lineTo(d * (o - u * 0.7), u * 0.5)
+      ctx.arc(0, 0, u * 0.3, 0, Math.PI * 2)
+      ctx.fill()
+      break
+    case 'about': // a person
+      ctx.arc(0, -u * 0.34, u * 0.36, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.ellipse(0, u * 0.72, u * 0.72, u * 0.5, 0, Math.PI, 0)
+      ctx.fill()
+      break
+    case 'toolkit': // four tiles
+      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        ctx.beginPath()
+        ctx.roundRect(dx * u * 0.44 - u * 0.33, dy * u * 0.44 - u * 0.33, u * 0.66, u * 0.66, u * 0.18)
+        ctx.fill()
+      }
+      break
+    case 'camera':
+      ctx.roundRect(-u * 0.9, -u * 0.52, u * 1.8, u * 1.22, u * 0.26)
       ctx.stroke()
+      ctx.beginPath()
+      ctx.arc(0, u * 0.08, u * 0.33, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.roundRect(-u * 0.34, -u * 0.78, u * 0.68, u * 0.3, u * 0.1)
+      ctx.fill()
+      break
+    case 'contact': // a speech bubble
+      ctx.roundRect(-u * 0.86, -u * 0.7, u * 1.72, u * 1.16, u * 0.4)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.moveTo(-u * 0.36, u * 0.3)
+      ctx.lineTo(-u * 0.6, u * 0.86)
+      ctx.lineTo(u * 0.08, u * 0.4)
+      ctx.closePath()
+      ctx.fill()
+      break
+    case 'settings': // a gear
+      for (let i = 0; i < 8; i++) {
+        ctx.save()
+        ctx.rotate((i * Math.PI) / 4)
+        ctx.beginPath()
+        ctx.roundRect(-u * 0.15, -u * 0.92, u * 0.3, u * 0.42, u * 0.07)
+        ctx.fill()
+        ctx.restore()
+      }
+      ctx.beginPath()
+      ctx.lineWidth = u * 0.3
+      ctx.arc(0, 0, u * 0.5, 0, Math.PI * 2)
+      ctx.stroke()
+      break
+    case 'chevron':
+      ctx.moveTo(-u * 0.22, -u * 0.48)
+      ctx.lineTo(u * 0.26, 0)
+      ctx.lineTo(-u * 0.22, u * 0.48)
+      ctx.stroke()
+      break
+    case 'out': // opens elsewhere
+      ctx.moveTo(-u * 0.4, u * 0.4)
+      ctx.lineTo(u * 0.4, -u * 0.4)
+      ctx.moveTo(-u * 0.1, -u * 0.42)
+      ctx.lineTo(u * 0.42, -u * 0.42)
+      ctx.lineTo(u * 0.42, u * 0.1)
+      ctx.stroke()
+      break
+    case 'play':
+      ctx.moveTo(-u * 0.34, -u * 0.56)
+      ctx.lineTo(u * 0.58, 0)
+      ctx.lineTo(-u * 0.34, u * 0.56)
+      ctx.closePath()
+      ctx.fill()
+      break
+    case 'pause':
+      ctx.roundRect(-u * 0.44, -u * 0.56, u * 0.3, u * 1.12, u * 0.08)
+      ctx.roundRect(u * 0.14, -u * 0.56, u * 0.3, u * 1.12, u * 0.08)
+      ctx.fill()
+      break
+    case 'prev':
+    case 'next': {
+      const d = name === 'next' ? 1 : -1
+      for (const o of [-u * 0.8, 0]) {
+        ctx.beginPath()
+        ctx.moveTo(d * o, -u * 0.5)
+        ctx.lineTo(d * (o + u * 0.8), 0)
+        ctx.lineTo(d * o, u * 0.5)
+        ctx.closePath()
+        ctx.fill()
+      }
+      break
     }
-  } else if (name === 'play') {
-    ctx.moveTo(-u * 0.3, -u * 0.5)
-    ctx.lineTo(u * 0.5, 0)
-    ctx.lineTo(-u * 0.3, u * 0.5)
-    ctx.closePath()
-    ctx.fill()
-  } else if (name === 'pause') {
-    ctx.fillRect(-u * 0.35, -u * 0.5, u * 0.22, u)
-    ctx.fillRect(u * 0.13, -u * 0.5, u * 0.22, u)
-  } else if (name === 'arrow') {
-    ctx.moveTo(-u * 0.5, 0)
-    ctx.lineTo(u * 0.5, 0)
-    ctx.moveTo(u * 0.1, -u * 0.4)
-    ctx.lineTo(u * 0.5, 0)
-    ctx.lineTo(u * 0.1, u * 0.4)
-    ctx.stroke()
-  } else if (name === 'out') {
-    ctx.moveTo(-u * 0.4, u * 0.4)
-    ctx.lineTo(u * 0.4, -u * 0.4)
-    ctx.moveTo(-u * 0.1, -u * 0.4)
-    ctx.lineTo(u * 0.4, -u * 0.4)
-    ctx.lineTo(u * 0.4, u * 0.1)
-    ctx.stroke()
+    case 'speaker':
+      ctx.moveTo(-u * 0.75, -u * 0.26)
+      ctx.lineTo(-u * 0.38, -u * 0.26)
+      ctx.lineTo(u * 0.08, -u * 0.66)
+      ctx.lineTo(u * 0.08, u * 0.66)
+      ctx.lineTo(-u * 0.38, u * 0.26)
+      ctx.lineTo(-u * 0.75, u * 0.26)
+      ctx.closePath()
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(u * 0.16, 0, u * 0.5, -0.75, 0.75)
+      ctx.stroke()
+      break
+    case 'earbuds':
+      for (const sx of [-1, 1]) {
+        ctx.beginPath()
+        ctx.arc(sx * u * 0.42, -u * 0.3, u * 0.3, 0, Math.PI * 2)
+        ctx.moveTo(sx * u * 0.42, 0)
+        ctx.lineTo(sx * u * 0.42, u * 0.8)
+        ctx.stroke()
+      }
+      break
+    case 'unplugged':
+      ctx.moveTo(0, -u * 0.8)
+      ctx.lineTo(0, u * 0.8)
+      ctx.moveTo(-u * 0.6, -u * 0.6)
+      ctx.lineTo(u * 0.6, u * 0.6)
+      ctx.stroke()
+      break
   }
   ctx.restore()
 }
 
-function art(ctx: Ctx, n: number, x: number, y: number, s: number, r: number) {
+/** App tiles for the main menu. */
+const TILES: Record<string, [string, string]> = {
+  projects: ['#ff8a4c', '#ff375f'],
+  about: ['#7b61ff', '#c55cf6'],
+  toolkit: ['#2dd4bf', '#0a84ff'],
+  camera: ['#ffd60a', '#ff9f0a'],
+  contact: ['#34c759', '#00b3a4'],
+  settings: ['#a1a1aa', '#5c5c63'],
+}
+
+function tile(ctx: Ctx, id: string, x: number, y: number, s: number) {
+  const [a, b] = TILES[id] ?? TILES.settings
+  const g = ctx.createLinearGradient(x, y, x + s, y + s)
+  g.addColorStop(0, a)
+  g.addColorStop(1, b)
+  ctx.beginPath()
+  ctx.roundRect(x, y, s, s, s * 0.3)
+  ctx.fillStyle = g
+  ctx.fill()
+  glyph(ctx, id, x + s / 2, y + s / 2, s * 0.52, W)
+}
+
+function art(ctx: Ctx, n: number, x: number, y: number, s: number, r: number, shadow = 0) {
+  if (shadow) {
+    ctx.save()
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'
+    ctx.shadowBlur = shadow
+    ctx.shadowOffsetY = shadow * 0.35
+    ctx.beginPath()
+    ctx.roundRect(x, y, s, s, r)
+    ctx.fillStyle = '#000'
+    ctx.fill()
+    ctx.restore()
+  }
   ctx.save()
   ctx.beginPath()
   ctx.roundRect(x, y, s, s, r)
@@ -125,18 +249,42 @@ function art(ctx: Ctx, n: number, x: number, y: number, s: number, r: number) {
   ctx.restore()
 }
 
-/** A row of dots: `on` of them lit, the last lit one red. */
-function dotRow(ctx: Ctx, x0: number, x1: number, y: number, count: number, on: number, r = 6) {
-  for (let i = 0; i < count; i++) {
-    const x = x0 + ((x1 - x0) * i) / (count - 1)
-    dot(ctx, x, y, r, i < on - 1 ? W : i === on - 1 ? RED : G3)
+/** A tiny copy of a cover; stretched over the whole screen it becomes a soft wash of its colours. */
+const washes = new Map<number, HTMLCanvasElement>()
+function wash(n: number) {
+  let c = washes.get(n)
+  if (!c) {
+    const mid = document.createElement('canvas')
+    mid.width = mid.height = 48
+    mid.getContext('2d')!.drawImage(cover(n), 0, 0, 48, 48)
+    c = document.createElement('canvas')
+    c.width = c.height = 8
+    const x = c.getContext('2d')!
+    x.imageSmoothingQuality = 'high'
+    x.drawImage(mid, 0, 0, 8, 8)
+    washes.set(n, c)
   }
+  return c
+}
+
+function mmss(sec: number) {
+  const s = Math.max(0, Math.floor(sec))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
 // --------------------------------------------------------------- renderer
 type TextLine = { text: string; font: string; color: string; x: number; y: number }
-type Chip = { text: string; x: number; y: number; w: number }
+type Chip = { text: string; x: number; y: number; w: number; tint: string }
 type TextLayout = { lines: TextLine[]; height: number; chips?: Chip[] }
+type Row = {
+  label: string
+  sub?: string
+  lead?: number // width of what's drawn before the label
+  drawLead?: (x: number, cy: number) => void
+  drawTrail?: (right: number, cy: number, k: number) => void
+}
+
+const GROUP_TINTS = ['#ff8a4c', '#7b61ff', '#2dd4bf', '#ffd60a', '#34c759', '#ff375f']
 
 export class PodOS {
   canvas = document.createElement('canvas')
@@ -150,7 +298,8 @@ export class PodOS {
   private sc = { key: -1, y: 0 }
   private lastDraw = 0
   private textCache = new Map<string, TextLayout>()
-  accent = RED
+  private playing: { index: number; since: number } | null = null
+  accent = '#ff4a3d'
   roomA = '#b7c8e8'
   roomB = '#ecc9cf'
 
@@ -176,6 +325,9 @@ export class PodOS {
     if (this.lastFrame && this.lastFrame.key !== top.key) this.trans = { from: this.lastFrame, dir: pod.dir, start: now }
     this.lastFrame = top
     if (this.trans && now - this.trans.start > 340) this.trans = null
+    // the "track" clock for whatever is playing on the page
+    if (pod.opened === null) this.playing = null
+    else if (!this.playing || this.playing.index !== pod.opened) this.playing = { index: pod.opened, since: now }
 
     let moving = !!this.trans
     if (this.hl.key !== top.key) this.hl = { key: top.key, y: top.sel }
@@ -196,7 +348,8 @@ export class PodOS {
     const booting = pod.power === 'booting'
     const camera = on && v.kind === 'camera'
     const flash = now - cam.flashAt < 400
-    const ticking = on && ((v.kind === 'menu' && v.id === 'main') || (v.kind === 'project' && pod.opened !== null))
+    // the mini player's equaliser and the progress bar of what's playing move on their own
+    const ticking = on && ((v.kind === 'menu' && v.id === 'main' && pod.lastPlayed !== null) || (v.kind === 'project' && pod.opened !== null))
     const sig = [
       pod.power,
       top.key,
@@ -222,7 +375,7 @@ export class PodOS {
 
     const continuous = moving || toastOn || volOn || booting || flash
     if (!continuous && sig === this.sig) {
-      // the camera runs at a film-ish 20 fps; the blinking clock and the equaliser at 10
+      // the camera runs at a film-ish 20 fps; the equaliser and progress bar at 10
       const every = camera ? 50 : ticking ? 100 : Infinity
       if (now - this.lastDraw < every) return false
     }
@@ -252,8 +405,8 @@ export class PodOS {
     if (this.trans) {
       const e = easeOut((now - this.trans.start) / 320)
       const d = this.trans.dir
-      this.drawView(pod, this.trans.from, -d * e * CW * 0.18, 1 - e, now, false)
-      this.drawView(pod, top, d * (1 - e) * CW * 0.18, e, now, true)
+      this.drawView(pod, this.trans.from, -d * e * CW * 0.16, 1 - e, now, false)
+      this.drawView(pod, top, d * (1 - e) * CW * 0.16, e, now, true)
     } else this.drawView(pod, top, 0, 1, now, true)
     this.drawStatus(pod, top)
     if (pod.toast && now - pod.toast.at < 2700) this.drawToast(pod, now)
@@ -264,8 +417,16 @@ export class PodOS {
     const ctx = this.ctx
     ctx.save()
     ctx.globalAlpha = alpha
-    ctx.translate(dx, 0)
+    // backgrounds don't slide, they cross-fade; the content slides over them
     const v = f.view
+    const sel = isTop ? this.hl.y : f.sel
+    if (v.kind === 'menu' && v.id === 'projects') this.bgCover(sel)
+    else if (v.kind === 'project') this.bgCover(v.index)
+    else if (v.kind === 'camera') {
+      ctx.fillStyle = '#050506'
+      ctx.fillRect(0, 0, CW, CH)
+    } else this.bgHome(v.kind === 'menu' && v.id === 'main' ? 1 : 0.6)
+    ctx.translate(dx, 0)
     if (v.kind === 'menu') {
       if (v.id === 'main') this.drawHome(pod, f, now, isTop)
       else if (v.id === 'projects') this.drawProjects(f, isTop)
@@ -276,223 +437,288 @@ export class PodOS {
     ctx.restore()
   }
 
+  // ----------------------------------------------------------- backgrounds
+  /** Deep ink with two soft glows in the colours of the room the pod stands in. */
+  private bgHome(strength: number) {
+    const ctx = this.ctx
+    const base = ctx.globalAlpha
+    ctx.fillStyle = INK
+    ctx.fillRect(0, 0, CW, CH)
+    const glow = (x: number, y: number, r: number, color: string, a: number) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r)
+      g.addColorStop(0, rgba(color, a * strength))
+      g.addColorStop(1, rgba(color, 0))
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, CW, CH)
+    }
+    glow(CW * 0.0, CH * 0.0, CW * 1.1, this.roomA, 0.42)
+    glow(CW * 1.05, CH * 1.0, CW * 1.0, this.roomB, 0.3)
+    glow(CW * 0.95, CH * 0.12, CW * 0.45, this.accent, 0.1)
+    ctx.globalAlpha = base
+  }
+
+  /** The cover in focus, blurred into a wash of colour; fractional `at` blends two neighbours. */
+  private bgCover(at: number) {
+    const ctx = this.ctx
+    const base = ctx.globalAlpha
+    const n = projects.length
+    const a = Math.max(0, Math.min(n - 1, Math.floor(at)))
+    const b = Math.min(n - 1, a + 1)
+    const t = clamp01(at - a)
+    ctx.fillStyle = INK
+    ctx.fillRect(0, 0, CW, CH)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    const draw = (i: number, k: number) => {
+      ctx.globalAlpha = base * k
+      ctx.drawImage(wash(i), -CW * 0.25, -CH * 0.25, CW * 1.5, CH * 1.5)
+    }
+    draw(a, 1)
+    if (t > 0.001 && b !== a) draw(b, t)
+    ctx.globalAlpha = base
+    // keep the type readable: darken, more towards the bottom
+    ctx.fillStyle = 'rgba(8,9,12,0.4)'
+    ctx.fillRect(0, 0, CW, CH)
+    const g = ctx.createLinearGradient(0, CH * 0.4, 0, CH)
+    g.addColorStop(0, 'rgba(8,9,12,0)')
+    g.addColorStop(1, 'rgba(8,9,12,0.62)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, CW, CH)
+  }
+
+  // ------------------------------------------------------------ chrome
   private drawStatus(pod: Pod, top: Frame) {
     const ctx = this.ctx
     const y = LENS.y
-    const g = ctx.createLinearGradient(0, 0, 0, y * 2.2)
-    g.addColorStop(0, 'rgba(0,0,0,0.95)')
+    const g = ctx.createLinearGradient(0, 0, 0, y * 2.1)
+    g.addColorStop(0, 'rgba(0,0,0,0.5)')
     g.addColorStop(1, 'rgba(0,0,0,0)')
     ctx.fillStyle = g
-    ctx.fillRect(0, 0, CW, y * 2.2)
+    ctx.fillRect(0, 0, CW, y * 2.1)
     const d = new Date()
     ctx.fillStyle = W
     ctx.font = `600 27px ${UI}`
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
-    ctx.fillText(`${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`, PAD, y)
-    // battery: four little bars
-    const bx = CW - PAD - 52
+    ctx.fillText(`${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`, PAD + 6, y)
+    // battery
+    const bx = CW - PAD - 56
     ctx.strokeStyle = G1
     ctx.lineWidth = 2.5
     ctx.beginPath()
-    ctx.roundRect(bx, y - 12, 48, 24, 7)
+    ctx.roundRect(bx, y - 12, 46, 24, 7)
     ctx.stroke()
     ctx.fillStyle = W
-    for (let i = 0; i < 4; i++) ctx.fillRect(bx + 6 + i * 9.5, y - 7, 6, 14)
-    if (pod.plugged) icon(ctx, 'earbuds', bx - 38, y, 30, G1)
+    ctx.beginPath()
+    ctx.roundRect(bx + 4, y - 8, 30, 16, 4)
+    ctx.fill()
+    ctx.fillStyle = G1
+    ctx.fillRect(bx + 48, y - 5, 4, 10)
+    if (pod.plugged) glyph(ctx, 'earbuds', bx - 36, y, 30, W)
     // the camera's in-use light
-    if (top.view.kind === 'camera' && cam.state === 'live') dot(ctx, LENS.x + LENS.r + 20, y, 7, '#34c759')
+    if (top.view.kind === 'camera' && cam.state === 'live') {
+      ctx.fillStyle = GREEN
+      ctx.beginPath()
+      ctx.arc(LENS.x + LENS.r + 20, y, 7, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }
 
-  private heading(text: string, y = 178, right?: string) {
+  private title(text: string, y = 172, badge?: string) {
     const ctx = this.ctx
     ctx.fillStyle = W
     ctx.textBaseline = 'alphabetic'
     ctx.textAlign = 'left'
-    ctx.font = `800 74px ${DOT}`
-    ctx.fillText(text, PAD - 4, y)
-    if (right) {
-      ctx.fillStyle = G2
-      ctx.textAlign = 'right'
-      ctx.font = `800 40px ${DOT}`
-      ctx.fillText(right, CW - PAD, y - 4)
+    ctx.font = `750 66px ${DISPLAY}`
+    ctx.fillText(text, PAD - 2, y)
+    if (badge) {
+      const w = ctx.measureText(text).width
+      ctx.font = `650 24px ${UI}`
+      const bw = ctx.measureText(badge).width + 30
+      pill(this.ctx, PAD + w + 16, y - 40, bw, 38, 19, G3)
+      ctx.fillStyle = W
+      ctx.textAlign = 'center'
+      ctx.fillText(badge, PAD + w + 16 + bw / 2, y - 12)
       ctx.textAlign = 'left'
     }
+  }
+
+  /** A list on a frosted highlight that glides to the selected row. */
+  private rows(rows: Row[], f: Frame, top: number, h: number, isTop: boolean) {
+    const ctx = this.ctx
+    const base = ctx.globalAlpha
+    const sel = isTop ? this.hl.y : f.sel
+    // the highlight
+    const hy = top + sel * h
+    pill(ctx, 26, hy + 6, CW - 52, h - 12, Math.min(30, (h - 12) / 2.4), 'rgba(255,255,255,0.14)', 'rgba(255,255,255,0.1)')
+    rows.forEach((r, i) => {
+      const cy = top + i * h + h / 2
+      const k = clamp01(1 - Math.abs(i - sel))
+      ctx.globalAlpha = base * (0.72 + 0.28 * k)
+      let x = PAD
+      if (r.drawLead) {
+        r.drawLead(x, cy)
+        x += (r.lead ?? 0) + 24
+      }
+      ctx.fillStyle = W
+      ctx.textBaseline = 'middle'
+      ctx.textAlign = 'left'
+      ctx.font = `${k > 0.5 ? 650 : 560} ${r.sub ? 34 : 35}px ${UI}`
+      ctx.fillText(r.label, x, r.sub ? cy - 17 : cy + 1)
+      if (r.sub) {
+        ctx.fillStyle = G1
+        ctx.font = `500 23px ${UI}`
+        ctx.fillText(r.sub, x, cy + 22)
+      }
+      if (r.drawTrail) r.drawTrail(CW - PAD, cy, k)
+    })
+    ctx.globalAlpha = base
   }
 
   // ------------------------------------------------------------------ home
   private drawHome(pod: Pod, f: Frame, now: number, isTop: boolean) {
     const ctx = this.ctx
-    const base = ctx.globalAlpha
-    const d = new Date()
-    // the clock, in dots; the colon blinks
-    ctx.fillStyle = W
+    const hour = new Date().getHours()
+    const hello = hour < 5 ? 'Up late' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
     ctx.textBaseline = 'alphabetic'
     ctx.textAlign = 'left'
-    ctx.font = `800 176px ${DOT}`
-    const hh = String(d.getHours()).padStart(2, '0')
-    const mm = String(d.getMinutes()).padStart(2, '0')
-    const hw = ctx.measureText(hh).width
-    const cw = ctx.measureText(':').width
-    ctx.fillText(hh, PAD - 10, 286)
-    ctx.globalAlpha = base * (Math.floor(now / 1000) % 2 === 0 ? 1 : 0.25)
-    ctx.fillText(':', PAD - 10 + hw, 286)
-    ctx.globalAlpha = base
-    ctx.fillText(mm, PAD - 10 + hw + cw, 286)
     ctx.fillStyle = G1
-    ctx.font = `600 23px ${MONO}`
-    const day = d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase()
-    ctx.fillText(day.replace(',', ''), PAD, 334)
-    ctx.textAlign = 'right'
-    const name = profile.name.toUpperCase()
-    ctx.fillText(name, CW - PAD, 334)
-    dot(ctx, CW - PAD - ctx.measureText(name).width - 18, 326, 6, RED)
-    ctx.textAlign = 'left'
+    ctx.font = `500 27px ${UI}`
+    ctx.fillText(hello, PAD, 150)
+    ctx.fillStyle = W
+    ctx.font = `800 76px ${DISPLAY}`
+    ctx.fillText(profile.name, PAD - 3, 228)
 
     const mini = pod.lastPlayed !== null
-    this.list(pod.items('main'), f, 384, mini ? 76 : 86, 44, isTop)
+    const items = pod.items('main')
+    this.rows(
+      items.map((it) => ({
+        label: it.label,
+        lead: 56,
+        drawLead: (x, cy) => tile(ctx, it.id, x, cy - 28, 56),
+        drawTrail: (right, cy) => glyph(ctx, 'chevron', right - 10, cy, 28, G2),
+      })),
+      f,
+      264,
+      mini ? 80 : 88,
+      isTop,
+    )
     if (mini) this.miniPlayer(pod, now)
-  }
-
-  /** A plain vertical list: the selected row is white with a red dot, the rest grey. */
-  private list(
-    items: MenuItem[],
-    f: Frame,
-    top: number,
-    row: number,
-    size: number,
-    isTop: boolean,
-    extra?: (it: MenuItem, y: number, k: number) => void,
-  ) {
-    const ctx = this.ctx
-    const base = ctx.globalAlpha
-    const sel = isTop ? this.hl.y : f.sel
-    items.forEach((it, i) => {
-      const y = top + i * row + row / 2
-      const k = clamp01(1 - Math.abs(i - sel))
-      ctx.globalAlpha = base * (0.38 + 0.62 * k)
-      ctx.fillStyle = W
-      ctx.font = `${k > 0.5 ? 600 : 500} ${size}px ${UI}`
-      ctx.textBaseline = 'middle'
-      ctx.textAlign = 'left'
-      ctx.fillText(it.label, PAD + 34 * k, y)
-      if (extra) extra(it, y, k)
-      else if (it.arrow && k > 0.5) icon(ctx, 'arrow', CW - PAD - 16, y, 30, W)
-      if (k > 0.02) {
-        ctx.globalAlpha = base * k
-        dot(ctx, PAD + 6, y, 8, RED)
-      }
-    })
-    ctx.globalAlpha = base
   }
 
   private miniPlayer(pod: Pod, now: number) {
     const ctx = this.ctx
     const n = pod.lastPlayed!
-    const y = CH - 126
-    ctx.fillStyle = '#111214'
-    ctx.beginPath()
-    ctx.roundRect(28, y, CW - 56, 104, 36)
-    ctx.fill()
-    art(ctx, n, 44, y + 14, 76, 18)
+    const y = CH - 132
+    pill(ctx, 26, y, CW - 52, 104, 32, 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0.08)')
+    art(ctx, n, 42, y + 14, 76, 18)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
-    ctx.fillStyle = G2
-    ctx.font = `600 19px ${MONO}`
-    ctx.fillText('NOW PLAYING', 142, y + 44)
+    ctx.fillStyle = G1
+    ctx.font = `500 21px ${UI}`
+    ctx.fillText(pod.opened === n ? 'Playing' : 'Last played', 138, y + 44)
     ctx.fillStyle = W
-    ctx.font = `600 30px ${UI}`
-    ctx.fillText(projects[n].title, 142, y + 80)
-    // a little dot equaliser
-    for (let i = 0; i < 5; i++) {
-      const h = 1 + Math.round(3.5 * Math.abs(Math.sin(now / (300 + i * 60) + i)))
-      for (let j = 0; j < 5; j++)
-        dot(ctx, CW - 150 + i * 18, y + 76 - j * 14, 4.5, j < h ? (i === 2 && j === h - 1 ? RED : W) : G3)
+    ctx.font = `650 30px ${UI}`
+    ctx.fillText(projects[n].title, 138, y + 80)
+    // a little equaliser in the room's accent
+    ctx.fillStyle = this.accent
+    for (let i = 0; i < 4; i++) {
+      const h = 14 + 30 * Math.abs(Math.sin(now / (260 + i * 70) + i * 1.7))
+      ctx.beginPath()
+      ctx.roundRect(CW - 128 + i * 18, y + 52 + 22 - h / 2, 10, h, 5)
+      ctx.fill()
     }
   }
 
   // ------------------------------------------------------------- projects
   private drawProjects(f: Frame, isTop: boolean) {
     const ctx = this.ctx
-    const base = ctx.globalAlpha
-    this.heading('PROJECTS', 178, String(projects.length).padStart(2, '0'))
-    const sel = isTop ? this.hl.y : f.sel
-    const top = 214
-    const row = (CH - top - 30) / projects.length
-    projects.forEach((p, i) => {
-      const cy = top + i * row + row / 2
-      const k = clamp01(1 - Math.abs(i - sel))
-      ctx.globalAlpha = base * (0.38 + 0.62 * k)
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'alphabetic'
-      ctx.fillStyle = W
-      ctx.font = `800 40px ${DOT}`
-      ctx.fillText(String(i + 1).padStart(2, '0'), PAD, cy + 12)
-      ctx.font = `${k > 0.5 ? 650 : 520} 42px ${UI}`
-      ctx.fillText(p.title, PAD + 92, cy - 2)
-      ctx.fillStyle = G1
-      ctx.font = `500 21px ${MONO}`
-      const kind = p.kind.toUpperCase()
-      ctx.fillText(kind, PAD + 94, cy + 32)
-      if (p.live) {
-        const lx = PAD + 94 + ctx.measureText(kind).width + 22
-        dot(ctx, lx, cy + 25, 5, RED)
-        ctx.fillStyle = RED
-        ctx.fillText('LIVE', lx + 12, cy + 32)
-      }
-      if (k > 0.01) {
-        ctx.globalAlpha = base * k
-        const s = 104
-        art(ctx, i, CW - PAD - s, cy - s / 2, s, 22)
-      }
-    })
-    ctx.globalAlpha = base
+    this.title('Projects', 172, String(projects.length))
+    this.rows(
+      projects.map((p, i) => ({
+        label: p.title,
+        sub: p.kind,
+        lead: 112,
+        drawLead: (x, cy) => art(ctx, i, x, cy - 56, 112, 24, 18),
+        drawTrail: (right, cy) => {
+          const live = !!p.live
+          ctx.font = `650 21px ${UI}`
+          const text = live ? 'Live' : 'Code'
+          const w = ctx.measureText(text).width + (live ? 50 : 30)
+          pill(ctx, right - w, cy - 19, w, 38, 19, live ? 'rgba(48,209,88,0.2)' : G3)
+          ctx.textBaseline = 'middle'
+          ctx.textAlign = 'left'
+          if (live) {
+            ctx.fillStyle = GREEN
+            ctx.beginPath()
+            ctx.arc(right - w + 20, cy, 6, 0, Math.PI * 2)
+            ctx.fill()
+          }
+          ctx.fillStyle = live ? GREEN : G1
+          ctx.fillText(text, right - w + (live ? 34 : 15), cy + 1)
+        },
+      })),
+      f,
+      206,
+      Math.min(176, (CH - 206 - 34) / projects.length),
+      isTop,
+    )
   }
 
   private drawList(pod: Pod, f: Frame, id: MenuId, isTop: boolean) {
     const ctx = this.ctx
-    this.heading(id === 'contact' ? 'CONTACT' : 'SETTINGS')
-    this.list(pod.items(id), f, 220, 96, 42, isTop, (it, y, k) => {
-      const right = CW - PAD
-      if (it.id === 'clicks') {
-        const on = pod.settings.clicks
-        ctx.strokeStyle = W
-        ctx.lineWidth = 3
-        ctx.beginPath()
-        ctx.roundRect(right - 84, y - 24, 84, 48, 24)
-        ctx.stroke()
-        dot(ctx, on ? right - 24 : right - 60, y, 15, on ? RED : G1)
-        return
-      }
-      if (it.id === 'finish') {
-        BODIES.forEach((b, j) => {
-          const x = right - 18 - (BODIES.length - 1 - j) * 52
-          const sw = FINISHES[b].swatch
-          const gg = ctx.createLinearGradient(x - 16, y - 16, x + 16, y + 16)
-          gg.addColorStop(0, sw[0])
-          gg.addColorStop(1, sw[2])
-          ctx.fillStyle = gg
-          ctx.beginPath()
-          ctx.arc(x, y, 16, 0, Math.PI * 2)
-          ctx.fill()
-          if (b === pod.settings.body) {
-            ctx.strokeStyle = W
-            ctx.lineWidth = 3
+    this.title(id === 'contact' ? 'Contact' : 'Settings')
+    const items: MenuItem[] = pod.items(id)
+    this.rows(
+      items.map((it) => ({
+        label: it.label,
+        drawTrail: (right, cy, k) => {
+          if (it.id === 'clicks') {
+            const on = pod.settings.clicks
+            pill(ctx, right - 80, cy - 24, 80, 48, 24, on ? GREEN : 'rgba(255,255,255,0.22)')
+            ctx.fillStyle = W
             ctx.beginPath()
-            ctx.arc(x, y, 23, 0, Math.PI * 2)
-            ctx.stroke()
+            ctx.arc(on ? right - 24 : right - 56, cy, 19, 0, Math.PI * 2)
+            ctx.fill()
+            return
           }
-        })
-        return
-      }
-      ctx.textAlign = 'right'
-      ctx.fillStyle = G1
-      ctx.font = `500 30px ${UI}`
-      if (it.value) ctx.fillText(it.value, right - (id === 'contact' ? 46 : 0), y)
-      ctx.textAlign = 'left'
-      if (id === 'contact' && k > 0.3) icon(ctx, 'out', right - 14, y, 26, W)
-      else if (it.arrow && k > 0.5) icon(ctx, 'arrow', right - 16, y, 30, W)
-    })
+          if (it.id === 'finish') {
+            BODIES.forEach((b, j) => {
+              const x = right - 18 - (BODIES.length - 1 - j) * 50
+              const sw = FINISHES[b].swatch
+              const gg = ctx.createLinearGradient(x - 16, cy - 16, x + 16, cy + 16)
+              gg.addColorStop(0, sw[0])
+              gg.addColorStop(1, sw[2])
+              ctx.fillStyle = gg
+              ctx.beginPath()
+              ctx.arc(x, cy, 16, 0, Math.PI * 2)
+              ctx.fill()
+              if (b === pod.settings.body) {
+                ctx.strokeStyle = W
+                ctx.lineWidth = 3
+                ctx.beginPath()
+                ctx.arc(x, cy, 23, 0, Math.PI * 2)
+                ctx.stroke()
+              }
+            })
+            return
+          }
+          ctx.textAlign = 'right'
+          ctx.textBaseline = 'middle'
+          ctx.fillStyle = G1
+          ctx.font = `500 29px ${UI}`
+          const out = id === 'contact' && it.id !== 'plain'
+          if (it.value) ctx.fillText(it.value, right - (out || it.arrow ? 44 : 0), cy + 1)
+          ctx.textAlign = 'left'
+          if (out) glyph(ctx, 'out', right - 12, cy, 26, k > 0.5 ? W : G2)
+          else if (it.arrow) glyph(ctx, 'chevron', right - 10, cy, 28, G2)
+        },
+      })),
+      f,
+      206,
+      96,
+      isTop,
+    )
   }
 
   // ---------------------------------------------------------- now playing
@@ -502,73 +728,96 @@ export class PodOS {
     const n = projects.length
     const playing = pod.opened === index
     ctx.textBaseline = 'alphabetic'
-    ctx.textAlign = 'left'
-    ctx.fillStyle = G2
-    ctx.font = `600 20px ${MONO}`
-    ctx.fillText('NOW PLAYING', PAD, 122)
-    ctx.textAlign = 'right'
-    ctx.fillText(`${String(index + 1).padStart(2, '0')} / ${String(n).padStart(2, '0')}`, CW - PAD, 122)
-    ctx.textAlign = 'left'
+    ctx.textAlign = 'center'
+    ctx.fillStyle = G1
+    ctx.font = `600 22px ${UI}`
+    ctx.fillText(`Project ${index + 1} of ${n}`, CW / 2, 122)
 
-    const s = 556
-    art(ctx, index, (CW - s) / 2, 144, s, 44)
+    const s = 500
+    art(ctx, index, (CW - s) / 2, 146, s, 34, 60)
 
+    ctx.textAlign = 'left'
     ctx.fillStyle = W
-    ctx.font = `800 62px ${DOT}`
-    ctx.fillText(p.title.toUpperCase(), PAD - 2, 782)
+    ctx.font = `750 56px ${DISPLAY}`
+    ctx.fillText(p.title, PAD, 732)
+    ctx.fillStyle = G1
     ctx.font = `500 26px ${UI}`
-    if (playing) {
-      const blink = Math.floor(now / 500) % 2 === 0
-      dot(ctx, PAD + 8, 815, 7, blink ? RED : 'rgba(255,59,48,0.35)')
-      ctx.fillStyle = RED
-      ctx.fillText('Playing on the page', PAD + 26, 824)
+    ctx.fillText(p.kind, PAD, 774)
+
+    const y = 826
+    if (now - pod.volumeShownAt < 1400) {
+      // volume replaces the progress bar for a moment
+      glyph(ctx, 'speaker', PAD + 14, y, 30, G1)
+      const x0 = PAD + 50
+      const x1 = CW - PAD
+      pill(ctx, x0, y - 4, x1 - x0, 8, 4, G3)
+      pill(ctx, x0, y - 4, Math.max(8, (x1 - x0) * pod.volume), 8, 4, W)
     } else {
-      ctx.fillStyle = G1
-      ctx.fillText(p.kind, PAD, 824)
+      // a pretend track: it runs while the project is open on the page
+      const length = 150 + index * 22
+      const t = playing && this.playing ? ((now - this.playing.since) / 1000) % length : 0
+      const x0 = PAD
+      const x1 = CW - PAD
+      const px = x0 + (x1 - x0) * (t / length)
+      pill(ctx, x0, y - 4, x1 - x0, 8, 4, G3)
+      pill(ctx, x0, y - 4, Math.max(8, px - x0), 8, 4, W)
+      ctx.fillStyle = W
+      ctx.beginPath()
+      ctx.arc(px, y, 11, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = G2
+      ctx.font = `600 20px ${UI}`
+      ctx.fillText(mmss(t), x0, y + 42)
+      ctx.textAlign = 'right'
+      ctx.fillText(`-${mmss(length - t)}`, x1, y + 42)
+      ctx.textAlign = 'left'
     }
 
-    if (now - pod.volumeShownAt < 1400) {
-      ctx.fillStyle = G1
-      ctx.font = `600 20px ${MONO}`
-      ctx.fillText('VOL', PAD, 878)
-      dotRow(ctx, PAD + 80, CW - PAD, 871, 22, Math.round(pod.volume * 22))
-    } else dotRow(ctx, PAD + 6, CW - PAD - 6, 871, 26, Math.round(((index + 1) / n) * 26))
-
-    const cy = 936
-    icon(ctx, 'prev', CW / 2 - 170, cy, 40)
-    icon(ctx, 'next', CW / 2 + 170, cy, 40)
-    ctx.strokeStyle = W
-    ctx.lineWidth = 3
+    const cy = 922
+    glyph(ctx, 'prev', CW / 2 - 176, cy, 44, W)
+    glyph(ctx, 'next', CW / 2 + 176, cy, 44, W)
+    ctx.fillStyle = W
     ctx.beginPath()
-    ctx.arc(CW / 2, cy, 36, 0, Math.PI * 2)
-    ctx.stroke()
-    icon(ctx, playing ? 'pause' : 'play', CW / 2 + (playing ? 0 : 3), cy, 34)
+    ctx.arc(CW / 2, cy, 50, 0, Math.PI * 2)
+    ctx.fill()
+    glyph(ctx, playing ? 'pause' : 'play', CW / 2 + (playing ? 0 : 4), cy, 42, INK)
   }
 
   // ------------------------------------------------------------ text pages
   private drawText(pod: Pod, f: Frame, kind: 'about' | 'toolkit', isTop: boolean) {
     const ctx = this.ctx
     const L = this.layoutText(kind)
-    const top = kind === 'about' ? 500 : 222
-    const viewH = CH - top - 30
+    const top = kind === 'about' ? 330 : 214
+    const viewH = CH - top - 34
     const max = Math.max(0, L.height - viewH)
     if (isTop) pod.scrollMax.current = max
     const scroll = Math.min(isTop ? this.sc.y : f.scroll, max)
 
     if (kind === 'about') {
+      // an avatar in the room's colours, then the name
+      const cx = PAD + 78
+      const cy = 206
+      const g = ctx.createLinearGradient(cx - 78, cy - 78, cx + 78, cy + 78)
+      g.addColorStop(0, this.accent)
+      g.addColorStop(1, this.roomA)
+      ctx.fillStyle = g
+      ctx.beginPath()
+      ctx.arc(cx, cy, 78, 0, Math.PI * 2)
+      ctx.fill()
       const initials = (profile.name.match(/[A-Z]/g) ?? ['K']).join('').slice(0, 2)
       ctx.fillStyle = W
-      ctx.textBaseline = 'alphabetic'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.font = `800 66px ${DISPLAY}`
+      ctx.fillText(initials, cx, cy + 4)
       ctx.textAlign = 'left'
-      ctx.font = `900 236px ${DOT}`
-      ctx.fillText(initials, PAD - 12, 330)
-      dot(ctx, PAD - 12 + ctx.measureText(initials).width + 14, 318, 12, RED)
-      ctx.font = `600 40px ${UI}`
-      ctx.fillText(profile.name, PAD, 404)
+      ctx.textBaseline = 'alphabetic'
+      ctx.font = `750 54px ${DISPLAY}`
+      ctx.fillText(profile.name, cx + 104, cy - 6)
       ctx.fillStyle = G1
-      ctx.font = `600 21px ${MONO}`
-      ctx.fillText(profile.role.toUpperCase(), PAD, 444)
-    } else this.heading('TOOLKIT')
+      ctx.font = `500 26px ${UI}`
+      ctx.fillText(profile.role, cx + 106, cy + 38)
+    } else this.title('Toolkit')
 
     ctx.save()
     ctx.beginPath()
@@ -583,24 +832,23 @@ export class PodOS {
       ctx.fillText(l.text, l.x, l.y)
     }
     if (L.chips) {
-      ctx.font = `500 28px ${UI}`
+      ctx.font = `550 27px ${UI}`
       ctx.textBaseline = 'middle'
       for (const c of L.chips) {
-        ctx.strokeStyle = G3
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.roundRect(c.x, c.y, c.w, 56, 28)
-        ctx.stroke()
+        pill(ctx, c.x, c.y, c.w, 54, 27, rgba(c.tint, 0.18))
         ctx.fillStyle = W
-        ctx.fillText(c.text, c.x + 24, c.y + 29)
+        ctx.fillText(c.text, c.x + 24, c.y + 28)
       }
     }
     ctx.restore()
 
     if (max > 0) {
-      const steps = 12
-      const k = Math.round((scroll / max) * (steps - 1))
-      for (let i = 0; i < steps; i++) dot(ctx, CW - 22, top + 10 + i * 26, 4, i === k ? RED : G3)
+      // a slim scroll bar
+      const x = CW - 26
+      const trackH = viewH - 20
+      const thumb = Math.max(60, (trackH * viewH) / (viewH + max))
+      pill(ctx, x, top, 6, trackH, 3, G3)
+      pill(ctx, x, top + (trackH - thumb) * (scroll / max), 6, thumb, 3, W)
     }
   }
 
@@ -610,38 +858,39 @@ export class PodOS {
     const ctx = this.ctx
     const lines: TextLine[] = []
     let y = 0
-    const maxW = CW - PAD * 2 - 20
+    const maxW = CW - PAD * 2 - 24
     if (kind === 'about') {
       const font = `400 30px ${UI}`
       ctx.font = font
       for (const para of profile.about) {
         for (const t of wrap(ctx, para, maxW)) {
-          lines.push({ text: t, font, color: G1, x: PAD, y })
-          y += 45
+          lines.push({ text: t, font, color: 'rgba(255,255,255,0.8)', x: PAD, y })
+          y += 46
         }
-        y += 24
+        y += 26
       }
       const res = { lines, height: y + 20 }
       this.textCache.set(kind, res)
       return res
     }
     const chips: Chip[] = []
-    for (const g of toolkit) {
-      lines.push({ text: g.group.toUpperCase(), font: `600 20px ${MONO}`, color: G2, x: PAD, y })
-      y += 40
-      ctx.font = `500 28px ${UI}`
+    toolkit.forEach((g, gi) => {
+      const tint = GROUP_TINTS[gi % GROUP_TINTS.length]
+      lines.push({ text: g.group, font: `650 24px ${UI}`, color: G1, x: PAD, y })
+      y += 44
+      ctx.font = `550 27px ${UI}`
       let x = PAD
       for (const item of g.items) {
         const w = ctx.measureText(item).width + 48
         if (x + w > CW - PAD) {
           x = PAD
-          y += 68
+          y += 66
         }
-        chips.push({ text: item, x, y, w })
+        chips.push({ text: item, x, y, w, tint })
         x += w + 12
       }
-      y += 100
-    }
+      y += 96
+    })
     const res = { lines, height: y, chips }
     this.textCache.set(kind, res)
     return res
@@ -651,13 +900,13 @@ export class PodOS {
   private drawCamera(now: number) {
     const ctx = this.ctx
     cam.frame(now, this.roomA, this.roomB)
-    const h = CH - 262
+    const h = CH - 272
     const w = Math.round(h * cam.aspect)
     const x = Math.round((CW - w) / 2)
     const y = 112
     ctx.save()
     ctx.beginPath()
-    ctx.roundRect(x, y, w, h, 30)
+    ctx.roundRect(x, y, w, h, 34)
     ctx.clip()
     ctx.imageSmoothingEnabled = false
     if (cam.low) ctx.drawImage(cam.low.c, x, y, w, h)
@@ -667,14 +916,10 @@ export class PodOS {
     if (f !== 'Mono') {
       const d = new Date()
       ctx.fillStyle = f === 'Night' ? '#8dff8a' : '#ff9d2e'
-      ctx.font = `800 34px ${DOT}`
+      ctx.font = `700 30px ${MONO}`
       ctx.textAlign = 'right'
       ctx.textBaseline = 'alphabetic'
-      ctx.fillText(
-        `'${YEAR} ${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getDate()).padStart(2, '0')}`,
-        x + w - 22,
-        y + h - 22,
-      )
+      ctx.fillText(`'${YEAR} ${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getDate()).padStart(2, '0')}`, x + w - 22, y + h - 22)
       ctx.textAlign = 'left'
     }
     const fl = 1 - (now - cam.flashAt) / 380
@@ -687,28 +932,36 @@ export class PodOS {
     if (cam.photos[0]) {
       ctx.save()
       ctx.beginPath()
-      ctx.roundRect(PAD - 10, CH - 128, 64, 100, 12)
+      ctx.roundRect(PAD - 6, CH - 132, 64, 100, 14)
       ctx.clip()
-      ctx.drawImage(cam.photos[0], PAD - 10, CH - 128, 64, 100)
+      ctx.drawImage(cam.photos[0], PAD - 6, CH - 132, 64, 100)
       ctx.restore()
     }
+    // the filter picker
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
-    ctx.fillStyle = W
-    ctx.font = `800 46px ${DOT}`
-    ctx.fillText(f.toUpperCase(), CW / 2, CH - 74)
-    FILTERS.forEach((_, i) => dot(ctx, CW / 2 + (i - 1) * 22, CH - 50, 5, i === cam.filter ? RED : G3))
+    ctx.font = `650 26px ${UI}`
+    const gap = 16
+    const widths = FILTERS.map((name) => ctx.measureText(name).width + 40)
+    let fx = CW / 2 - (widths.reduce((a, b) => a + b, 0) + gap * (FILTERS.length - 1)) / 2
+    FILTERS.forEach((name, i) => {
+      const on = i === cam.filter
+      pill(ctx, fx, CH - 136, widths[i], 50, 25, on ? W : 'rgba(255,255,255,0.12)')
+      ctx.fillStyle = on ? INK : G1
+      ctx.fillText(name, fx + widths[i] / 2, CH - 102)
+      fx += widths[i] + gap
+    })
     ctx.fillStyle = G2
-    ctx.font = `600 18px ${MONO}`
+    ctx.font = `600 19px ${UI}`
     const note =
       cam.state === 'blocked'
-        ? 'CAMERA BLOCKED · TEST FEED'
+        ? 'Camera blocked · showing a test feed'
         : cam.state === 'none'
-          ? 'NO CAMERA · TEST FEED'
+          ? 'No camera found · showing a test feed'
           : cam.state === 'starting'
-            ? 'STARTING…'
-            : '● SHOOT  ·  SCROLL FOR FILTERS'
-    ctx.fillText(note, CW / 2, CH - 20)
+            ? 'Starting…'
+            : 'Centre button to shoot · scroll for filters'
+    ctx.fillText(note, CW / 2, CH - 44)
     ctx.textAlign = 'left'
   }
 
@@ -725,15 +978,9 @@ export class PodOS {
     const w = ctx.measureText(text).width + 116
     const x = (CW - w) / 2
     const y = LENS.y + LENS.r + 18 - (1 - inE) * 30
-    ctx.fillStyle = '#16171a'
-    ctx.beginPath()
-    ctx.roundRect(x, y, w, 76, 38)
-    ctx.fill()
-    ctx.strokeStyle = G3
-    ctx.lineWidth = 2
-    ctx.stroke()
+    pill(ctx, x, y, w, 76, 38, 'rgba(30,31,36,0.96)', 'rgba(255,255,255,0.1)')
     const plugged = pod.toast!.icon === 'earbuds'
-    icon(ctx, plugged ? 'earbuds' : 'unplugged', x + 46, y + 38, 30, plugged ? W : RED)
+    glyph(ctx, plugged ? 'earbuds' : 'unplugged', x + 46, y + 38, 30, plugged ? W : '#ff6961')
     ctx.fillStyle = W
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
@@ -744,20 +991,25 @@ export class PodOS {
   private drawBoot(pod: Pod, now: number) {
     const ctx = this.ctx
     const t = now - pod.bootAt
+    const k = clamp01((t - 200) / (BOOT_MS - 400))
     ctx.save()
     ctx.globalAlpha = easeOut(t / 600)
+    this.bgHome(0.35 + 0.65 * k)
     ctx.fillStyle = W
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
-    ctx.font = `900 150px ${DOT}`
+    ctx.font = `800 140px ${DISPLAY}`
     const word = profile.short
-    ctx.fillText(word, CW / 2 - 14, CH * 0.5)
-    dot(ctx, CW / 2 + ctx.measureText(word).width / 2 + 4, CH * 0.5 - 14, 13, RED)
-    const k = clamp01((t - 200) / (BOOT_MS - 400))
-    dotRow(ctx, CW / 2 - 150, CW / 2 + 150, CH * 0.5 + 70, 13, Math.ceil(k * 13), 5)
+    ctx.fillText(word, CW / 2 - 12, CH * 0.5)
+    ctx.fillStyle = this.accent
+    ctx.beginPath()
+    ctx.arc(CW / 2 + ctx.measureText(word).width / 2 + 6, CH * 0.5 - 12, 13, 0, Math.PI * 2)
+    ctx.fill()
+    pill(ctx, CW / 2 - 140, CH * 0.5 + 62, 280, 8, 4, G3)
+    pill(ctx, CW / 2 - 140, CH * 0.5 + 62, Math.max(8, 280 * k), 8, 4, W)
     ctx.fillStyle = G2
-    ctx.font = `600 19px ${MONO}`
-    ctx.fillText(`PORTFOLIO ’${YEAR}`, CW / 2, CH * 0.5 + 130)
+    ctx.font = `600 21px ${UI}`
+    ctx.fillText(`Portfolio ’${YEAR}`, CW / 2, CH * 0.5 + 124)
     ctx.restore()
   }
 }

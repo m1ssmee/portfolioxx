@@ -1,12 +1,19 @@
 import { contact, profile, projects, toolkit } from '../content'
 
-export function PlainView({ notice, detail }: { notice?: string; detail?: string }) {
+type Props = { notice?: string; detail?: string; retry?: boolean }
+
+export function PlainView({ notice, detail, retry }: Props) {
   return (
     <main className="plain">
       {notice ? (
         <p className="plain-notice">
           {notice}
           {detail && <small className="plain-why">Reason: {detail}</small>}
+          {retry && (
+            <a className="plain-retry" href="?gpu=low">
+              Try the 3D version again
+            </a>
+          )}
         </p>
       ) : (
         <a className="plain-back" href="#">

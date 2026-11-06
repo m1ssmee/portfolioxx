@@ -543,3 +543,9 @@ kbd {
   opacity: 0.6;
   word-break: break-word;
 }
+.plain-retry {
+  display: inline-block;
+  margin-top: 8px;
+  color: inherit;
+  font-weight: 650;
+}

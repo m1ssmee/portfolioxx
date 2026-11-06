@@ -8,6 +8,7 @@ import { profile, projects, YEAR } from './content'
 import { rig } from './rig'
 import { ambienceFor } from './three/ambience'
 import { fontsReady } from './three/fonts'
+import { checkGpu, rememberLowTier } from './gpu'
 import { focusIndex, usePod, type Action, type Pod } from './usePod'
 
 const Scene = lazy(() => import('./three/Scene'))
@@ -23,18 +24,11 @@ const KEYS: Record<string, Action> = {
   ArrowLeft: 'prev',
 }
 
-/** three.js needs WebGL 2; WebGL 1 alone is not enough. */
-function hasWebGL() {
-  try {
-    const gl = document.createElement('canvas').getContext('webgl2')
-    gl?.getExtension('WEBGL_lose_context')?.loseContext() // don't keep a context alive just for the test
-    return !!gl
-  } catch {
-    return false
-  }
+const NOTICE = {
+  off: 'This browser has 3D graphics switched off, so here is the plain version. Turning on hardware acceleration in the browser’s settings, or restarting the browser, usually brings the 3D one back.',
+  old: 'This browser is too old for the 3D version, so here is the plain one.',
+  failed: 'The 3D version didn’t start on this device, so here is the plain one.',
 }
-
-const FALLBACK_NOTICE = 'This browser can’t show the 3D version, so here is the plain one.'
 
 /** One line for screen readers describing what the pod shows. */
 function describe(pod: Pod) {
@@ -53,7 +47,14 @@ function describe(pod: Pod) {
 export default function App() {
   const pod = usePod()
   const { act, plain, setPower, togglePower } = pod
-  const [webgl] = useState(hasWebGL)
+  const [gpu] = useState(checkGpu)
+  const [tier, setTier] = useState(gpu.tier)
+  // the GPU struggled (slow frames, or a lost context that came back): rebuild the scene lighter
+  const lighten = useCallback(() => {
+    if (gpu.forced) return
+    rememberLowTier()
+    setTier('low')
+  }, [gpu.forced])
   // why the 3D view gave up, if it did: shown in small print so it can be reported
   const [failed, setFailed] = useState<string | null>(null)
   const fail = useCallback((why: unknown) => {
@@ -186,10 +187,9 @@ export default function App() {
     }
   }, [act, plain])
 
-  if (plain || !webgl || failed) {
-    const why = !webgl ? 'WebGL 2 is not available' : failed
-    return <PlainView notice={!plain ? FALLBACK_NOTICE : undefined} detail={!plain ? (why ?? undefined) : undefined} />
-  }
+  if (plain) return <PlainView />
+  if (!gpu.webgl2) return <PlainView notice={gpu.webgl1 ? NOTICE.old : NOTICE.off} retry />
+  if (failed) return <PlainView notice={NOTICE.failed} detail={failed} retry />
 
   const focus = focusIndex(pod)
   const amb = ambienceFor(focus)
@@ -205,7 +205,7 @@ export default function App() {
       {fonts && (
         <SceneBoundary onError={fail}>
           <Suspense fallback={null}>
-            <Scene pod={pod} onReady={markReady} onFail={fail} />
+            <Scene key={tier} pod={pod} tier={tier} onReady={markReady} onFail={fail} onStruggle={lighten} />
           </Suspense>
         </SceneBoundary>
       )}

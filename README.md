@@ -39,7 +39,7 @@ Room colours per project are in `src/three/ambience.ts`, and the generated cover
 - Vite + React + TypeScript, with three.js through React Three Fiber, drei and postprocessing.
 - `src/three/Pod.tsx`: the pod (metal frame, clear glass shell, clear wheel, satin centre button, side power button, USB-C port) and its wheel input.
 - `src/three/Internals.tsx` and `src/three/internals.ts`: everything visible through the glass: battery, logic board with chips, shield cans and passives, flex cables, wheel sensor ring with LEDs, screws. All the textures are drawn in code.
-- `src/three/os.ts`: the pod's OS, a monochrome dot-matrix UI drawn into a canvas that becomes the screen texture.
+- `src/three/os.ts`: the pod's OS, a colourful music-player UI (screens washed in the colours of the cover in focus, app tiles, a gliding highlight) drawn into a canvas that becomes the screen texture.
 - `src/camera.ts`: the camera app's feed, squeeze and filters.
 - `src/three/cable.ts`: earphone physics. Position-based dynamics: the cable is a chain of particles with stretch and bending constraints, and the earbuds and plug are rigid bodies kept in shape by shape matching. Floor friction, self-collision, collision with the pod, and pull-out/plug-in of the plug.
 - `src/three/Earphones.tsx`: the earbuds, inline remote, USB-C plug and cable meshes.
@@ -47,6 +47,7 @@ Room colours per project are in `src/three/ambience.ts`, and the generated cover
 - `src/three/Backdrop.tsx`: the studio sweep with drifting colour glows and the giant scrolling type.
 - `src/three/Albums.tsx`: the projects as album covers on an arc.
 - `src/usePod.ts`: menus, navigation and what each button does.
+- `src/gpu.ts`: picks a graphics budget. Dedicated graphics cards get refracting glass, contact-hardening shadows and multisampling; built-in laptop graphics, phones and software renderers get a light version of the same scene. A device that struggles (slow frames, a lost graphics context) drops to the light version by itself. `?gpu=low` or `?gpu=high` in the address forces one. If 3D can't run at all, the plain page is shown with the reason.
 
 ## Deploy
 
