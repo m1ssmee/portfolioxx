@@ -66,6 +66,16 @@
         <stop offset="0.7" stop-color="#f46100" />
         <stop offset="1" stop-color="#e05500" />
       </radialGradient>
+      <!-- the jack's chamfer: its upper slope faces down into shadow, the lower one catches the light -->
+      <linearGradient id="jack-chamfer" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#c4c4c2" />
+        <stop offset="1" stop-color="#fbfbf9" />
+      </linearGradient>
+      <radialGradient id="jack-hole" cx="0.5" cy="0.62" r="0.62">
+        <stop offset="0" stop-color="#050506" />
+        <stop offset="0.75" stop-color="#151517" />
+        <stop offset="1" stop-color="#3a3a3d" />
+      </radialGradient>
       <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0" stop-color="#e6e6e4" />
         <stop offset="0.45" stop-color="#ffffff" />
@@ -178,10 +188,13 @@
     <circle cx="537.83" cy="998" r="21" fill="url(#orange)" />
     <ellipse cx="530.83" cy="989" rx="8" ry="4.5" fill="#ffffff" fill-opacity="0.45" transform="rotate(-30 530.83 989)" filter="url(#blur-1)" />
 
-    <!-- bottom strip -->
-    <circle cx="84.2" cy="1126" r="3.2" fill="#555557" />
-    <text class="label" x="96.2" y="1131.27">MIC</text>
-    <text class="label" x="332.65" y="1131.27" text-anchor="middle">KEYPAD</text>
+    <!-- bottom strip: AUX jack on the left, mic on the right -->
+    <circle cx="97.5" cy="1126" r="16.5" fill="url(#jack-chamfer)" />
+    <circle cx="97.5" cy="1126" r="16.5" fill="none" stroke="#000" stroke-opacity="0.12" stroke-width="0.8" />
+    <circle cx="97.5" cy="1126" r="13" fill="url(#jack-hole)" />
+    <text class="label" x="123.6" y="1131.27">AUX</text>
+    <circle cx="538.57" cy="1126" r="3.2" fill="#555557" />
+    <text class="label" x="550.57" y="1131.27">MIC</text>
   </svg>
 </body>
 </html>
