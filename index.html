@@ -8,24 +8,27 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <svg class="pod" viewBox="-7 0 576 1189" role="img" aria-label="Krish's pod" xmlns="http://www.w3.org/2000/svg">
+  <svg class="pod" viewBox="-7 0 617 1189" role="img" aria-label="Krish's pod" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <clipPath id="face-clip">
-        <rect x="24" y="24" width="514" height="1141" rx="82" />
+      <clipPath id="outer-clip">
+        <rect x="0" y="0" width="603" height="1189" rx="106" />
       </clipPath>
-      <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#2e2f33" />
-        <stop offset="0.5" stop-color="#1c1d20" />
-        <stop offset="1" stop-color="#121214" />
+      <clipPath id="face-clip">
+        <rect x="24" y="24" width="555" height="1141" rx="82" />
+      </clipPath>
+
+      <!-- white plastic: soft light from above, edges falling away -->
+      <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffffff" />
+        <stop offset="1" stop-color="#ebebe9" />
       </linearGradient>
-      <linearGradient id="frame-edge" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#ffffff" stop-opacity="0.22" />
-        <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.06" />
-        <stop offset="1" stop-color="#ffffff" stop-opacity="0.14" />
+      <linearGradient id="shell-shine" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="1" />
+        <stop offset="0.35" stop-color="#ffffff" stop-opacity="0" />
       </linearGradient>
       <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#f8f8f6" />
-        <stop offset="1" stop-color="#eeeeec" />
+        <stop offset="0" stop-color="#fcfcfa" />
+        <stop offset="1" stop-color="#f0f0ee" />
       </linearGradient>
       <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#ffffff" stop-opacity="0.07" />
@@ -36,90 +39,115 @@
         <stop offset="1" stop-color="#020203" />
       </radialGradient>
       <linearGradient id="hole" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#0f0f10" />
-        <stop offset="1" stop-color="#46464a" />
+        <stop offset="0" stop-color="#262628" />
+        <stop offset="1" stop-color="#5d5d60" />
       </linearGradient>
       <linearGradient id="key" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#fafaf8" />
-        <stop offset="1" stop-color="#ededeb" />
-      </linearGradient>
-      <radialGradient id="dome" cx="0.5" cy="0.7" r="0.65">
         <stop offset="0" stop-color="#ffffff" />
-        <stop offset="0.6" stop-color="#f7f7f5" />
-        <stop offset="1" stop-color="#e3e3e1" />
+        <stop offset="1" stop-color="#eeeeec" />
+      </linearGradient>
+      <linearGradient id="key-edge" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="1" />
+        <stop offset="0.5" stop-color="#ffffff" stop-opacity="0" />
+        <stop offset="1" stop-color="#000000" stop-opacity="0.08" />
+      </linearGradient>
+      <radialGradient id="dome" cx="0.5" cy="0.62" r="0.62">
+        <stop offset="0" stop-color="#ffffff" />
+        <stop offset="0.62" stop-color="#f6f6f4" />
+        <stop offset="1" stop-color="#e2e2e0" />
       </radialGradient>
       <linearGradient id="dome-edge" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#000000" stop-opacity="0.12" />
-        <stop offset="0.55" stop-color="#000000" stop-opacity="0.03" />
-        <stop offset="1" stop-color="#ffffff" stop-opacity="0.95" />
+        <stop offset="0" stop-color="#000000" stop-opacity="0.13" />
+        <stop offset="0.55" stop-color="#000000" stop-opacity="0.04" />
+        <stop offset="1" stop-color="#ffffff" stop-opacity="1" />
       </linearGradient>
-      <radialGradient id="orange" cx="0.4" cy="0.35" r="0.7">
-        <stop offset="0" stop-color="#ff7a1a" />
-        <stop offset="1" stop-color="#ef5f00" />
+      <radialGradient id="orange" cx="0.4" cy="0.35" r="0.72">
+        <stop offset="0" stop-color="#ff8b2f" />
+        <stop offset="0.7" stop-color="#f46100" />
+        <stop offset="1" stop-color="#e05500" />
       </radialGradient>
-      <filter id="grain" x="0" y="0" width="100%" height="100%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
-        <feColorMatrix type="saturate" values="0" />
+      <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#e6e6e4" />
+        <stop offset="0.45" stop-color="#ffffff" />
+        <stop offset="1" stop-color="#d4d4d2" />
+      </linearGradient>
+      <filter id="blur-1" x="-10%" y="-10%" width="120%" height="120%">
+        <feGaussianBlur stdDeviation="1.4" />
       </filter>
-      <filter id="soft" x="-5%" y="-5%" width="110%" height="110%">
-        <feGaussianBlur stdDeviation="4" />
+      <filter id="blur-3" x="-10%" y="-10%" width="120%" height="120%">
+        <feGaussianBlur stdDeviation="3" />
+      </filter>
+      <filter id="blur-5" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="5" />
       </filter>
       <g id="grille-row" class="hole">
-        <circle cx="59.24" cy="0" r="4" />
-        <circle cx="79.4" cy="0" r="4" />
-        <circle cx="99.56" cy="0" r="4" />
-        <circle cx="119.72" cy="0" r="4" />
-        <circle cx="139.88" cy="0" r="4" />
-        <circle cx="160.04" cy="0" r="4" />
-        <circle cx="180.2" cy="0" r="4" />
-        <circle cx="200.36" cy="0" r="4" />
-        <circle cx="220.52" cy="0" r="4" />
-        <circle cx="240.68" cy="0" r="4" />
-        <circle cx="260.84" cy="0" r="4" />
-        <circle cx="281" cy="0" r="4" />
-        <circle cx="301.16" cy="0" r="4" />
-        <circle cx="321.32" cy="0" r="4" />
-        <circle cx="341.48" cy="0" r="4" />
-        <circle cx="361.64" cy="0" r="4" />
-        <circle cx="381.8" cy="0" r="4" />
-        <circle cx="401.96" cy="0" r="4" />
-        <circle cx="422.12" cy="0" r="4" />
-        <circle cx="442.28" cy="0" r="4" />
-        <circle cx="462.44" cy="0" r="4" />
-        <circle cx="482.6" cy="0" r="4" />
-        <circle cx="502.76" cy="0" r="4" />
+        <circle cx="59.58" cy="0" r="4" />
+        <circle cx="79.74" cy="0" r="4" />
+        <circle cx="99.9" cy="0" r="4" />
+        <circle cx="120.06" cy="0" r="4" />
+        <circle cx="140.22" cy="0" r="4" />
+        <circle cx="160.38" cy="0" r="4" />
+        <circle cx="180.54" cy="0" r="4" />
+        <circle cx="200.7" cy="0" r="4" />
+        <circle cx="220.86" cy="0" r="4" />
+        <circle cx="241.02" cy="0" r="4" />
+        <circle cx="261.18" cy="0" r="4" />
+        <circle cx="281.34" cy="0" r="4" />
+        <circle cx="301.5" cy="0" r="4" />
+        <circle cx="321.66" cy="0" r="4" />
+        <circle cx="341.82" cy="0" r="4" />
+        <circle cx="361.98" cy="0" r="4" />
+        <circle cx="382.14" cy="0" r="4" />
+        <circle cx="402.3" cy="0" r="4" />
+        <circle cx="422.46" cy="0" r="4" />
+        <circle cx="442.62" cy="0" r="4" />
+        <circle cx="462.78" cy="0" r="4" />
+        <circle cx="482.94" cy="0" r="4" />
+        <circle cx="503.1" cy="0" r="4" />
+        <circle cx="523.26" cy="0" r="4" />
+        <circle cx="543.42" cy="0" r="4" />
       </g>
     </defs>
 
     <!-- side button -->
-    <rect class="side-button" x="558" y="288" width="9" height="125" rx="2.5" />
+    <rect class="side-button" x="599" y="288" width="9" height="125" rx="2.5" />
 
-    <!-- border -->
-    <rect x="0" y="0" width="562" height="1189" rx="106" fill="url(#frame)" />
-    <rect x="1" y="1" width="560" height="1187" rx="105" fill="none" stroke="url(#frame-edge)" stroke-width="1.5" />
+    <!-- border: one piece of white plastic around the face -->
+    <rect x="0" y="0" width="603" height="1189" rx="106" fill="url(#shell)"/>
+    <g clip-path="url(#outer-clip)">
+      <!-- its outer edge rolls away from the light -->
+      <rect x="0" y="0" width="603" height="1189" rx="106" fill="none" stroke="#c9c9c7" stroke-width="9" filter="url(#blur-3)"/>
+      <!-- and a soft shine runs along its top -->
+      <rect x="6" y="6" width="591" height="1177" rx="100" fill="none" stroke="url(#shell-shine)" stroke-width="3" filter="url(#blur-1)"/>
+    </g>
 
     <!-- face -->
     <g clip-path="url(#face-clip)">
-      <rect x="24" y="24" width="514" height="1141" fill="url(#face)" />
-      <rect x="24" y="24" width="514" height="1141" filter="url(#grain)" opacity="0.05" style="mix-blend-mode: multiply" />
+      <rect x="24" y="24" width="555" height="1141" rx="0" fill="url(#face)"/>
 
-      <!-- keypad: dark grooves, three keys, domes -->
-      <rect x="24" y="910" width="514" height="177" fill="#1c1c1e" />
-      <rect class="key" x="14" y="913" width="178.67" height="170" rx="3" />
-      <rect class="key" x="196.67" y="913" width="168.67" height="170" rx="3" />
-      <rect class="key" x="369.33" y="913" width="178.67" height="170" rx="3" />
-      <circle class="dome" cx="108.33" cy="998" r="60" />
-      <circle class="dome" cx="281" cy="998" r="60" />
-      <circle class="dome" cx="453.67" cy="998" r="60" />
+      <!-- keypad: gaps, three keys, domes -->
+      <rect x="24" y="910" width="555" height="177" fill="#9c9c9a" />
+      <rect class="key" x="14" y="913" width="192.33" height="170" rx="3" />
+      <rect class="key" x="210.33" y="913" width="182.33" height="170" rx="3" />
+      <rect class="key" x="396.67" y="913" width="192.33" height="170" rx="3" />
+      <circle class="dome" cx="115.17" cy="998" r="60" />
+      <ellipse class="gloss" cx="95.17" cy="971" rx="25" ry="12" transform="rotate(-24 95.17 971)" />
+      <circle class="dome" cx="301.5" cy="998" r="60" />
+      <ellipse class="gloss" cx="281.5" cy="971" rx="25" ry="12" transform="rotate(-24 281.5 971)" />
+      <circle class="dome" cx="487.83" cy="998" r="60" />
+      <ellipse class="gloss" cx="467.83" cy="971" rx="25" ry="12" transform="rotate(-24 467.83 971)" />
 
-      <!-- the face meets the border: a soft shade along the edge -->
-      <rect x="24" y="24" width="514" height="1141" rx="82" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="10" filter="url(#soft)" />
+      <!-- the border stands a touch proud of the face: a soft shade along the seam -->
+      <rect x="24" y="24" width="555" height="1141" rx="82" fill="none" stroke="#000" stroke-opacity="0.1" stroke-width="8" filter="url(#blur-3)"/>
     </g>
+    <!-- the seam between border and face -->
+    <rect x="24" y="24" width="555" height="1141" rx="82" fill="none" stroke="#c4c4c2" stroke-width="1.6"/>
+    <rect x="25.6" y="25.6" width="551.8" height="1137.8" rx="80.4" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="1"/>
 
     <!-- screen, with the punch-hole camera at the centre of its top-left corner -->
-    <rect x="35" y="35" width="492" height="631" rx="71" fill="#b9b9b7" />
-    <rect x="36" y="36" width="490" height="629" rx="70" fill="#0a0a0b" />
-    <rect x="36" y="36" width="490" height="629" rx="70" fill="url(#glass)" />
+    <rect x="35" y="35" width="533" height="631" rx="71" fill="#c8c8c6"/>
+    <rect x="36" y="36" width="531" height="629" rx="70" fill="#0a0a0b"/>
+    <rect x="36" y="36" width="531" height="629" rx="70" fill="url(#glass)"/>
     <circle cx="106" cy="106" r="13" fill="#1b1c1f" />
     <circle cx="106" cy="106" r="12.25" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1" />
     <circle cx="106" cy="106" r="8.5" fill="url(#lens)" />
@@ -129,9 +157,9 @@
     <!-- labels under the screen -->
     <rect class="badge" x="55" y="689" width="41" height="25" rx="5" />
     <text class="badge-text" x="75.5" y="706.95" text-anchor="middle">HQ</text>
-    <text class="label" x="282.15" y="706.77" text-anchor="middle">DISPLAY</text>
-    <rect class="badge" x="461" y="689" width="46" height="25" rx="5" />
-    <path class="badge-icon" d="M470.5 696H480C483.5 696 484 701.5 485.5 701.5M470.5 707H480C483.5 707 484 701.5 485.5 701.5H496.5M492 697L496.8 701.5L492 706" />
+    <text class="label" x="302.65" y="706.77" text-anchor="middle">DISPLAY</text>
+    <rect class="badge" x="502" y="689" width="46" height="25" rx="5" />
+    <path class="badge-icon" d="M511.5 696H521C524.5 696 525 701.5 526.5 701.5M511.5 707H521C524.5 707 525 701.5 526.5 701.5H537.5M533 697L537.8 701.5L533 706" />
 
     <!-- speaker grille -->
     <use href="#grille-row" y="753" />
@@ -139,19 +167,18 @@
     <use href="#grille-row" y="793" />
     <use href="#grille-row" y="813" />
     <use href="#grille-row" y="833" />
-    <text class="label" x="282.15" y="881.27" text-anchor="middle">SPEAKERS</text>
+    <text class="label" x="302.65" y="881.27" text-anchor="middle">SPEAKERS</text>
 
     <!-- key symbols -->
-    <polygon class="key-icon" points="90.33,998 117.33,983 117.33,1013" />
-    <polygon class="key-icon" points="299,998 272,983 272,1013" />
-    <circle cx="453.67" cy="998" r="21" fill="url(#orange)" />
+    <polygon class="key-icon" points="97.17,998 124.17,983 124.17,1013" />
+    <polygon class="key-icon" points="319.5,998 292.5,983 292.5,1013" />
+    <circle cx="487.83" cy="998" r="21" fill="url(#orange)" />
+    <ellipse cx="480.83" cy="989" rx="8" ry="4.5" fill="#ffffff" fill-opacity="0.45" transform="rotate(-30 480.83 989)" filter="url(#blur-1)" />
 
     <!-- bottom strip -->
-    <circle cx="84.2" cy="1126" r="3.2" fill="#4a4a4c" />
+    <circle cx="84.2" cy="1126" r="3.2" fill="#555557" />
     <text class="label" x="96.2" y="1131.27">MIC</text>
-    <text class="label" x="282.15" y="1131.27" text-anchor="middle">KEYPAD</text>
-    <rect class="badge" x="451" y="1114" width="30" height="24" rx="6" />
-    <path class="badge-icon" d="M466 1126L475 1126M466 1126L472.36 1132.36M466 1126L466 1135M466 1126L459.64 1132.36M466 1126L457 1126M466 1126L459.64 1119.64M466 1126L466 1117M466 1126L472.36 1119.64" />
+    <text class="label" x="302.65" y="1131.27" text-anchor="middle">KEYPAD</text>
   </svg>
 </body>
 </html>

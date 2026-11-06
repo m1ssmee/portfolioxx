@@ -21,9 +21,10 @@ body {
 /* the pod fills most of the screen height, and the width on narrow screens */
 .pod {
   display: block;
-  width: min(88vw, calc(90vh * 576 / 1189));
+  width: min(88vw, calc(90vh * 617 / 1189));
   height: auto;
-  filter: drop-shadow(0 24px 36px rgba(0, 0, 0, 0.14)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+  /* white on white: the shadow is what sets it off the page */
+  filter: drop-shadow(0 28px 40px rgba(0, 0, 0, 0.16)) drop-shadow(0 5px 10px rgba(0, 0, 0, 0.1));
 }
 
 .pod text {
@@ -34,23 +35,23 @@ body {
   font-size: 14.5px;
   font-weight: 500;
   letter-spacing: 2.3px;
-  fill: #959595;
+  fill: #9a9a9a;
 }
 
 .badge {
-  fill: #b5b5b5;
+  fill: #c3c3c1;
 }
 
 .badge-text {
   font-size: 15px;
   font-weight: 650;
   letter-spacing: 0.4px;
-  fill: #f7f7f7;
+  fill: #ffffff;
 }
 
 .badge-icon {
   fill: none;
-  stroke: #f7f7f7;
+  stroke: #ffffff;
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -62,6 +63,8 @@ body {
 
 .key {
   fill: url(#key);
+  stroke: url(#key-edge);
+  stroke-width: 2;
 }
 
 .dome {
@@ -70,10 +73,18 @@ body {
   stroke-width: 1.5;
 }
 
+.gloss {
+  fill: #ffffff;
+  opacity: 0.85;
+  filter: url(#blur-5);
+}
+
 .key-icon {
-  fill: #7a7a7a;
+  fill: #8a8a8a;
 }
 
 .side-button {
-  fill: #1d1e21;
+  fill: url(#side);
+  stroke: #cfcfcd;
+  stroke-width: 0.8;
 }
