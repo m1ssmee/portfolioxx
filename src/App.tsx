@@ -3,6 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useState, type CSSProperties } 
 import { Caption } from './components/Caption'
 import { PlainView } from './components/PlainView'
 import { ProjectPanel } from './components/ProjectPanel'
+import { SceneBoundary } from './components/SceneBoundary'
 import { profile, projects, YEAR } from './content'
 import { rig } from './rig'
 import { ambienceFor } from './three/ambience'
@@ -22,14 +23,18 @@ const KEYS: Record<string, Action> = {
   ArrowLeft: 'prev',
 }
 
+/** three.js needs WebGL 2; WebGL 1 alone is not enough. */
 function hasWebGL() {
   try {
-    const c = document.createElement('canvas')
-    return !!(c.getContext('webgl2') || c.getContext('webgl'))
+    const gl = document.createElement('canvas').getContext('webgl2')
+    gl?.getExtension('WEBGL_lose_context')?.loseContext() // don't keep a context alive just for the test
+    return !!gl
   } catch {
     return false
   }
 }
+
+const FALLBACK_NOTICE = 'This browser can’t show the 3D version, so here is the plain one.'
 
 /** One line for screen readers describing what the pod shows. */
 function describe(pod: Pod) {
@@ -49,6 +54,8 @@ export default function App() {
   const pod = usePod()
   const { act, plain, setPower, togglePower } = pod
   const [webgl] = useState(hasWebGL)
+  const [failed, setFailed] = useState(false) // the 3D view crashed or lost its GPU context for good
+  const fail = useCallback(() => setFailed(true), [])
   const [fonts, setFonts] = useState(false)
   const [ready, setReady] = useState(false)
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
@@ -176,7 +183,7 @@ export default function App() {
     }
   }, [act, plain])
 
-  if (plain || !webgl) return <PlainView notice={!plain ? 'This browser can’t show the 3D version, so here is the plain one.' : undefined} />
+  if (plain || !webgl || failed) return <PlainView notice={!plain ? FALLBACK_NOTICE : undefined} />
 
   const focus = focusIndex(pod)
   const amb = ambienceFor(focus)
@@ -190,9 +197,11 @@ export default function App() {
       style={style}
     >
       {fonts && (
-        <Suspense fallback={null}>
-          <Scene pod={pod} onReady={markReady} />
-        </Suspense>
+        <SceneBoundary onError={fail}>
+          <Suspense fallback={null}>
+            <Scene pod={pod} onReady={markReady} onFail={fail} />
+          </Suspense>
+        </SceneBoundary>
       )}
       <div className={`loading${ready ? ' done' : ''}`} aria-hidden={ready}>
         <span className="loading-dot" />

@@ -4,15 +4,32 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0b0b0d" />
+    <meta name="theme-color" content="#d6d9df" />
     <title>Krish P. — portfolio</title>
     <meta
       name="description"
       content="Krish P. builds AI products, 3D interfaces and robots. Projects: BodyMap, Codebase Tavern, Lunar Habitat Safety Rover, CropScan."
     />
+    <style>
+      /* shown until the app takes over, so a slow connection never looks like a blank page */
+      html, body { margin: 0; background: #d6d9df; }
+      .boot {
+        position: fixed; inset: 0; display: grid; place-content: center; gap: 4px; text-align: center;
+        font: 500 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; color: #15171b;
+      }
+      .boot strong { font-size: 18px; letter-spacing: -0.01em; }
+      .boot span { opacity: 0.55; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot"><strong>Krish P.</strong><span>loading the portfolio…</span></div>
+    </div>
+    <noscript>
+      <p style="text-align: center; font-family: system-ui, sans-serif">
+        This portfolio needs JavaScript. Projects are on <a href="https://github.com/m1ssmee">GitHub</a>.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

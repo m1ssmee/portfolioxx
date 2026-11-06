@@ -17,8 +17,15 @@ import { PodModel } from './Pod'
 
 type Props = { pod: Pod; onReady: () => void }
 
-export default function Scene({ pod, onReady }: Props) {
-  const [dpr, setDpr] = useState(() => Math.min(2, window.devicePixelRatio || 1))
+// Phones and tablets get a lighter GPU budget: fewer pixels, no multisampled buffers and a smaller
+// shadow map. Together that roughly halves the graphics memory, which matters because a mobile
+// browser that runs out simply drops the page.
+const LITE =
+  typeof window !== 'undefined' &&
+  (window.matchMedia('(pointer: coarse)').matches || Math.min(window.screen.width, window.screen.height) < 600)
+
+export default function Scene({ pod, onReady, onFail }: Props & { onFail: () => void }) {
+  const [dpr, setDpr] = useState(() => Math.min(LITE ? 1.5 : 2, window.devicePixelRatio || 1))
   return (
     <Canvas
       className="scene"
@@ -28,10 +35,38 @@ export default function Scene({ pod, onReady }: Props) {
       camera={{ fov: FOV, near: 0.1, far: 40, position: [0, CAM_Y, 3.4] }}
     >
       <PerformanceMonitor onDecline={() => setDpr((d) => Math.max(1, d - 0.5))} />
+      <ContextWatch onFail={onFail} />
       <World pod={pod} onReady={onReady} />
       {import.meta.env.DEV && <DevHooks />}
     </Canvas>
   )
+}
+
+/** If the GPU context is lost and doesn't come back, give up on 3D instead of leaving an empty canvas. */
+function ContextWatch({ onFail }: { onFail: () => void }) {
+  const gl = useThree((s) => s.gl)
+  useEffect(() => {
+    const canvas = gl.domElement
+    let timer = 0
+    const check = () => {
+      // a hidden tab may legitimately wait for its context: only judge while it's on screen
+      if (document.visibilityState === 'hidden') timer = window.setTimeout(check, 1000)
+      else if (gl.getContext().isContextLost()) onFail()
+    }
+    const lost = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(check, 4000)
+    }
+    const restored = () => window.clearTimeout(timer)
+    canvas.addEventListener('webglcontextlost', lost)
+    canvas.addEventListener('webglcontextrestored', restored)
+    return () => {
+      window.clearTimeout(timer)
+      canvas.removeEventListener('webglcontextlost', lost)
+      canvas.removeEventListener('webglcontextrestored', restored)
+    }
+  }, [gl, onFail])
+  return null
 }
 
 function World({ pod, onReady }: Props) {
@@ -73,7 +108,7 @@ function World({ pod, onReady }: Props) {
         castShadow
         position={[-2.4, 4.2, 3.4]}
         intensity={2.5}
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={LITE ? [1024, 1024] : [2048, 2048]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
       >
@@ -100,7 +135,7 @@ function World({ pod, onReady }: Props) {
       <Ashtray position={[-0.82, ASHTRAY_Y, 0.1]} />
       <Albums show={L.split && pod.opened === null} focus={focus} x={L.albumsX} onPick={pod.focusProject} />
 
-      <EffectComposer multisampling={4}>
+      <EffectComposer multisampling={LITE ? 0 : 4}>
         <Bloom mipmapBlur intensity={0.35} luminanceThreshold={1} luminanceSmoothing={0.2} />
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
         <Vignette offset={0.3} darkness={0.42} />
