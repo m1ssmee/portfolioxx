@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Krish P.</title>
+  <link rel="preload" href="fonts/inter.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <svg class="pod" viewBox="-7 0 576 1189" role="img" aria-label="Krish's pod" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <clipPath id="face-clip">
+        <rect x="24" y="24" width="514" height="1141" rx="82" />
+      </clipPath>
+      <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#2e2f33" />
+        <stop offset="0.5" stop-color="#1c1d20" />
+        <stop offset="1" stop-color="#121214" />
+      </linearGradient>
+      <linearGradient id="frame-edge" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.22" />
+        <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.06" />
+        <stop offset="1" stop-color="#ffffff" stop-opacity="0.14" />
+      </linearGradient>
+      <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f8f8f6" />
+        <stop offset="1" stop-color="#eeeeec" />
+      </linearGradient>
+      <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.07" />
+        <stop offset="0.42" stop-color="#ffffff" stop-opacity="0" />
+      </linearGradient>
+      <radialGradient id="lens" cx="0.45" cy="0.4" r="0.6">
+        <stop offset="0" stop-color="#121722" />
+        <stop offset="1" stop-color="#020203" />
+      </radialGradient>
+      <linearGradient id="hole" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0f0f10" />
+        <stop offset="1" stop-color="#46464a" />
+      </linearGradient>
+      <linearGradient id="key" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#fafaf8" />
+        <stop offset="1" stop-color="#ededeb" />
+      </linearGradient>
+      <radialGradient id="dome" cx="0.5" cy="0.7" r="0.65">
+        <stop offset="0" stop-color="#ffffff" />
+        <stop offset="0.6" stop-color="#f7f7f5" />
+        <stop offset="1" stop-color="#e3e3e1" />
+      </radialGradient>
+      <linearGradient id="dome-edge" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#000000" stop-opacity="0.12" />
+        <stop offset="0.55" stop-color="#000000" stop-opacity="0.03" />
+        <stop offset="1" stop-color="#ffffff" stop-opacity="0.95" />
+      </linearGradient>
+      <radialGradient id="orange" cx="0.4" cy="0.35" r="0.7">
+        <stop offset="0" stop-color="#ff7a1a" />
+        <stop offset="1" stop-color="#ef5f00" />
+      </radialGradient>
+      <filter id="grain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+        <feColorMatrix type="saturate" values="0" />
+      </filter>
+      <filter id="soft" x="-5%" y="-5%" width="110%" height="110%">
+        <feGaussianBlur stdDeviation="4" />
+      </filter>
+      <g id="grille-row" class="hole">
+        <circle cx="59.24" cy="0" r="4" />
+        <circle cx="79.4" cy="0" r="4" />
+        <circle cx="99.56" cy="0" r="4" />
+        <circle cx="119.72" cy="0" r="4" />
+        <circle cx="139.88" cy="0" r="4" />
+        <circle cx="160.04" cy="0" r="4" />
+        <circle cx="180.2" cy="0" r="4" />
+        <circle cx="200.36" cy="0" r="4" />
+        <circle cx="220.52" cy="0" r="4" />
+        <circle cx="240.68" cy="0" r="4" />
+        <circle cx="260.84" cy="0" r="4" />
+        <circle cx="281" cy="0" r="4" />
+        <circle cx="301.16" cy="0" r="4" />
+        <circle cx="321.32" cy="0" r="4" />
+        <circle cx="341.48" cy="0" r="4" />
+        <circle cx="361.64" cy="0" r="4" />
+        <circle cx="381.8" cy="0" r="4" />
+        <circle cx="401.96" cy="0" r="4" />
+        <circle cx="422.12" cy="0" r="4" />
+        <circle cx="442.28" cy="0" r="4" />
+        <circle cx="462.44" cy="0" r="4" />
+        <circle cx="482.6" cy="0" r="4" />
+        <circle cx="502.76" cy="0" r="4" />
+      </g>
+    </defs>
+
+    <!-- side button -->
+    <rect class="side-button" x="558" y="288" width="9" height="125" rx="2.5" />
+
+    <!-- border -->
+    <rect x="0" y="0" width="562" height="1189" rx="106" fill="url(#frame)" />
+    <rect x="1" y="1" width="560" height="1187" rx="105" fill="none" stroke="url(#frame-edge)" stroke-width="1.5" />
+
+    <!-- face -->
+    <g clip-path="url(#face-clip)">
+      <rect x="24" y="24" width="514" height="1141" fill="url(#face)" />
+      <rect x="24" y="24" width="514" height="1141" filter="url(#grain)" opacity="0.05" style="mix-blend-mode: multiply" />
+
+      <!-- keypad: dark grooves, three keys, domes -->
+      <rect x="24" y="910" width="514" height="177" fill="#1c1c1e" />
+      <rect class="key" x="14" y="913" width="178.67" height="170" rx="3" />
+      <rect class="key" x="196.67" y="913" width="168.67" height="170" rx="3" />
+      <rect class="key" x="369.33" y="913" width="178.67" height="170" rx="3" />
+      <circle class="dome" cx="108.33" cy="998" r="60" />
+      <circle class="dome" cx="281" cy="998" r="60" />
+      <circle class="dome" cx="453.67" cy="998" r="60" />
+
+      <!-- the face meets the border: a soft shade along the edge -->
+      <rect x="24" y="24" width="514" height="1141" rx="82" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="10" filter="url(#soft)" />
+    </g>
+
+    <!-- screen, with the punch-hole camera at the centre of its top-left corner -->
+    <rect x="35" y="35" width="492" height="631" rx="71" fill="#b9b9b7" />
+    <rect x="36" y="36" width="490" height="629" rx="70" fill="#0a0a0b" />
+    <rect x="36" y="36" width="490" height="629" rx="70" fill="url(#glass)" />
+    <circle cx="106" cy="106" r="13" fill="#1b1c1f" />
+    <circle cx="106" cy="106" r="12.25" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1" />
+    <circle cx="106" cy="106" r="8.5" fill="url(#lens)" />
+    <circle cx="106" cy="106" r="5.2" fill="none" stroke="#5c7bc4" stroke-opacity="0.22" stroke-width="1" />
+    <circle cx="103.4" cy="103.2" r="1.9" fill="#ffffff" fill-opacity="0.35" />
+
+    <!-- labels under the screen -->
+    <rect class="badge" x="55" y="689" width="41" height="25" rx="5" />
+    <text class="badge-text" x="75.5" y="706.95" text-anchor="middle">HQ</text>
+    <text class="label" x="282.15" y="706.77" text-anchor="middle">DISPLAY</text>
+    <rect class="badge" x="461" y="689" width="46" height="25" rx="5" />
+    <path class="badge-icon" d="M470.5 696H480C483.5 696 484 701.5 485.5 701.5M470.5 707H480C483.5 707 484 701.5 485.5 701.5H496.5M492 697L496.8 701.5L492 706" />
+
+    <!-- speaker grille -->
+    <use href="#grille-row" y="753" />
+    <use href="#grille-row" y="773" />
+    <use href="#grille-row" y="793" />
+    <use href="#grille-row" y="813" />
+    <use href="#grille-row" y="833" />
+    <text class="label" x="282.15" y="881.27" text-anchor="middle">SPEAKERS</text>
+
+    <!-- key symbols -->
+    <polygon class="key-icon" points="90.33,998 117.33,983 117.33,1013" />
+    <polygon class="key-icon" points="299,998 272,983 272,1013" />
+    <circle cx="453.67" cy="998" r="21" fill="url(#orange)" />
+
+    <!-- bottom strip -->
+    <circle cx="84.2" cy="1126" r="3.2" fill="#4a4a4c" />
+    <text class="label" x="96.2" y="1131.27">MIC</text>
+    <text class="label" x="282.15" y="1131.27" text-anchor="middle">KEYPAD</text>
+    <rect class="badge" x="451" y="1114" width="30" height="24" rx="6" />
+    <path class="badge-icon" d="M466 1126L475 1126M466 1126L472.36 1132.36M466 1126L466 1135M466 1126L459.64 1132.36M466 1126L457 1126M466 1126L459.64 1119.64M466 1126L466 1117M466 1126L472.36 1119.64" />
+  </svg>
+</body>
+</html>
