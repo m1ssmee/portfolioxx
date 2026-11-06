@@ -61,20 +61,10 @@
         <stop offset="0.55" stop-color="#000000" stop-opacity="0.04" />
         <stop offset="1" stop-color="#ffffff" stop-opacity="1" />
       </linearGradient>
-      <radialGradient id="orange" cx="0.4" cy="0.35" r="0.72">
-        <stop offset="0" stop-color="#ff8b2f" />
-        <stop offset="0.7" stop-color="#f46100" />
-        <stop offset="1" stop-color="#e05500" />
-      </radialGradient>
-      <!-- the jack's chamfer: its upper slope faces down into shadow, the lower one catches the light -->
-      <linearGradient id="jack-chamfer" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#c4c4c2" />
-        <stop offset="1" stop-color="#fbfbf9" />
-      </linearGradient>
-      <radialGradient id="jack-hole" cx="0.5" cy="0.62" r="0.62">
-        <stop offset="0" stop-color="#050506" />
-        <stop offset="0.75" stop-color="#151517" />
-        <stop offset="1" stop-color="#3a3a3d" />
+      <radialGradient id="red" cx="0.4" cy="0.35" r="0.72">
+        <stop offset="0" stop-color="#ff5a45" />
+        <stop offset="0.7" stop-color="#ee2a1d" />
+        <stop offset="1" stop-color="#d21d12" />
       </radialGradient>
       <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0" stop-color="#e6e6e4" />
@@ -168,11 +158,13 @@
     <circle cx="103.4" cy="103.2" r="1.9" fill="#ffffff" fill-opacity="0.35" />
 
     <!-- labels under the screen -->
-    <rect class="badge" x="55" y="689" width="41" height="25" rx="5" />
-    <text class="badge-text" x="75.5" y="706.95" text-anchor="middle">HQ</text>
+    <rect class="badge" x="55" y="689" width="89.4" height="25" rx="5" />
+    <text class="badge-text" x="100.1" y="706.41" text-anchor="middle">HD AUDIO</text>
     <text class="label" x="332.65" y="706.77" text-anchor="middle">DISPLAY</text>
     <rect class="badge" x="562" y="689" width="46" height="25" rx="5" />
-    <path class="badge-icon" d="M571.5 696H581C584.5 696 585 701.5 586.5 701.5M571.5 707H581C584.5 707 585 701.5 586.5 701.5H597.5M593 697L597.8 701.5L593 706" />
+    <path class="badge-icon" d="M578 705V702A7 7 0 0 1 592 702V705" />
+    <rect class="badge-fill" x="576.4" y="702.1" width="4.2" height="6.4" rx="1.6" />
+    <rect class="badge-fill" x="589.4" y="702.1" width="4.2" height="6.4" rx="1.6" />
 
     <!-- speaker grille -->
     <use href="#grille-row" y="753" />
@@ -185,14 +177,11 @@
     <!-- key symbols -->
     <polygon class="key-icon" points="107.17,998 134.17,983 134.17,1013" />
     <polygon class="key-icon" points="349.5,998 322.5,983 322.5,1013" />
-    <circle cx="537.83" cy="998" r="21" fill="url(#orange)" />
+    <circle cx="537.83" cy="998" r="21" fill="url(#red)" />
     <ellipse cx="530.83" cy="989" rx="8" ry="4.5" fill="#ffffff" fill-opacity="0.45" transform="rotate(-30 530.83 989)" filter="url(#blur-1)" />
 
-    <!-- bottom strip: AUX jack on the left, mic on the right -->
-    <circle cx="97.5" cy="1126" r="16.5" fill="url(#jack-chamfer)" />
-    <circle cx="97.5" cy="1126" r="16.5" fill="none" stroke="#000" stroke-opacity="0.12" stroke-width="0.8" />
-    <circle cx="97.5" cy="1126" r="13" fill="url(#jack-hole)" />
-    <text class="label" x="123.6" y="1131.27">AUX</text>
+    <!-- bottom strip: AUX on the left, mic on the right -->
+    <text class="label" x="80.4" y="1131.27">AUX</text>
     <circle cx="538.57" cy="1126" r="3.2" fill="#555557" />
     <text class="label" x="550.57" y="1131.27">MIC</text>
   </svg>
