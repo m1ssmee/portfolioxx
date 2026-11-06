@@ -8,13 +8,13 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <svg class="pod" viewBox="-7 0 617 1189" role="img" aria-label="Krish's pod" xmlns="http://www.w3.org/2000/svg">
+  <svg class="pod" viewBox="-7 0 657 1189" role="img" aria-label="Krish's pod" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <clipPath id="outer-clip">
-        <rect x="0" y="0" width="603" height="1189" rx="106" />
+        <rect x="0" y="0" width="643" height="1189" rx="106" />
       </clipPath>
       <clipPath id="face-clip">
-        <rect x="24" y="24" width="555" height="1141" rx="82" />
+        <rect x="24" y="24" width="595" height="1141" rx="82" />
       </clipPath>
 
       <!-- white plastic: soft light from above, edges falling away -->
@@ -81,73 +81,75 @@
         <feGaussianBlur stdDeviation="5" />
       </filter>
       <g id="grille-row" class="hole">
-        <circle cx="59.58" cy="0" r="4" />
-        <circle cx="79.74" cy="0" r="4" />
-        <circle cx="99.9" cy="0" r="4" />
-        <circle cx="120.06" cy="0" r="4" />
-        <circle cx="140.22" cy="0" r="4" />
-        <circle cx="160.38" cy="0" r="4" />
-        <circle cx="180.54" cy="0" r="4" />
-        <circle cx="200.7" cy="0" r="4" />
-        <circle cx="220.86" cy="0" r="4" />
-        <circle cx="241.02" cy="0" r="4" />
-        <circle cx="261.18" cy="0" r="4" />
-        <circle cx="281.34" cy="0" r="4" />
-        <circle cx="301.5" cy="0" r="4" />
-        <circle cx="321.66" cy="0" r="4" />
-        <circle cx="341.82" cy="0" r="4" />
-        <circle cx="361.98" cy="0" r="4" />
-        <circle cx="382.14" cy="0" r="4" />
-        <circle cx="402.3" cy="0" r="4" />
-        <circle cx="422.46" cy="0" r="4" />
-        <circle cx="442.62" cy="0" r="4" />
-        <circle cx="462.78" cy="0" r="4" />
-        <circle cx="482.94" cy="0" r="4" />
-        <circle cx="503.1" cy="0" r="4" />
-        <circle cx="523.26" cy="0" r="4" />
-        <circle cx="543.42" cy="0" r="4" />
+        <circle cx="59.42" cy="0" r="4" />
+        <circle cx="79.58" cy="0" r="4" />
+        <circle cx="99.74" cy="0" r="4" />
+        <circle cx="119.9" cy="0" r="4" />
+        <circle cx="140.06" cy="0" r="4" />
+        <circle cx="160.22" cy="0" r="4" />
+        <circle cx="180.38" cy="0" r="4" />
+        <circle cx="200.54" cy="0" r="4" />
+        <circle cx="220.7" cy="0" r="4" />
+        <circle cx="240.86" cy="0" r="4" />
+        <circle cx="261.02" cy="0" r="4" />
+        <circle cx="281.18" cy="0" r="4" />
+        <circle cx="301.34" cy="0" r="4" />
+        <circle cx="321.5" cy="0" r="4" />
+        <circle cx="341.66" cy="0" r="4" />
+        <circle cx="361.82" cy="0" r="4" />
+        <circle cx="381.98" cy="0" r="4" />
+        <circle cx="402.14" cy="0" r="4" />
+        <circle cx="422.3" cy="0" r="4" />
+        <circle cx="442.46" cy="0" r="4" />
+        <circle cx="462.62" cy="0" r="4" />
+        <circle cx="482.78" cy="0" r="4" />
+        <circle cx="502.94" cy="0" r="4" />
+        <circle cx="523.1" cy="0" r="4" />
+        <circle cx="543.26" cy="0" r="4" />
+        <circle cx="563.42" cy="0" r="4" />
+        <circle cx="583.58" cy="0" r="4" />
       </g>
     </defs>
 
     <!-- side button -->
-    <rect class="side-button" x="599" y="288" width="9" height="125" rx="2.5" />
+    <rect class="side-button" x="639" y="288" width="9" height="125" rx="2.5" />
 
     <!-- border: one piece of white plastic around the face -->
-    <rect x="0" y="0" width="603" height="1189" rx="106" fill="url(#shell)"/>
+    <rect x="0" y="0" width="643" height="1189" rx="106" fill="url(#shell)"/>
     <g clip-path="url(#outer-clip)">
       <!-- its outer edge rolls away from the light -->
-      <rect x="0" y="0" width="603" height="1189" rx="106" fill="none" stroke="#c9c9c7" stroke-width="9" filter="url(#blur-3)"/>
+      <rect x="0" y="0" width="643" height="1189" rx="106" fill="none" stroke="#c9c9c7" stroke-width="9" filter="url(#blur-3)"/>
       <!-- and a soft shine runs along its top -->
-      <rect x="6" y="6" width="591" height="1177" rx="100" fill="none" stroke="url(#shell-shine)" stroke-width="3" filter="url(#blur-1)"/>
+      <rect x="6" y="6" width="631" height="1177" rx="100" fill="none" stroke="url(#shell-shine)" stroke-width="3" filter="url(#blur-1)"/>
     </g>
 
     <!-- face -->
     <g clip-path="url(#face-clip)">
-      <rect x="24" y="24" width="555" height="1141" rx="0" fill="url(#face)"/>
+      <rect x="24" y="24" width="595" height="1141" rx="0" fill="url(#face)"/>
 
       <!-- keypad: gaps, three keys, domes -->
-      <rect x="24" y="910" width="555" height="177" fill="#9c9c9a" />
-      <rect class="key" x="14" y="913" width="192.33" height="170" rx="3" />
-      <rect class="key" x="210.33" y="913" width="182.33" height="170" rx="3" />
-      <rect class="key" x="396.67" y="913" width="192.33" height="170" rx="3" />
-      <circle class="dome" cx="115.17" cy="998" r="60" />
-      <ellipse class="gloss" cx="95.17" cy="971" rx="25" ry="12" transform="rotate(-24 95.17 971)" />
-      <circle class="dome" cx="301.5" cy="998" r="60" />
-      <ellipse class="gloss" cx="281.5" cy="971" rx="25" ry="12" transform="rotate(-24 281.5 971)" />
-      <circle class="dome" cx="487.83" cy="998" r="60" />
-      <ellipse class="gloss" cx="467.83" cy="971" rx="25" ry="12" transform="rotate(-24 467.83 971)" />
+      <rect x="24" y="910" width="595" height="177" fill="#9c9c9a" />
+      <rect class="key" x="14" y="913" width="205.67" height="170" rx="3" />
+      <rect class="key" x="223.67" y="913" width="195.67" height="170" rx="3" />
+      <rect class="key" x="423.33" y="913" width="205.67" height="170" rx="3" />
+      <circle class="dome" cx="121.83" cy="998" r="60" />
+      <ellipse class="gloss" cx="101.83" cy="971" rx="25" ry="12" transform="rotate(-24 101.83 971)" />
+      <circle class="dome" cx="321.5" cy="998" r="60" />
+      <ellipse class="gloss" cx="301.5" cy="971" rx="25" ry="12" transform="rotate(-24 301.5 971)" />
+      <circle class="dome" cx="521.17" cy="998" r="60" />
+      <ellipse class="gloss" cx="501.17" cy="971" rx="25" ry="12" transform="rotate(-24 501.17 971)" />
 
       <!-- the border stands a touch proud of the face: a soft shade along the seam -->
-      <rect x="24" y="24" width="555" height="1141" rx="82" fill="none" stroke="#000" stroke-opacity="0.1" stroke-width="8" filter="url(#blur-3)"/>
+      <rect x="24" y="24" width="595" height="1141" rx="82" fill="none" stroke="#000" stroke-opacity="0.1" stroke-width="8" filter="url(#blur-3)"/>
     </g>
     <!-- the seam between border and face -->
-    <rect x="24" y="24" width="555" height="1141" rx="82" fill="none" stroke="#c4c4c2" stroke-width="1.6"/>
-    <rect x="25.6" y="25.6" width="551.8" height="1137.8" rx="80.4" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="1"/>
+    <rect x="24" y="24" width="595" height="1141" rx="82" fill="none" stroke="#c4c4c2" stroke-width="1.6"/>
+    <rect x="25.6" y="25.6" width="591.8" height="1137.8" rx="80.4" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="1"/>
 
     <!-- screen, with the punch-hole camera at the centre of its top-left corner -->
-    <rect x="35" y="35" width="533" height="631" rx="71" fill="#c8c8c6"/>
-    <rect x="36" y="36" width="531" height="629" rx="70" fill="#0a0a0b"/>
-    <rect x="36" y="36" width="531" height="629" rx="70" fill="url(#glass)"/>
+    <rect x="35" y="35" width="573" height="631" rx="71" fill="#c8c8c6"/>
+    <rect x="36" y="36" width="571" height="629" rx="70" fill="#0a0a0b"/>
+    <rect x="36" y="36" width="571" height="629" rx="70" fill="url(#glass)"/>
     <circle cx="106" cy="106" r="13" fill="#1b1c1f" />
     <circle cx="106" cy="106" r="12.25" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1" />
     <circle cx="106" cy="106" r="8.5" fill="url(#lens)" />
@@ -157,9 +159,9 @@
     <!-- labels under the screen -->
     <rect class="badge" x="55" y="689" width="41" height="25" rx="5" />
     <text class="badge-text" x="75.5" y="706.95" text-anchor="middle">HQ</text>
-    <text class="label" x="302.65" y="706.77" text-anchor="middle">DISPLAY</text>
-    <rect class="badge" x="502" y="689" width="46" height="25" rx="5" />
-    <path class="badge-icon" d="M511.5 696H521C524.5 696 525 701.5 526.5 701.5M511.5 707H521C524.5 707 525 701.5 526.5 701.5H537.5M533 697L537.8 701.5L533 706" />
+    <text class="label" x="322.65" y="706.77" text-anchor="middle">DISPLAY</text>
+    <rect class="badge" x="542" y="689" width="46" height="25" rx="5" />
+    <path class="badge-icon" d="M551.5 696H561C564.5 696 565 701.5 566.5 701.5M551.5 707H561C564.5 707 565 701.5 566.5 701.5H577.5M573 697L577.8 701.5L573 706" />
 
     <!-- speaker grille -->
     <use href="#grille-row" y="753" />
@@ -167,18 +169,18 @@
     <use href="#grille-row" y="793" />
     <use href="#grille-row" y="813" />
     <use href="#grille-row" y="833" />
-    <text class="label" x="302.65" y="881.27" text-anchor="middle">SPEAKERS</text>
+    <text class="label" x="322.65" y="881.27" text-anchor="middle">SPEAKERS</text>
 
     <!-- key symbols -->
-    <polygon class="key-icon" points="97.17,998 124.17,983 124.17,1013" />
-    <polygon class="key-icon" points="319.5,998 292.5,983 292.5,1013" />
-    <circle cx="487.83" cy="998" r="21" fill="url(#orange)" />
-    <ellipse cx="480.83" cy="989" rx="8" ry="4.5" fill="#ffffff" fill-opacity="0.45" transform="rotate(-30 480.83 989)" filter="url(#blur-1)" />
+    <polygon class="key-icon" points="103.83,998 130.83,983 130.83,1013" />
+    <polygon class="key-icon" points="339.5,998 312.5,983 312.5,1013" />
+    <circle cx="521.17" cy="998" r="21" fill="url(#orange)" />
+    <ellipse cx="514.17" cy="989" rx="8" ry="4.5" fill="#ffffff" fill-opacity="0.45" transform="rotate(-30 514.17 989)" filter="url(#blur-1)" />
 
     <!-- bottom strip -->
     <circle cx="84.2" cy="1126" r="3.2" fill="#555557" />
     <text class="label" x="96.2" y="1131.27">MIC</text>
-    <text class="label" x="302.65" y="1131.27" text-anchor="middle">KEYPAD</text>
+    <text class="label" x="322.65" y="1131.27" text-anchor="middle">KEYPAD</text>
   </svg>
 </body>
 </html>

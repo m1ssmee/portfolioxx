@@ -21,7 +21,7 @@ body {
 /* the pod fills most of the screen height, and the width on narrow screens */
 .pod {
   display: block;
-  width: min(88vw, calc(90vh * 617 / 1189));
+  width: min(88vw, calc(90vh * 657 / 1189));
   height: auto;
   /* white on white: the shadow is what sets it off the page */
   filter: drop-shadow(0 28px 40px rgba(0, 0, 0, 0.16)) drop-shadow(0 5px 10px rgba(0, 0, 0, 0.1));
