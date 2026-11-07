@@ -519,14 +519,10 @@ export function createScene(container, options = {}) {
       collision: collision.collision,
       ground: ropeGround,
       jack,
-      onPlug: (on) => {
-        audio.setPlugged(on)
-        screenT = 0
-      },
+      onPlug: (on) => audio.setPlugged(on),
       onTap: (part) => {
         // (the remote's button: play and pause, as on any wired earbuds)
         if (part === 'remote') audio.setPlaying(!audio.playing)
-        screenT = 0
       },
     })
     step('earbuds plugged in, settled')
