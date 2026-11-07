@@ -49,7 +49,9 @@ const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 
 // (the canvas at most 1.5 device pixels per CSS pixel: the picture is soft by design, its text is
 // the page's own (crisp at any ratio), and a 2x canvas is nearly twice the work a frame, which a
 // laptop's GPU feels as dropped frames whenever anything moves)
-const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 1.5)
+// (and lower still if this GPU cannot keep up: the quality governor, in the frame loop)
+let dprCap = 1.5
+const pixelRatio = () => Math.min(window.devicePixelRatio || 1, dprCap)
 
 const CSS = `
 .cg-root{--ink:#262c35;--label:#3e4652;--rule:rgba(38,44,53,.4);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
@@ -2283,10 +2285,39 @@ export function createScene(container, options = {}) {
       key.shadow.needsUpdate = true
     }
     const cigSwapping = (q) => q.state === 'arriving' || q.state === 'leaving'
+    // ---- steady frames: while things move, the frames' own pace is watched; on a GPU that cannot
+    // keep it (slower than about 48 a second, for most of a second), the work a frame is lowered a
+    // step at a time: less multisampling, then fewer pixels. (Not under automation: a test's
+    // software renderer is slow by nature, and its pictures must stay comparable.)
+    const gov = { on: !navigator.webdriver, level: 0, n: 0, ema: 16.7, after: 0, bias: 0 }
+    function govern(interval, moving) {
+      if (!gov.on || !moving) return void (gov.n = 0)
+      // (the first frames of a motion pay for its start, not its pace)
+      if (++gov.n < 4) return
+      gov.ema += (Math.min(interval + gov.bias, 100) - gov.ema) * 0.08
+      if (gov.ema < 21 || gov.n < 45 || performance.now() < gov.after || gov.level >= 3) return
+      gov.level++
+      if (gov.level === 1) frameCache.setSamples(2)
+      else if (gov.level === 2) {
+        dprCap = 1.25
+        resize()
+      } else {
+        dprCap = 1
+        frameCache.setSamples(0)
+        resize()
+      }
+      gov.n = 0
+      gov.ema = 16.7
+      gov.after = performance.now() + 1500
+    }
+    api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio() })
+    api.gov = gov // (tests: switched on by hand, a slow frame faked by its bias, ms)
+    let shadowTurn = 0
     function frame(now) {
       raf = 0
       if (!running || destroyed) return
       const t0 = performance.now()
+      const interval = now - last
       let dt = Math.min(0.05, (now - last) / 1000) // (clamped: nothing jumps after a pause)
       last = now
       if (dbgFlags.freeze) dt = 0 // (tests: time stands still, the frame is still drawn)
@@ -2414,7 +2445,8 @@ export function createScene(container, options = {}) {
       camMoved = false
       // (the cigarette or the lighter carried, gliding or falling, or the flame burning: drawn whole,
       // the shadows drawn again every frame)
-      if (carried || lighterBusy || cableBusy || badgeBusy) shadowDirty = true
+      const dragging = carried || lighterBusy || cableBusy || badgeBusy
+      if (dragging) shadowDirty = true
       const changing = carried || lighterBusy || cableBusy || badgeBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
@@ -2422,6 +2454,7 @@ export function createScene(container, options = {}) {
       // pinch with small pauses goes on drawing whole frames, it does not bake at every pause)
       stillTime = changing ? 0 : stillTime + Math.max(dt, 1 / 240)
       const moving = changing || stillTime < 0.2
+      govern(interval, moving)
       // shadows: drawn again only when the shadow casters changed (the burn moves slowly: every 2 s)
       shadowClock += dt
       const burnStep = shadowClock > 2
@@ -2451,7 +2484,9 @@ export function createScene(container, options = {}) {
         // (the camera as it is now: if it stays, the next frame bakes for it)
         bakedCam.copy(camera.matrixWorld)
         bakedProj.copy(camera.projectionMatrix)
-        if (shadowDirty || burnStep) {
+        // (while something is carried the soft shadow is drawn again every other frame: blurred
+        // over 13 mm, its half rate does not show, and it is one of the dearest passes)
+        if ((shadowDirty || burnStep) && !(dragging && shadowTurn++ & 1)) {
           shadowsNow()
           shadowDirty = false
         }

@@ -36,7 +36,7 @@ const GRAB_SMOOTH = 0.09
 const GRAB_MAX_SPEED = 240
 /** After a release, the rope's motion is damped harder, easing off over this long (s): it relaxes
  * slowly into its curves, it does not whip. */
-const RELAX = 1.6
+const RELAX = 2.2
 /** Let go, a held thing is set down, not dropped: its anchor lowered this fast (mm/s) until it rests
  * on something, for at most this long (s). */
 const LOWER_SPEED = 80

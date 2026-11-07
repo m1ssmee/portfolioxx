@@ -319,6 +319,13 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   const api = {
     valid: false, // (the cache matches the camera and the scene)
     /** SMAA loaded and its programs compiled (the loader waits for it: nothing compiles after entry). */
+    /** The live frame's multisampling (the quality governor lowers it on a slow GPU). */
+    setSamples(n) {
+      if (live.samples === n) return
+      live.dispose()
+      live.samples = n
+      api.valid = false
+    },
     get smaaReady() {
       return !!smaa && !smaaWarm
     },

@@ -16,6 +16,9 @@ depth of field is drawn at half size on one fixed spiral (no per-pixel noise to 
 moves) and blended in only where the lens blurs; the canvas is at most 1.5 device pixels per CSS
 pixel (the text is the page's own, crisp at any ratio), which keeps a laptop's frames steady. The
 soft shadow is an exact box blur, one sample a texel, its depth range fitted to the still life.
+While things move the frames' own pace is watched: on a GPU that cannot keep about 48 a second, the
+work a frame steps down (less multisampling, then fewer pixels; `api.quality()` under `?debug`), and
+while something is carried the soft shadow is drawn again every other frame.
 
 ```
 npm ci
