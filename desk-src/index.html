@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Late night — a desk still life</title>
+    <meta name="description" content="A late-night desk: a white music player, wired earbuds, a cigarette burning in a stoneware ashtray and a lighter, in one interactive 3D scene." />
+    <meta name="theme-color" content="#060505" />
+    <style>
+      html,body{height:100%;margin:0;background:#060505}
+      #desk{position:fixed;inset:0;overflow:hidden;background:#000}
+      /* the loader: near-black, a faint grain, an ember, one sentence, one line */
+      .ld{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:#060505;color:#b9b0a3;font:400 12px/1.6 ui-monospace,'SF Mono',Menlo,Consolas,monospace;transition:opacity .9s ease}
+      .ld::before{content:'';position:absolute;inset:-60px;opacity:.07;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");animation:grain .9s steps(5) infinite}
+      @keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-22px,14px)}40%{transform:translate(18px,-26px)}60%{transform:translate(-30px,-8px)}80%{transform:translate(26px,22px)}}
+      .ld-c{position:relative;display:flex;flex-direction:column;align-items:center;gap:26px}
+      .ld-ember{width:7px;height:7px;border-radius:50%;background:radial-gradient(circle,#ffd2a0 0,#ff7a2e 45%,#c23a0c 100%);box-shadow:0 0 10px 3px rgba(255,110,40,.5),0 0 32px 10px rgba(255,90,20,.16);opacity:.35;transition:opacity 1s ease}
+      .ld-ember i{display:block;width:100%;height:100%;border-radius:50%;animation:breathe 3.4s ease-in-out infinite;background:inherit}
+      @keyframes breathe{0%,100%{transform:scale(.8)}50%{transform:scale(1.15)}}
+      .ld-lines{position:relative;height:20px;width:min(84vw,460px)}
+      .ld-line{position:absolute;inset:0;margin:0;text-align:center;letter-spacing:.26em;white-space:nowrap;opacity:0;transform:translateY(5px) scale(.985);transition:opacity .55s ease,transform .55s ease;text-shadow:0 0 7px rgba(185,176,163,.3)}
+      .ld-line.on{opacity:1;transform:none}
+      .ld-bar{width:160px;height:1px;background:rgba(255,255,255,.08);overflow:hidden}
+      .ld-fill{height:100%;background:#d9cdbd;transform-origin:0 50%;transform:scaleX(0);transition:transform .7s cubic-bezier(.2,.7,.2,1)}
+      .ld-go{display:flex;gap:30px;opacity:0;transform:translateY(4px);transition:opacity .8s ease,transform .8s ease;visibility:hidden}
+      .ld.ready .ld-go{opacity:1;transform:none;visibility:visible}
+      .ld button{all:unset;cursor:pointer;letter-spacing:.26em;color:#e5dacb;padding:4px 2px;border-bottom:1px solid rgba(229,218,203,.18);transition:border-color .3s,color .3s}
+      .ld button:hover{border-color:rgba(229,218,203,.7)}
+      .ld button:focus-visible{outline:1px solid #e8a868;outline-offset:6px}
+      .ld-slow{position:absolute;top:calc(100% + 26px);margin:0;opacity:0;transition:opacity 1s;letter-spacing:.2em;color:#7f776c;white-space:nowrap;display:flex;gap:18px;align-items:center}
+      .ld.slow .ld-slow{opacity:1}
+      .ld.gone{opacity:0;pointer-events:none}
+      .ld.gone .ld-c>:not(.ld-ember){opacity:0;transition:opacity .5s}
+      .ld-fly{position:fixed;z-index:11;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#ff7a2e;box-shadow:0 0 10px 3px rgba(255,110,40,.5);pointer-events:none;transition:transform 1.3s cubic-bezier(.5,0,.2,1),opacity 1.3s ease .4s}
+      .ld-fallback{position:fixed;inset:0;background:#060505 center/cover no-repeat}
+      @media (prefers-reduced-motion:reduce){.ld::before,.ld-ember i{animation:none}.ld-line{transform:none}}
+    </style>
+  </head>
+  <body>
+    <div id="desk"></div>
+    <div class="ld" id="ld">
+      <div class="ld-c">
+        <div class="ld-ember" aria-hidden="true"><i></i></div>
+        <div class="ld-lines" role="status" aria-live="polite"><p class="ld-line"></p><p class="ld-line" aria-hidden="true"></p></div>
+        <div class="ld-bar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="ld-fill"></div></div>
+        <div class="ld-go"><button type="button" data-go="sound">enter</button><button type="button" data-go="quiet">enter without sound</button></div>
+        <p class="ld-slow" aria-live="polite"><span>taking a moment longer than usual…</span><button type="button" data-go="anyway">enter anyway</button></p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

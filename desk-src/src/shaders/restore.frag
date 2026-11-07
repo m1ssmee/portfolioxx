@@ -1,0 +1,1 @@
+uniform sampler2D tStat; uniform sampler2D tEmb; uniform sampler2D tDepth; uniform float uI; varying vec2 vUv; void main() { gl_FragColor = vec4(texture2D(tStat, vUv).rgb + uI * texture2D(tEmb, vUv).rgb, 1.0); gl_FragDepth = texture2D(tDepth, vUv).r; }
