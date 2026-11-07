@@ -286,7 +286,8 @@ export function createEarbudsLive({ visual, collision, ground, jack, onPlug, onT
         const held = grabbed && grabbed.body === plug
         if (d > AWAY) armed = true
         else if (armed && ((d < SNAP && near.sub(jack.mouth).dot(jack.out) > -4) || (held && aimed && aimRay.distanceToPoint(jack.mouth) < SNAP_AIM))) {
-          if (grabbed) rig.release()
+          // (let go at once: the plug glides into the jack by itself)
+          if (grabbed) rig.release(true)
           grabbed = null
           setPlugged(true)
         }

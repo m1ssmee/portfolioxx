@@ -9,8 +9,11 @@
 //   cable    the largest wobble of any cable particle, held and after the release, mm
 //   rest     after the release: how long until the rig sleeps, and the largest step any particle
 //            makes per frame from 1.5 s on, mm
-//   node tools/grab-jitter.mjs [--legacy]   (--legacy: the pointer straight to the rig, per frame, and
-//   each frame drawn as the last step left it, as the scene did before; ONLY=name: one scenario)
+//   node tools/grab-jitter.mjs [--legacy] [--steady] [--steps]   (--legacy: the pointer straight to
+//   the rig, per frame, and each frame drawn as the last step left it, as the scene did before;
+//   --steady: frames exactly 1/60 s, as vsync gives them (the default's frame-time noise alone reads
+//   as wobble on anything moving fast); --steps: every 120 Hz step measured as it left the rig, the
+//   physics itself, no drawing; ONLY=name: one scenario)
 import { Rig } from '../src/core/rope.js'
 import { collisionData, rigSpec } from '../src/objects/earbudsRig.js'
 import { ashtraySDF } from '../src/objects/ashtray.js'
@@ -19,6 +22,8 @@ import { poseParticles, poseState } from '../src/objects/earbudsPose.js'
 import { PLAYER } from '../src/layout.js'
 
 const LEGACY = process.argv.includes('--legacy')
+const STEADY = process.argv.includes('--steady')
+const STEPS = process.argv.includes('--steps')
 const ONLY = process.env.ONLY // (one scenario, by the start of its name)
 const LIFT = 9
 const POINTER_TAU = 0.12 // (core/grab.js)
@@ -113,7 +118,7 @@ function scenario(name, { what, path, releaseAt, end }) {
   let released = false
   let sleptAt = -1
   while (t < end) {
-    const dt = (1 / 60) * (1 + (rand() - 0.5) * 0.25)
+    const dt = STEPS ? 1 / 120 : STEADY ? 1 / 60 : (1 / 60) * (1 + (rand() - 0.5) * 0.25)
     t += dt
     // the pointer, as the browser hands it over (one move per frame, sampled a little before it)
     if (!released) {
@@ -141,7 +146,7 @@ function scenario(name, { what, path, releaseAt, end }) {
     }
     if (rig.asleep && released && sleptAt < 0) sleptAt = t - releaseAt
     // (as it is drawn: between the last two steps, or, --legacy, as the last step left it)
-    const V = LEGACY ? rig : rig.blended(acc * 120)
+    const V = LEGACY || STEPS ? rig : rig.blended(acc * 120)
     const vb = body ? V.bodies[body.index] : null
     const P = vb ? Array.from(vb.c) : [V.x[what.i * 3], V.x[what.i * 3 + 1], V.x[what.i * 3 + 2]]
     frames.push({ t, P, q: vb ? quat(vb.R) : null, x: Float64Array.from(V.x), released })
@@ -192,7 +197,7 @@ const line = (len, dur, dir = [1, 0.35]) => (t) => {
   return [(dir[0] / l) * s, (dir[1] / l) * s]
 }
 const hold = 1.0
-console.log(LEGACY ? 'pointer straight to the rig, per frame' : 'pointer eased (core/grab.js)')
+console.log(`${LEGACY ? 'pointer straight to the rig, per frame' : 'pointer eased (core/grab.js)'}${STEPS ? ', every physics step' : STEADY ? ', steady 60 Hz frames' : ''}`)
 scenario('bud, held still', { what: { body: 'budL' }, path: () => [0, 0], releaseAt: 2.0, end: 5.5 })
 scenario('bud, slow (40 mm/s)', { what: { body: 'budL' }, path: line(60, 1.5), releaseAt: 1.5 + hold, end: 6 })
 scenario('bud, quick (500 mm/s)', { what: { body: 'budL' }, path: line(200, 0.4, [-1, 0.5]), releaseAt: 0.4 + hold, end: 5.5 })

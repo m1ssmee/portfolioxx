@@ -37,6 +37,10 @@ const GRAB_MAX_SPEED = 240
 /** After a release, the rope's motion is damped harder, easing off over this long (s): it relaxes
  * slowly into its curves, it does not whip. */
 const RELAX = 1.6
+/** Let go, a held thing is set down, not dropped: its anchor lowered this fast (mm/s) until it rests
+ * on something, for at most this long (s). */
+const LOWER_SPEED = 80
+const LOWER_MAX = 0.35
 let H = STEP / SUBSTEPS
 
 // ---------------------------------------------------------------------------------- small math
@@ -128,7 +132,13 @@ export class Rig {
     this.radius = C.radius
     this.mu = { s: 0.8, k: 0.7 }
     this.air = 2.0 // 1/s
-    this.smooth = 0.05 // internal damping, per substep
+    this.smooth = 0.08 // internal damping, per substep
+    // while anything is held, the cable's grip on what it lies on comes from how far it was pushed
+    // out of it, but at most its own weight: the bend and the strain relief press the cable into the
+    // desk where it leaves a held part, and taken as weight that made it stick, then slip, a few
+    // millimetres at every step, and a dragged cable snaked. (At rest, uncapped: a curve pressed
+    // into the desk by its own bend holds the shape it fell in.)
+    this.penCap = 1
     this.relaxT = RELAX // (s since the last release: the rope is calmed for a while after it)
     // what lies on something and moves slower than this (mm/s) is held still: below it, static
     // friction (weight times mu, a hundredth of a millimetre a substep) loses to the solver's own
@@ -314,6 +324,7 @@ export class Rig {
     this.count = 0
     this.time = 0
     this.grabbed = null
+    this.lowering = null // (a hold being set down: see release())
     this.asleep = false
     this.quiet = 0
     this.lastBig = 0
@@ -488,7 +499,7 @@ export class Rig {
 
   /** Take hold of a cable particle, or a design-frame point on a body. */
   grab(what, target) {
-    this.release()
+    this.release(true)
     // the anchor the held point is tied to: from where that point is now, drawn to the hand's target
     // a step at a time (never a jump, whatever the pointer does)
     const b = what.body ? what.body.bary(what.s) : null
@@ -507,12 +518,29 @@ export class Rig {
     if (g.T[1] < r) g.T[1] = r
     this.wake()
   }
-  release() {
+  /**
+   * Let go. What was held is not dropped from the hand's height: it is set down, its anchor lowered
+   * at a hand's pace until it rests on something (at most LOWER_MAX), then let go; a part dropped
+   * from 9 mm lands at 400 mm/s and the cable at it snaps. `now`: at once (the plug seating itself
+   * in the jack, or a new hold).
+   */
+  release(now = false) {
     const g = this.grabbed
-    if (g && g.i !== undefined) this.w[g.i] = this.w0[g.i]
-    if (g) this.relaxT = 0
     this.grabbed = null
+    if (g) {
+      g.lowerT = 0
+      this.lowering = g
+    }
+    if (now) this.letGo()
     this.wake()
+  }
+  /** The set-down over: the anchor gone; the rope is calmed for a while as it relaxes. */
+  letGo() {
+    const g = this.lowering
+    if (!g) return
+    if (g.i !== undefined) this.w[g.i] = this.w0[g.i]
+    this.lowering = null
+    this.relaxT = 0
   }
 
   // ---------------------------------------------------------------------------------- stepping
@@ -533,7 +561,16 @@ export class Rig {
 
   step() {
     this.syncPrev()
-    const g = this.grabbed
+    let g = this.grabbed
+    if (!g && this.lowering) {
+      // setting down: the anchor lowered; let go once it rests on something, or after LOWER_MAX
+      const lg = this.lowering
+      lg.lowerT += STEP
+      lg.T[1] = Math.max(lg.body ? 1.2 : this.radius, lg.T[1] - LOWER_SPEED * STEP)
+      const down = lg.body ? lg.body.contact : this.x[lg.i * 3 + 1] <= this.radius + 0.05
+      if (down || lg.lowerT > LOWER_MAX) this.letGo()
+      else g = lg
+    }
     if (g) {
       // the anchor's way this step (each substep takes its share of it)
       g.from.set(g.a)
@@ -582,7 +619,7 @@ export class Rig {
   substep(t) {
     const { x, p, w, n } = this
     this.count++
-    const g = this.grabbed
+    const g = this.grabbed || this.lowering
     if (g) for (let k = 0; k < 3; k++) g.now[k] = g.from[k] + (g.to[k] - g.from[k]) * t
 
     // 1. Verlet: inertia, gravity, air drag
@@ -825,7 +862,7 @@ export class Rig {
    */
   solveBeads() {
     const { x, w } = this
-    const g = this.grabbed
+    const g = this.grabbed || this.lowering
     for (const ch of this.chains) {
       const bd = ch.bead
       if (!bd) continue
@@ -1072,7 +1109,7 @@ export class Rig {
     const muS = this.mu.s * this.grip
     const muK = this.mu.k * this.grip
     // (not while anything is held: a dragged cable slides evenly; after a release it eases in)
-    const rest = this.grabbed ? 0 : this.restSpeed * H * Math.min(1, this.relaxT / 0.5) * this.grip
+    const rest = this.grabbed || this.lowering ? 0 : this.restSpeed * H * Math.min(1, this.relaxT / 0.5) * this.grip
     // the parts, at each point they touch the floor
     const bc = this.bodyContacts || []
     const bw = this.tmp3 || (this.tmp3 = new Float64Array(4))
@@ -1112,8 +1149,9 @@ export class Rig {
     }
     const stuck = this.stuck || (this.stuck = new Uint8Array(this.n))
     stuck.fill(0)
+    const capPen = this.grabbed || this.lowering ? this.penCap * G * H * H : Infinity
     for (const i of this.cable) {
-      const pen = cN[i * 4 + 3]
+      const pen = Math.min(cN[i * 4 + 3], capPen)
       if (pen <= 0 || w[i] === 0) continue
       const j = i * 3
       const nx = cN[i * 4]
@@ -1397,7 +1435,8 @@ export class Rig {
   /** A part lying on the floor doesn't spin or roll on forever: damp its turning. */
   rollResistance() {
     const { x, p } = this
-    const held = this.grabbed && this.grabbed.body
+    const hold = this.grabbed || this.lowering
+    const held = hold && hold.body
     for (const b of this.bodies) {
       // (lying on something: it does not spin or roll on for ever; held, or in the air, it does not
       // swing or tumble on either: a lighter damping of its turning, about its centre's motion)
