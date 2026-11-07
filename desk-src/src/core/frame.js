@@ -42,6 +42,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   // the cache (single-sampled: copied out of the live target after each bake)
   const cStat = withDepth(rt(16, 16, { ...HF }))
   const cEmb = rt(16, 16, { ...HF, depthBuffer: false })
+  // (the depth of field's blurred frames, at half size: see shaders/dof.frag)
   const dStat = rt(16, 16, { ...HF, depthBuffer: false })
   const dEmb = rt(16, 16, { ...HF, depthBuffer: false })
   const dLive = rt(16, 16, { ...HF, depthBuffer: false })
@@ -104,6 +105,10 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
       tDofEmb: { value: dEmb.texture },
       tDofLive: { value: dLive.texture },
       uDofK: { value: 0 },
+      uFocus: { value: 200 },
+      uEq: { value: 600 },
+      uK: { value: 1 },
+      uMaxC: { value: 8 },
       uBox: { value: new THREE.Vector4(2, 2, -1, -1) },
       uI: { value: 1 },
       tSmoke: { value: smoke.texture },
@@ -138,6 +143,8 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   // ---- sizes
   let W = 16
   let H = 16
+  let HW = 8
+  let HH = 8
   let SW = 16
   let SH = 16
   function setSize(w, h) {
@@ -145,13 +152,16 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     H = h
     SW = Math.max(1, Math.round(w * Q.smokeScale))
     SH = Math.max(1, Math.round(h * Q.smokeScale))
-    for (const t of [live, cStat, cEmb, dStat, dEmb, dLive, ldr]) t.setSize(w, h)
+    HW = Math.max(1, w >> 1)
+    HH = Math.max(1, h >> 1)
+    for (const t of [live, cStat, cEmb, ldr]) t.setSize(w, h)
+    for (const t of [dStat, dEmb, dLive]) t.setSize(HW, HH)
     smoke.setSize(SW, SH)
     smokeZ.setSize(SW, SH)
     compMat.uniforms.uSmokeSize.value.set(SW, SH)
     compMat.uniforms.uAspect.value = w / h
     dofMat.uniforms.uTexel.value.set(1 / w, 1 / h)
-    dofMat.uniforms.uMax.value = 12 * (h / 1080)
+    dofMat.uniforms.uMax.value = compMat.uniforms.uMaxC.value = 12 * (h / 1080)
     SU.uRes.value.set(SW, SH)
     SU.uPx.value = SH / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
     bloom.setSize(Math.round(w * Q.bloomScale * 2), Math.round(h * Q.bloomScale * 2))
@@ -188,6 +198,11 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     u.uEq.value = 100 + (Hs * 100) / 24
     const N = 2.8 * Math.max(1, (focus.home / focus.s) ** 2)
     u.uK.value = (0.5 * (100 / N) * H) / Hs
+    // (the composite needs the same circles: where they are small, it keeps the frame's own pixels)
+    const c = compMat.uniforms
+    c.uFocus.value = u.uFocus.value
+    c.uEq.value = u.uEq.value
+    c.uK.value = u.uK.value
   }
 
   // ---- bloom, clipped
@@ -396,10 +411,10 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
         setDof(f.focus)
         dofMat.uniforms.tColor.value = live.texture
         dofMat.uniforms.tDepth.value = live.depthTexture
-        if (f.truth || !f.still) px.set(0, 0, W, H)
-        else rect(f.regionBox, W, H, dofMat.uniforms.uMax.value + 2, px)
+        if (f.truth || !f.still) px.set(0, 0, HW, HH)
+        else rect(f.regionBox, HW, HH, dofMat.uniforms.uMax.value / 2 + 2, px)
         draw(dofMat, dLive, px)
-        compMat.uniforms.uBox.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
+        compMat.uniforms.uBox.value.set(px.x / HW, px.y / HH, (px.x + px.z) / HW, (px.y + px.w) / HH)
         compMat.uniforms.uI.value = f.emberI
       }
       renderSmoke(f.still && !f.truth ? f.smokeBox : null)

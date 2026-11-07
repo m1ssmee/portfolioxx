@@ -39,12 +39,12 @@ installEmberLight()
 // One quality: the reference look, on every device. (Internal effect buffers: the smoke at half
 // resolution, upsampled by depth, and the bloom's mip chain from half resolution: side by side with
 // full-resolution buffers they are indistinguishable; see the report.)
-const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.5, bloomScale: 0.5, shadow: 2048, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
+const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.5, bloomScale: 0.5, shadow: 1536, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
 /** The canvas at full sharpness: CSS size x devicePixelRatio, capped at 2 only on 3x screens. */
-const pixelRatio = () => {
-  const d = window.devicePixelRatio || 1
-  return d >= 3 ? 2 : d
-}
+// (the canvas at most 1.5 device pixels per CSS pixel: the picture is soft by design, its text is
+// the page's own (crisp at any ratio), and a 2x canvas is nearly twice the work a frame, which a
+// laptop's GPU feels as dropped frames whenever anything moves)
+const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 1.5)
 
 const CSS = `
 .cg-root{--ink:#262c35;--label:#3e4652;--rule:rgba(38,44,53,.4);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
@@ -670,12 +670,17 @@ export function createScene(container, options = {}) {
     const key = new THREE.DirectionalLight(0xfffaf2, 2.1)
     key.castShadow = true
     key.shadow.mapSize.set(Q.shadow, Q.shadow)
-    Object.assign(key.shadow.camera, { left: -470, right: 470, top: 470, bottom: -470, near: 50, far: 2600 })
+    Object.assign(key.shadow.camera, { left: -470, right: 470, top: 470, bottom: -470 })
     key.shadow.camera.updateProjectionMatrix()
+    // (the soft shadow: an exact box blur, one sample a texel, 21 texels (13 mm) across: three.js
+    // spreads blurSamples evenly over 2 x radius, and a nearest-sampled depth map read at uneven
+    // steps counts some texels twice and skips others, so a thin cable's shadow came out banded and
+    // flickered as it moved. Its depth range is fitted to the still life below: the moments are
+    // stored in half floats, whose steps are a fraction of that range)
     key.shadow.bias = -0.0004
     key.shadow.normalBias = 0.5
-    key.shadow.radius = 16
-    key.shadow.blurSamples = 24
+    key.shadow.radius = 10
+    key.shadow.blurSamples = 21
     scene.add(key, key.target)
     const rim = new THREE.DirectionalLight(0xe9f0ff, 0.4)
     scene.add(rim, rim.target)
@@ -1161,6 +1166,12 @@ export function createScene(container, options = {}) {
       const c = new THREE.Vector3(LAYOUT.VIEW.wide.at[0], 0, LAYOUT.VIEW.wide.at[2])
       key.position.copy(c).addScaledVector(RIGHT, -520).addScaledVector(FWD, 420).add(new THREE.Vector3(0, 1150, 0))
       key.target.position.copy(c)
+      // (the shadow's depth range: from above anything that can be held high to below the far edge
+      // of the ground it covers, the ground being tilted 30 degrees to the light)
+      const D = key.position.distanceTo(c)
+      key.shadow.camera.near = D - 650
+      key.shadow.camera.far = D + 450
+      key.shadow.camera.updateProjectionMatrix()
       rim.position.copy(c).addScaledVector(RIGHT, 700).addScaledVector(FWD, -560).add(new THREE.Vector3(0, 420, 0))
       rim.target.position.copy(c)
       key.target.updateMatrixWorld()

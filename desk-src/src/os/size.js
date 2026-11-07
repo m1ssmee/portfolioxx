@@ -7,3 +7,7 @@ export const OS_H = 383
 export const TEX_W = 800
 export const TEX_H = Math.round((TEX_W * OS_H) / OS_W)
 export const GLASS = { x0: 36, y0: 36, w: 591, h: 629 }
+/** The glass's corner radius (logical px): os.css's .pos border-radius. */
+export const GLASS_R = 43
+/** The display's black border inside the glass (logical px). */
+export const BEZEL = 5

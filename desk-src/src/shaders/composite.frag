@@ -1,5 +1,6 @@
       uniform sampler2D tScene; uniform sampler2D tDepth;
       uniform sampler2D tDofStat; uniform sampler2D tDofEmb; uniform sampler2D tDofLive; uniform float uDofK; uniform vec4 uBox; uniform float uI;
+      uniform float uFocus; uniform float uEq; uniform float uK; uniform float uMaxC;
       uniform sampler2D tSmoke; uniform sampler2D tSmokeZ; uniform vec2 uSmokeSize;
       uniform sampler2D tBloom; uniform float uAspect;
       uniform vec4 uShim; uniform float uT;
@@ -45,7 +46,11 @@
         if (uDofK > 0.0) {
           bool inBox = vUv.x >= uBox.x && vUv.y >= uBox.y && vUv.x <= uBox.z && vUv.y <= uBox.w;
           vec3 d = inBox ? texture2D(tDofLive, vUv).rgb : texture2D(tDofStat, vUv).rgb + uI * texture2D(tDofEmb, vUv).rgb;
-          c = mix(c, d, uDofK);
+          // (the blur is drawn at half size: taken only where the lens blurs, by this pixel's own
+          // circle; in focus, the frame's own sharp pixels)
+          float dz = linZ(texture2D(tDepth, vUv).r) - uFocus;
+          float cc = min(uK * abs(dz) / max(uEq + dz, 1.0), uMaxC);
+          c = mix(c, d, uDofK * smoothstep(0.6, 2.2, cc));
         }
         vec4 s = smokeAt(vUv);
         c = c * (1.0 - s.a) + s.rgb;

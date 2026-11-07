@@ -9,8 +9,8 @@
 import css from './os.css?inline'
 import { iconSprite, icon } from './icons.js'
 import { THEMES, wallpaperTile } from './theme.js'
-import { paintDom } from './paint.js'
-import { OS_W, OS_H, TEX_W, TEX_H } from './size.js'
+import { paintDom, paintGlass } from './paint.js'
+import { OS_W, OS_H, TEX_W, TEX_H, GLASS_R, BEZEL } from './size.js'
 
 export { OS_W, OS_H, TEX_W, TEX_H }
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
@@ -97,7 +97,8 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
       <div class="pos-btns"${C.email ? ' style="margin-top:10px"' : ''}>${[C.links.github && link(C.links.github, 'GitHub'), C.links.linkedin && link(C.links.linkedin, 'LinkedIn'), C.links.x && link(C.links.x, 'X')].filter(Boolean).join('')}</div></div>`,
     )}
     <i class="pos-cam" aria-hidden="true"><i></i></i>
-    <div class="pos-sleep" data-paint="skip"></div>`
+    <div class="pos-sleep" data-paint="skip"></div>
+    <div class="pos-glass" data-paint="skip" aria-hidden="true"></div>`
 
   const $ = (s) => el.querySelector(s)
   const $$ = (s) => el.querySelectorAll(s)
@@ -375,6 +376,7 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
     el.hidden = false
     const t = performance.now()
     paintDom(el, canvas, TEX_W / OS_W, { grain: pattern })
+    paintGlass(canvas.getContext('2d'), TEX_W / OS_W, OS_W, OS_H, GLASS_R, BEZEL)
     el.style.transform = tf
     el.style.opacity = op
     el.hidden = vis

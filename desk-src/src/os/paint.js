@@ -211,3 +211,55 @@ function paintOutline(ctx, cs, x, y, w, h, r) {
     ctx.stroke()
   }
 }
+
+/**
+ * The glass over the display, as .pos-glass draws it in the DOM (os.css): the room's cool reflection
+ * across its top left and the display's falloff towards its foot, the recess's shade from the
+ * plastic's edge (the key light comes from the top left), and the display's black border. Painted over the screen at `scale` canvas px per logical px; w, h the
+ * logical screen, r its corner radius, bezel the border's width.
+ */
+export function paintGlass(ctx, scale, w, h, r, bezel) {
+  ctx.save()
+  ctx.setTransform(scale, 0, 0, scale, 0, 0)
+  ctx.globalAlpha = 1
+  rrect(ctx, 0, 0, w, h, r)
+  ctx.clip()
+  // CSS's linear-gradient(deg, stops) over the box, the last listed (lowest) first
+  const gradient = (deg, stops) => {
+    const a = (deg * Math.PI) / 180
+    const dx = Math.sin(a)
+    const dy = -Math.cos(a)
+    const half = (Math.abs(w * dx) + Math.abs(h * dy)) / 2
+    const g = ctx.createLinearGradient(w / 2 - dx * half, h / 2 - dy * half, w / 2 + dx * half, h / 2 + dy * half)
+    for (const [at, color] of stops) g.addColorStop(at, color)
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, h)
+  }
+  // (the display's falloff towards its foot; the room's cool reflection across the top left)
+  gradient(180, [[0.52, 'rgba(24,34,52,0)'], [1, 'rgba(24,34,52,0.06)']])
+  gradient(122, [[0, 'rgba(206,218,236,0.34)'], [0.36, 'rgba(206,218,236,0.12)'], [0.56, 'rgba(206,218,236,0)']])
+  // inset shadows, the last listed (lowest) first: a shape with the screen as its hole casts them
+  // (canvas shadows are in canvas pixels, whatever the transform)
+  const inset = (ox, oy, blur, color) => {
+    ctx.save()
+    ctx.shadowColor = color
+    ctx.shadowBlur = blur * scale
+    ctx.shadowOffsetX = ox * scale
+    ctx.shadowOffsetY = oy * scale
+    ctx.beginPath()
+    ctx.rect(-w, -h, 3 * w, 3 * h)
+    ctx.roundRect(0, 0, w, h, r)
+    ctx.fillStyle = '#000'
+    ctx.fill('evenodd')
+    ctx.restore()
+  }
+  inset(0, 0, 18, 'rgba(8,10,14,0.16)')
+  inset(6, 9, 16, 'rgba(8,10,14,0.42)')
+  // the black border
+  ctx.beginPath()
+  ctx.roundRect(0, 0, w, h, r)
+  ctx.roundRect(bezel, bezel, w - 2 * bezel, h - 2 * bezel, Math.max(0, r - bezel))
+  ctx.fillStyle = '#101216'
+  ctx.fill('evenodd')
+  ctx.restore()
+}

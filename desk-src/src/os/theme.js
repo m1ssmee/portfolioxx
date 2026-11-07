@@ -2,9 +2,9 @@
 // muted slate blue, deep enough to read as text at AA contrast on every surface.
 export const THEMES = {
   light: {
-    bg: '#eceff3',
-    tile: '#e1e5eb',
-    press: '#d6dbe2',
+    bg: '#f3f5f8',
+    tile: '#e6eaf0',
+    press: '#dadfe6',
     line: '#c9cfd8',
     text: '#1f252d',
     muted: '#4f5866',

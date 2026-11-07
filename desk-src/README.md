@@ -11,7 +11,11 @@ closes in on anything; Escape or back returns to the player. The view holds stil
 still dither instead of film grain, so a frame changes only where something moves. It moves softly:
 the wheel's zoom is a critically damped spring on the distance (each notch eases in and out), glides
 ease with a smootherstep, and a moving frame keeps the still frame's depth of field, so nothing pops
-as the view starts or stops (the shadows are drawn again only when what casts them moves).
+as the view starts or stops (the shadows are drawn again only when what casts them moves). The
+depth of field is drawn at half size on one fixed spiral (no per-pixel noise to crawl as the view
+moves) and blended in only where the lens blurs; the canvas is at most 1.5 device pixels per CSS
+pixel (the text is the page's own, crisp at any ratio), which keeps a laptop's frames steady. The
+soft shadow is an exact box blur, one sample a texel, its depth range fitted to the still life.
 
 ```
 npm ci
@@ -66,7 +70,9 @@ sheet. Back, Escape, ◀ or a click on the blur closes it.
 
 - Three screens: the projects list (home), a project's page, About & contact. One light theme, the
   scene's own paper and slate, and calmer with reduced motion
-- `src/os/os.js`: the OS (one DOM, 360 × 383 logical px, the glass's own shape); `os.css` its look;
+- `src/os/os.js`: the OS (one DOM, 360 × 383 logical px, the glass's own shape); `os.css` its look
+  (its `.pos-glass`, the display's black border, the recess's shade and the room's reflection, is
+  drawn again into the texture by `paint.js`'s `paintGlass`: keep the two together);
   `theme.js` the theme and the wallpaper; `icons.js` its few glyphs (one 24-unit grid, 1.5 px
   strokes); `paint.js` paints the DOM into the screen's texture
 - From across the desk the screen is a canvas texture painted from the OS's own DOM (only when
