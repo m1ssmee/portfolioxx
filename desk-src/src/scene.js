@@ -431,8 +431,16 @@ export function createScene(container, options = {}) {
     })
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), backMat)
     ground.renderOrder = -2
-    // (the key light's soft shadow, and nothing else, darkens it)
-    const shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ color: 0x2a3340, opacity: 0.32, depthWrite: false }))
+    // (the key light's soft shadow, and nothing else, darkens it. Its plane lies on the desk's, and
+    // a few hundredths of a millimetre a metre away is less than a step of the depth buffer: left to
+    // the depth test, the two tie, and a tile-based GPU (Apple's, every phone's) breaks the tie
+    // differently tile by tile, so the shadow came and went in 32-pixel bands that shifted with every
+    // zoom. A polygon offset puts it in front of the desk by whole depth steps, at any distance, as a
+    // decal is drawn; nothing else is near enough for those few steps to matter)
+    const shadowCatcher = new THREE.Mesh(
+      new THREE.PlaneGeometry(1600, 1600).rotateX(-Math.PI / 2),
+      new THREE.ShadowMaterial({ color: 0x2a3340, opacity: 0.32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }),
+    )
     shadowCatcher.material.onBeforeCompile = (sh) => {
       sh.fragmentShader = sh.fragmentShader
         .replace(
