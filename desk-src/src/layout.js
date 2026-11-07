@@ -34,9 +34,10 @@ export const DESK = {
   // (turn: its top's heading on the ground, from RIGHT towards up the picture)
   badge: deskAt(-128, -92),
   badgeTurn: 0.17,
-  // the notebook, to the right of the ashtray, turned a little
-  notebook: deskAt(178, 18),
-  notebookTurn: -0.1,
+  // the notebook, to the right of the ashtray, turned a little, high enough to stay clear of the
+  // keys' hints at the picture's lower right
+  notebook: deskAt(186, -40),
+  notebookTurn: -0.08,
 }
 /**
  * What the camera looks at, and how much must fit: the player in the middle; on a wide screen the

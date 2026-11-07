@@ -1,0 +1,287 @@
+/* The visitors' book, opened over the scene: a cream spread on a frosted veil, the left page the
+   prints, the right your own. Calm: paper, ink, one line of type. */
+.vb {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  font: 400 13px/1.45 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  color: #23262c;
+  -webkit-font-smoothing: antialiased;
+}
+.vb[hidden] {
+  display: none;
+}
+.vb-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(232, 236, 241, 0.55);
+  -webkit-backdrop-filter: blur(22px) saturate(0.5);
+  backdrop-filter: blur(22px) saturate(0.5);
+  opacity: 0;
+  transition: opacity 0.32s ease;
+}
+.vb-spread {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 22px 1fr;
+  width: min(880px, calc(100% - 48px));
+  height: min(560px, calc(100% - 72px));
+  background: #f6f3ea;
+  border-radius: 6px 10px 10px 6px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 30px 60px -28px rgba(30, 38, 52, 0.45), 0 2px 6px rgba(30, 38, 52, 0.12);
+  /* a dot grid, as on the notebook's own pages */
+  background-image: radial-gradient(rgba(60, 60, 50, 0.14) 0.8px, transparent 1px);
+  background-size: 14px 14px;
+  background-position: 7px 7px;
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  transition: opacity 0.32s ease, transform 0.42s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.vb-open .vb-veil,
+.vb-open .vb-spread {
+  opacity: 1;
+}
+.vb-open .vb-spread {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vb-spread {
+    transform: none;
+    transition: opacity 0.2s ease;
+  }
+}
+.vb-page {
+  position: relative;
+  min-height: 0;
+  padding: 34px 34px 28px;
+  display: flex;
+  flex-direction: column;
+}
+/* the spine: the spiral's holes down the middle, a soft fold either side */
+.vb-spine {
+  background:
+    radial-gradient(circle, #2b2c31 0 2.4px, transparent 2.6px) center 18px / 22px 22px repeat-y,
+    linear-gradient(90deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0) 65%, rgba(0, 0, 0, 0.06));
+}
+.vb h2,
+.vb h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.vb h2 {
+  font-size: 22px;
+}
+.vb h3 {
+  font-size: 17px;
+}
+.vb-count,
+.vb-sub {
+  margin: 4px 0 0;
+  color: #6b6f78;
+  font-size: 12px;
+}
+.vb-prints {
+  list-style: none;
+  margin: 18px -8px 0 0;
+  padding: 0 8px 8px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 14px 10px;
+  overflow-y: auto;
+  min-height: 0;
+  align-content: start;
+  scrollbar-width: thin;
+}
+.vb-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.vb-print {
+  display: block;
+  width: 54px;
+  height: 68px;
+  transform: rotate(var(--tilt, 0deg));
+  mix-blend-mode: multiply;
+}
+.vb-print svg,
+.vb-pad-print svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.vb-who {
+  margin-top: 6px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vb-from,
+.vb-when {
+  color: #7a7e86;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vb-new .vb-print {
+  animation: vb-land 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes vb-land {
+  from {
+    opacity: 0;
+    transform: rotate(var(--tilt, 0deg)) scale(1.25);
+  }
+}
+.vb-field {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 14px;
+  border-bottom: 1px solid rgba(40, 44, 52, 0.18);
+  padding-bottom: 4px;
+}
+.vb-field span {
+  color: #6b6f78;
+  font-size: 12px;
+}
+.vb-field input {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  outline: none;
+  padding: 2px 0;
+  min-width: 0;
+}
+.vb-field input::placeholder {
+  color: #a6a9af;
+}
+.vb-field:focus-within {
+  border-bottom-color: #23262c;
+}
+.vb-inks {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.vb-inks button {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: var(--ink);
+  cursor: pointer;
+  box-shadow: 0 0 0 2px #f6f3ea, 0 0 0 3px transparent;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.vb-inks button[aria-checked='true'] {
+  box-shadow: 0 0 0 2px #f6f3ea, 0 0 0 3.5px var(--ink);
+}
+.vb-inks button:focus-visible {
+  outline: 2px solid #23262c;
+  outline-offset: 4px;
+}
+.vb-pad {
+  position: relative;
+  margin: 20px auto 0;
+  width: 132px;
+  height: 160px;
+  border-radius: 46% 46% 42% 42% / 40% 40% 50% 50%;
+  border: 1.5px dashed rgba(40, 44, 52, 0.28);
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+.vb-pad:focus-visible {
+  outline: 2px solid #23262c;
+  outline-offset: 4px;
+}
+.vb-pressing {
+  transform: scale(0.97);
+  border-color: rgba(40, 44, 52, 0.5);
+}
+.vb-pad-print {
+  position: absolute;
+  inset: 16px 22px 26px;
+  mix-blend-mode: multiply;
+}
+.vb-pad-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -24px;
+  color: #6b6f78;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.vb-done {
+  border-style: solid;
+  border-color: rgba(40, 44, 52, 0.12);
+  cursor: default;
+}
+.vb-note {
+  margin: 34px 0 0;
+  min-height: 1.4em;
+  text-align: center;
+  color: #4a4e56;
+  font-size: 12px;
+}
+.vb-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #4a4e56;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.vb-close:hover {
+  background: rgba(40, 44, 52, 0.07);
+}
+.vb-close:focus-visible {
+  outline: 2px solid #23262c;
+}
+/* a phone: one page at a time, your print first, everyone's below */
+@media (max-width: 760px) {
+  .vb-spread {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    height: calc(100% - 32px);
+    width: calc(100% - 24px);
+    overflow-y: auto;
+  }
+  .vb-spine {
+    display: none;
+  }
+  .vb-right {
+    order: -1;
+    padding-bottom: 40px;
+  }
+  .vb-page {
+    padding: 26px 22px 20px;
+  }
+  .vb-prints {
+    overflow: visible;
+  }
+}

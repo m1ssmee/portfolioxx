@@ -19,6 +19,8 @@ import { createDeskGround } from './objects/deskGround.js'
 import { createPickup } from './objects/pickup.js'
 import { createLighter } from './objects/lighter.js'
 import { createBadge } from './objects/badge.js'
+import { createNotebook } from './objects/notebook.js'
+import { createVisitorsBook } from './visitors/book.js'
 import badgeFaceUrl from './assets/badge-face.webp?url'
 import badgeBackUrl from './assets/badge-back.webp?url'
 import { TRAY, notchSeat, ashtraySDF } from './objects/ashtray.js'
@@ -1103,6 +1105,24 @@ export function createScene(container, options = {}) {
     deskBoxes.push(badgeBox)
     step('badge')
 
+    // ---- the visitors' book (objects/notebook.js, visitors/book.js): an A5 notebook to the right of
+    // the ashtray; a tap closes in on it and opens it
+    const notebook = createNotebook({ at: LAYOUT.DESK.notebook, turn: LAYOUT.PLAYER.yaw + LAYOUT.DESK.notebookTurn, anisotropy: aniso })
+    scene.add(notebook.group)
+    disposables.push({ dispose: () => notebook.dispose() })
+    const notebookBox = boxOf(null, [74, 3.5, 105], 1.5, 3.5, 135)
+    notebookBox.set(notebook.group.matrixWorld)
+    deskBoxes.push(notebookBox)
+    let bookPending = false
+    const book = createVisitorsBook({ host: root, onClose: () => wake() })
+    cleanups.push(() => book.dispose())
+    function openBook() {
+      bookPending = false
+      if (projOpen) leaveProject()
+      book.open()
+      wake()
+    }
+
     // ---- smoke (the smoke, the burn and the ember, and all that moves them: the cigarette lit)
     stage('light', 'start')
     const curl = (await curlJob).curl
@@ -1320,11 +1340,13 @@ export function createScene(container, options = {}) {
       },
       earbuds: { center: (o) => earbudsLive.focusCenter(o), radius: 52, el: THREE.MathUtils.degToRad(50) },
       badge: { center: (o) => badge.center(o), radius: 50, el: THREE.MathUtils.degToRad(62) },
+      notebook: { center: (o) => notebook.center(o), radius: 120, el: THREE.MathUtils.degToRad(66) },
     }
     const focusMeshes = { ashtray: [trayMesh, ...cigs.flatMap((c) => [c.body, c.ash, c.ember])], lighter: lighter.meshes, player: [] }
     player.group.traverse((o) => o.isMesh && focusMeshes.player.push(o))
     focusMeshes.earbuds = earbudsLive.item.meshes
     focusMeshes.badge = badge.meshes
+    focusMeshes.notebook = notebook.meshes
     const focus = createFocus({
       camera,
       controls,
@@ -1405,6 +1427,11 @@ export function createScene(container, options = {}) {
         return
       }
       if (e.key !== 'Escape' || grab.held) return
+      if (book.isOpen) {
+        e.preventDefault()
+        book.close()
+        return
+      }
       if (projOpen) {
         e.preventDefault()
         leaveProject()
@@ -1640,6 +1667,14 @@ export function createScene(container, options = {}) {
       listen,
       onActive: () => wake(),
       tapFirst: (hit) => {
+        // (the notebook: closed in on, then opened)
+        if (hit.item === notebookItem) {
+          if (focus.focused === 'notebook' && !focus.moving) return false
+          if (projOpen) leaveProject()
+          focus.focusOn('notebook')
+          bookPending = true
+          return true
+        }
         const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === badgeItem ? 'badge' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
         if (projOpen) leaveProject()
@@ -1712,6 +1747,9 @@ export function createScene(container, options = {}) {
       onTap: () => {},
     }
     grab.add(badgeItem)
+    // the notebook: only tapped (it opens); a drag on it turns the camera
+    const notebookItem = { meshes: notebook.meshes, fixed: true, canGrab: () => !book.isOpen, onTap: () => openBook() }
+    grab.add(notebookItem)
     // the flame: the round button (only while the lighter is held) or Space; held, it burns
     const flameBtn = root.querySelector('[data-flame]')
     let flameBtnShown = false
@@ -2281,6 +2319,11 @@ export function createScene(container, options = {}) {
       }
       const lighterBusy = lighter.update(dt, simTime)
       if (lighterBusy) lighterBox.set(lighter.group.matrix)
+      // (the notebook opens once the camera has come to it)
+      if (bookPending && !focus.moving) {
+        if (focus.focused === 'notebook') openBook()
+        else bookPending = false
+      }
       const badgeBusy = badge.update(dt)
       if (badgeBusy) badgeBox.set(badge.group.matrix)
       // (the cable drawn between its last two steps: physics.alpha)
@@ -2605,7 +2648,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, backU, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, badgeItem, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, backU, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, badgeItem, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },

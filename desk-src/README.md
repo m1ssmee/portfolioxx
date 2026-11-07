@@ -43,6 +43,24 @@ player; an object held goes home), `Space` the lighter's flame while it is held.
 The cable's chains and their lengths are set in one place, `CHAINS` in `src/objects/earbudsGeom.js`:
 the physics and the cable's mesh both read it.
 
+## The badge and the visitors' book
+
+- `src/objects/badge.js`: the owner's ID card (its face from `src/assets/badge-face.webp`, drawn
+  from the GitHub profile's `assets/id-card.svg`), a nickel clip and ring, a purple lanyard (a
+  ribbon of particles). Double-click to close in; pick it up to hold it up and read it; let go and
+  it is laid down face up, its lanyard laid out beside it.
+- `src/objects/notebook.js` and `src/visitors/`: an A5 spiral notebook, "visitors". A tap closes in
+  and opens it: everyone's thumbprints on the left page, yours on the right (pick an ink, add a name
+  and a place if you like, press and hold the pad). Each print is drawn from a random number, one of
+  a kind (`print.js`), not anyone's real finger.
+- Shared prints are kept by `api/visitors.js` (at the repository's root), a Vercel function over
+  Upstash Redis. To turn it on: in the Vercel project, Storage, add an Upstash Redis database
+  (Marketplace) and connect it to the project; Vercel sets `UPSTASH_REDIS_REST_URL` and
+  `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL` and `KV_REST_API_TOKEN`), and redeploy. Until
+  then, or anywhere without it (`npm run dev`), the book keeps a visitor's print in their browser.
+  One print a minute per visitor; the newest 2,000 are kept; remove one from Upstash's console
+  (the list `visitors:marks`).
+
 ## The earbuds: calm by design
 
 A held part is tied to an anchor that follows the hand through a critically damped follower

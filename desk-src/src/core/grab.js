@@ -8,6 +8,8 @@
 //              (time constant POINTER_TAU): pointer events come unevenly, several a frame or none,
 //              and each one straight to the object would jerk it.
 // Each grabbable: { meshes, canGrab(), pick(hit), aim(ray), twist(rad), release(), home(), cancel(), onTap() }
+// A fixed one ({ meshes, fixed: true, canGrab(), onTap() }, the notebook): only tapped; a drag on it
+// turns the camera, as on the desk.
 import * as THREE from 'three'
 
 export const GRAB_LAYER = 5
@@ -92,6 +94,11 @@ export function createGrab({ canvas, camera, controls, listen, onActive, tapFirs
       if (e.button > 0) return
       const hit = hitAt(e.clientX, e.clientY)
       if (!hit) return
+      if (hit.item.fixed) {
+        // (the camera has the press too: still and quick, it is a tap)
+        press = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), stamp: e.timeStamp, hit, touch: e.pointerType === 'touch', timer: 0, moved: false, fixed: true }
+        return
+      }
       press = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), stamp: e.timeStamp, hit, touch: e.pointerType === 'touch', timer: 0, moved: false }
       if (press.touch) {
         // touch: the camera may still orbit (a swipe); holding still picks it up
@@ -138,6 +145,7 @@ export function createGrab({ canvas, camera, controls, listen, onActive, tapFirs
       const p = press
       press = null
       p.moved = true
+      if (p.fixed) return
       // (a mouse drag that starts on an object picks it up; a touch swipe stays an orbit)
       if (!p.touch) start(p)
     }
