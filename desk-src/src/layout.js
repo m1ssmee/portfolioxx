@@ -6,6 +6,8 @@
 //   the earbuds  plugged in, the cable in a few open curves round the player's lower left, the buds
 //                above it, at the left
 //   the ashtray  (with its cigarette) and the lighter below it: off to the right, out of its way
+//   the badge    the owner's ID card, above the player, its lanyard trailing off the top
+//   the notebook the visitors' book, an A5 spiral notebook, to the right of the ashtray
 export const FWD = [0.836, 0, -0.549]
 export const RIGHT = [-FWD[2], 0, FWD[0]]
 /** A point on the ground from view coordinates. */
@@ -28,6 +30,13 @@ export const DESK = {
   // little (theta: its length's heading on the ground, from FWD)
   lighter: deskAt(-10, 110),
   lighterTurn: Math.PI / 2 + 0.2,
+  // the badge, above the player, lying across the picture, its clip to the right and a little up
+  // (turn: its top's heading on the ground, from RIGHT towards up the picture)
+  badge: deskAt(-128, -92),
+  badgeTurn: 0.17,
+  // the notebook, to the right of the ashtray, turned a little
+  notebook: deskAt(178, 18),
+  notebookTurn: -0.1,
 }
 /**
  * What the camera looks at, and how much must fit: the player in the middle; on a wide screen the
@@ -36,6 +45,6 @@ export const DESK = {
  * (mm, across and up the picture).
  */
 export const VIEW = {
-  wide: { at: deskAt(-135, 20), span: [470, 262] },
-  tall: { at: deskAt(-135, 20), span: [262, 470] },
+  wide: { at: deskAt(-62, 8), span: [650, 300] },
+  tall: { at: deskAt(-62, 8), span: [300, 650] },
 }

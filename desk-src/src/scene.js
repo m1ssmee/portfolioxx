@@ -18,6 +18,9 @@ import { createEarbudsLive } from './objects/earbudsLive.js'
 import { createDeskGround } from './objects/deskGround.js'
 import { createPickup } from './objects/pickup.js'
 import { createLighter } from './objects/lighter.js'
+import { createBadge } from './objects/badge.js'
+import badgeFaceUrl from './assets/badge-face.webp?url'
+import badgeBackUrl from './assets/badge-back.webp?url'
 import { TRAY, notchSeat, ashtraySDF } from './objects/ashtray.js'
 import { CIG, cigaretteMaterials, bodyGeometry, emberGeometry, ashGeometry, strandGeometry, buttGeometry, flakeGeometry, matchStick } from './objects/cigarette.js'
 import { createSmoke, SmokeHistory } from './objects/smoke.js'
@@ -1079,6 +1082,27 @@ export function createScene(container, options = {}) {
     deskBoxes.push(lighterBox)
     stage('lighter', 'done')
 
+    // ---- the badge (objects/badge.js): the owner's ID card and its lanyard, above the player
+    const texLoader = new THREE.TextureLoader()
+    const [badgeFace, badgeBack] = await Promise.all([texLoader.loadAsync(badgeFaceUrl), texLoader.loadAsync(badgeBackUrl)])
+    const badgeTop = new THREE.Vector3().copy(RIGHT).multiplyScalar(Math.cos(LAYOUT.DESK.badgeTurn)).addScaledVector(FWD, Math.sin(LAYOUT.DESK.badgeTurn))
+    const badge = createBadge({
+      faceTex: badgeFace,
+      backTex: badgeBack,
+      rest: { x: LAYOUT.DESK.badge[0], z: LAYOUT.DESK.badge[2], theta: Math.atan2(badgeTop.z, badgeTop.x) },
+      sdf: deskSdf,
+      sdfGrad: deskSdfGrad,
+      ground: ropeGround,
+      anisotropy: aniso,
+    })
+    scene.add(badge.root)
+    disposables.push({ dispose: () => badge.dispose() })
+    // (the cable lies on the card, wherever it is)
+    const badgeBox = boxOf(null, badge.box.half, badge.box.r, badge.box.y0, 55)
+    badgeBox.set(badge.group.matrix)
+    deskBoxes.push(badgeBox)
+    step('badge')
+
     // ---- smoke (the smoke, the burn and the ember, and all that moves them: the cigarette lit)
     stage('light', 'start')
     const curl = (await curlJob).curl
@@ -1295,10 +1319,12 @@ export function createScene(container, options = {}) {
         deep: 2.4,
       },
       earbuds: { center: (o) => earbudsLive.focusCenter(o), radius: 52, el: THREE.MathUtils.degToRad(50) },
+      badge: { center: (o) => badge.center(o), radius: 50, el: THREE.MathUtils.degToRad(62) },
     }
     const focusMeshes = { ashtray: [trayMesh, ...cigs.flatMap((c) => [c.body, c.ash, c.ember])], lighter: lighter.meshes, player: [] }
     player.group.traverse((o) => o.isMesh && focusMeshes.player.push(o))
     focusMeshes.earbuds = earbudsLive.item.meshes
+    focusMeshes.badge = badge.meshes
     const focus = createFocus({
       camera,
       controls,
@@ -1614,7 +1640,7 @@ export function createScene(container, options = {}) {
       listen,
       onActive: () => wake(),
       tapFirst: (hit) => {
-        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : cigItems.includes(hit.item) ? 'ashtray' : null
+        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === badgeItem ? 'badge' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
         if (projOpen) leaveProject()
         focus.focusOn(name)
@@ -1670,6 +1696,22 @@ export function createScene(container, options = {}) {
       onTap: () => {},
     }
     grab.add(lighterItem)
+    // the badge: held up to be read, then laid down
+    const badgeItem = {
+      meshes: badge.meshes,
+      canGrab: () => badge.st.mode !== 'glide' && badge.st.mode !== 'down',
+      pick: () => {
+        badge.pick(camera)
+        api.lastPick = performance.now()
+      },
+      aim: (ray) => badge.aim(ray),
+      twist: (r) => badge.twist(r),
+      release: () => badge.release(),
+      home: () => badge.home(),
+      cancel: () => badge.cancel(),
+      onTap: () => {},
+    }
+    grab.add(badgeItem)
     // the flame: the round button (only while the lighter is held) or Space; held, it burns
     const flameBtn = root.querySelector('[data-flame]')
     let flameBtnShown = false
@@ -2049,6 +2091,7 @@ export function createScene(container, options = {}) {
     const physics = createPhysics()
     physics.add(pickup.physics)
     physics.add(lighter.physics)
+    physics.add(badge.physics)
     physics.add({ awake: () => flakesAwake > 0, step: (h) => stepFlakes(h) })
     physics.add(earbudsLive.physics)
     grab.add(earbudsLive.item)
@@ -2079,6 +2122,7 @@ export function createScene(container, options = {}) {
       if (grab.held) grab.drop('home')
       if (pickup.st.mode === 'lying' || pickup.st.mode === 'fall') pickup.glideTo(cigs[cur].notch)
       lighter.home()
+      badge.home()
       if (!earbudsLive.plugged) earbudsLive.plug()
       // (home: from a close-up, or from wherever the view was turned to)
       if (focus.focused) focus.back()
@@ -2237,6 +2281,8 @@ export function createScene(container, options = {}) {
       }
       const lighterBusy = lighter.update(dt, simTime)
       if (lighterBusy) lighterBox.set(lighter.group.matrix)
+      const badgeBusy = badge.update(dt)
+      if (badgeBusy) badgeBox.set(badge.group.matrix)
       // (the cable drawn between its last two steps: physics.alpha)
       const cableBusy = earbudsLive.update(physics.alpha)
       stepOS(dt)
@@ -2325,8 +2371,8 @@ export function createScene(container, options = {}) {
       camMoved = false
       // (the cigarette or the lighter carried, gliding or falling, or the flame burning: drawn whole,
       // the shadows drawn again every frame)
-      if (carried || lighterBusy || cableBusy) shadowDirty = true
-      const changing = carried || lighterBusy || cableBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
+      if (carried || lighterBusy || cableBusy || badgeBusy) shadowDirty = true
+      const changing = carried || lighterBusy || cableBusy || badgeBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
       // (the cache is baked once the view has been still for a fifth of a second: a slow zoom or
@@ -2559,7 +2605,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, backU, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, backU, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, badgeItem, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },
