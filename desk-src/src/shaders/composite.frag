@@ -3,7 +3,6 @@
       uniform sampler2D tSmoke; uniform sampler2D tSmokeZ; uniform vec2 uSmokeSize;
       uniform sampler2D tBloom; uniform float uAspect;
       uniform vec4 uShim; uniform float uT;
-      uniform float seed;
       varying vec2 vUv;
 #include <linearDepth>
 
@@ -56,7 +55,7 @@
         vec4 o = sRGBTransferOETF(vec4(c, 1.0));
         // (a still dither, a level either way at most: no banding in the soft ground, and nothing
         // that crawls from frame to frame)
-        float n = fract(sin(dot(gl_FragCoord.xy + seed * 37.0, vec2(12.9898, 78.233))) * 43758.5453);
+        float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
         o.rgb += (n - 0.5) * (1.6 / 255.0);
         gl_FragColor = o;
       }

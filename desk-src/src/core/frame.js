@@ -115,7 +115,6 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
       uAspect: { value: 1 },
       uNear: { value: camera.near },
       uFar: { value: camera.far },
-      seed: { value: 0 },
       toneMappingExposure: { value: 1 },
     },
     vertexShader: VS,
@@ -363,7 +362,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     },
     /**
      * One frame. `still`: use the cache (region drawn over it); otherwise draw `scene` whole.
-     * f: { still, scene, emberI, dofK, regionBox, emberBox, smokeBox, glow: {x, y, r, col}, focus, seed }
+     * f: { still, scene, emberI, dofK, regionBox, emberBox, smokeBox, glow: {x, y, r, col}, focus }
      */
     render(f) {
       const scene = f.scene
@@ -389,14 +388,15 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
         renderer.render(scene, camera)
         camera.layers.mask = keep
       }
-      // the depth of field: only in the region's box (the rest is in the cache)
-      const dofK = f.still ? f.dofK : 0
+      // the depth of field: still, only in the region's box (the rest is in the cache); moving, over
+      // the whole frame (the same blur either way: nothing pops as the view stops or starts)
+      const dofK = f.dofK
       compMat.uniforms.uDofK.value = dofK
       if (dofK > 0) {
         setDof(f.focus)
         dofMat.uniforms.tColor.value = live.texture
         dofMat.uniforms.tDepth.value = live.depthTexture
-        if (f.truth) px.set(0, 0, W, H)
+        if (f.truth || !f.still) px.set(0, 0, W, H)
         else rect(f.regionBox, W, H, dofMat.uniforms.uMax.value + 2, px)
         draw(dofMat, dLive, px)
         compMat.uniforms.uBox.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
@@ -408,7 +408,6 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
       if (f.shim) compMat.uniforms.uShim.value.set(f.shim.x, f.shim.y, f.shim.k, f.shim.r)
       else compMat.uniforms.uShim.value.z = 0
       compMat.uniforms.uT.value = f.time || 0
-      compMat.uniforms.seed.value = f.seed
       compMat.uniforms.toneMappingExposure.value = renderer.toneMappingExposure
       if (!f.still && smaa && !smaaWarm) {
         draw(compMat, ldr)

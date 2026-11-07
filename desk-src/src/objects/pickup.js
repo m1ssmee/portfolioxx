@@ -70,7 +70,6 @@ export function createPickup({ camera, sdfGrad, notchPose, notchSeat, cigLength,
   const grad = new Float64Array(3)
   const prevP = new THREE.Vector3()
   const prevV = new THREE.Vector3()
-  const ndcV = new THREE.Vector3()
   const aimRay = new THREE.Ray()
 
   /** The cigarette's matrix from its two ends (filter end A, foot B) and its roll about itself. */

@@ -11,24 +11,6 @@ const smooth = (a, b, x) => {
   return t * t * (3 - 2 * t)
 }
 
-/** A tangent-space normal map from a height field (tiling). */
-function normalFrom(h, S, k) {
-  const n = new Uint8Array(S * S * 4)
-  const at = (i, j) => h[((j + S) % S) * S + ((i + S) % S)]
-  for (let j = 0; j < S; j++)
-    for (let i = 0; i < S; i++) {
-      const dx = (at(i + 1, j) - at(i - 1, j)) * k
-      const dy = (at(i, j + 1) - at(i, j - 1)) * k
-      const l = Math.hypot(dx, dy, 1)
-      const o = (j * S + i) * 4
-      n[o] = Math.round((-dx / l * 0.5 + 0.5) * 255)
-      n[o + 1] = Math.round((-dy / l * 0.5 + 0.5) * 255)
-      n[o + 2] = Math.round((1 / l * 0.5 + 0.5) * 255)
-      n[o + 3] = 255
-    }
-  return n
-}
-
 /** Stoneware: iron speckles (r), clay mottling (g), fine grit (b). */
 function speckle(S) {
   const px = new Uint8Array(S * S * 4)

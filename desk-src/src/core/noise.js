@@ -44,14 +44,3 @@ export function fbm2t(x, y, px, py, oct = 4, seed = 0) {
   }
   return a
 }
-export function fbm3(x, y, z, oct = 4) {
-  let a = 0
-  let amp = 0.5
-  let f = 1
-  for (let o = 0; o < oct; o++) {
-    a += amp * noise3(x * f, y * f, z * f)
-    amp *= 0.5
-    f *= 2
-  }
-  return a
-}

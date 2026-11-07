@@ -11,7 +11,8 @@ export function createFocus({ camera, controls, home, targets, reduceMotion, onC
   const c = new THREE.Vector3()
   const d = new THREE.Vector3()
   let current = null
-  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+  // (smootherstep: no jerk at either end, the camera eases out of rest and into it)
+  const ease = (t) => t * t * t * (t * (6 * t - 15) + 10)
 
   function glide(pos, target) {
     tw.p0.copy(camera.position)
@@ -19,7 +20,7 @@ export function createFocus({ camera, controls, home, targets, reduceMotion, onC
     tw.p1.copy(pos)
     tw.q1.copy(target)
     tw.t0 = performance.now()
-    tw.ms = reduceMotion ? 1 : 950
+    tw.ms = reduceMotion ? 1 : 1150
     tw.on = true
     controls.enableDamping = false
   }

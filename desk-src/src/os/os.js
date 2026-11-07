@@ -3,7 +3,7 @@
 // screen in focus mode) and, from across the desk, the screen's texture (paint.js paints that same
 // DOM). One state, one layout: the two can never disagree. Three screens: the projects list (home), a
 // project's page, About & contact.
-//   createPodOS({ content, audio, canvas, onActivity }) -> { el, canvas, ... } (see the API at the end)
+//   createPodOS({ content, audio, canvas }) -> { el, canvas, ... } (see the API at the end)
 // The texture holds the colours exactly as the page shows them; the scene's shader undoes its tone
 // mapping for them (scene.js), so the lit glass and the DOM agree.
 import css from './os.css?inline'
@@ -15,7 +15,7 @@ import { OS_W, OS_H, TEX_W, TEX_H } from './size.js'
 export { OS_W, OS_H, TEX_W, TEX_H }
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
-export function createPodOS({ content: C, audio, canvas: into = null, onActivity }) {
+export function createPodOS({ content: C, audio, canvas: into = null }) {
   // ---- the root, its style, the icon sprite
   const style = document.createElement('style')
   style.textContent = css
@@ -254,16 +254,8 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
     const v = views.get(st.view)
     ;(v?.querySelector('.pos-card') || v?.querySelector('button:not(.pos-back), a'))?.focus({ preventScroll: true })
   }
-  el.addEventListener(
-    'pointerdown',
-    () => {
-      byKeys(false)
-      onActivity?.()
-    },
-    { passive: true },
-  )
+  el.addEventListener('pointerdown', () => byKeys(false), { passive: true })
   el.addEventListener('click', (e) => {
-    onActivity?.()
     const b = e.target.closest('[data-act]')
     if (!b) return
     const act = b.dataset.act
@@ -324,7 +316,6 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
     return true
   }
   el.addEventListener('keydown', (e) => {
-    onActivity?.()
     if (onKeyDown(e)) {
       e.preventDefault()
       e.stopPropagation()

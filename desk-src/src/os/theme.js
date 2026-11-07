@@ -12,32 +12,6 @@ export const THEMES = {
   },
 }
 
-/** The text/background pairs the UI uses (for the contrast check). */
-export const TEXT_PAIRS = [
-  ['text', 'bg'],
-  ['muted', 'bg'],
-  ['text', 'tile'],
-  ['muted', 'tile'],
-  ['accent', 'bg'],
-  ['accent', 'tile'],
-  ['text', 'press'],
-]
-
-const lin = (c) => {
-  c /= 255
-  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-}
-const lum = (hex) => {
-  const n = parseInt(hex.slice(1), 16)
-  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
-}
-/** WCAG contrast ratio of two #rrggbb colours. */
-export function contrast(a, b) {
-  const la = lum(a)
-  const lb = lum(b)
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
-}
-
 /**
  * The wallpaper: a small tile of soft tonal grain (light and dark specks of very low alpha, at most
  * 10/255), laid over the theme's background. Returned as a canvas

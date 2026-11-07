@@ -8,7 +8,10 @@ OS. A minimal loader fetches and builds everything before entry. The production 
 Views: home is the player in focus, upright and large, Pod OS live on its screen (the rest of the
 still life at the edges); "step back" (or zooming out) shows the whole still life; a double-click
 closes in on anything; Escape or back returns to the player. The view holds still: no parallax, a
-still dither instead of film grain, so a frame changes only where something moves.
+still dither instead of film grain, so a frame changes only where something moves. It moves softly:
+the wheel's zoom is a critically damped spring on the distance (each notch eases in and out), glides
+ease with a smootherstep, and a moving frame keeps the still frame's depth of field, so nothing pops
+as the view starts or stops (the shadows are drawn again only when what casts them moves).
 
 ```
 npm ci

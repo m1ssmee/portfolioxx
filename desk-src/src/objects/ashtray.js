@@ -93,7 +93,6 @@ export function ashtraySDF(x, y, z) {
   const yn = T.height - N.depth + N.r
   if (y > yn - N.r - 3 && r > 36)
   for (let k = 0; k < 3; k++) {
-    const a = N.angles[k]
     const ca = NOTCH_CS[k * 2]
     const sa = NOTCH_CS[k * 2 + 1]
     // the point in the notch's frame: along (radial), across (tangential), up

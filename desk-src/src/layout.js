@@ -39,9 +39,3 @@ export const VIEW = {
   wide: { at: deskAt(-135, 20), span: [470, 262] },
   tall: { at: deskAt(-135, 20), span: [262, 470] },
 }
-/** Rotate a local (x, z) offset by a yaw (about y), as three.js's makeRotationY does. */
-export function yawXZ(yaw, x, z) {
-  const c = Math.cos(yaw)
-  const s = Math.sin(yaw)
-  return [c * x + s * z, -s * x + c * z]
-}

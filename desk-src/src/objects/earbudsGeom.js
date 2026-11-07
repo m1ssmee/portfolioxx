@@ -298,7 +298,7 @@ export const PLUG35_COLLIDE_BOUNDS = [-4.2, -30.0, -4.2, 4.2, 11.9, 4.2]
  * The moulded parts' SDF meshing jobs, at the original's high-quality resolution (JOBS.bud(1),
  * JOBS.remote(1)). Run them where the mesher is (a worker): build the list there (the `sdf`s are
  * functions) and call meshSDF(job.sdf, job.bounds, job.h, job.opts), or job.run(meshSDF). The
- * outputs ({ positions, normals, ao, indices }) are what createEarbuds({ meshes: { bud, remote } })
+ * outputs ({ positions, normals, ao, indices }) are what createEarbudsAsync({ meshes: { bud, remote } })
  * takes.
  */
 export function earbudsMeshJobs() {

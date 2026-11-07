@@ -22,7 +22,7 @@ const SETTLE_MS = 500 // (after seating, the cable's pull is not counted while i
 const SEAT_S = 0.2 // (seating: the plug glides into the jack over this long, turning as it goes)
 
 /**
- * visual: createEarbuds(...) (parts, cable, applyState); collision: earbudsRig.collisionData();
+ * visual: createEarbudsAsync(...) (parts, cable, applyState); collision: earbudsRig.collisionData();
  * ground: objects/deskGround.js; jack: { mouth: Vector3, out: Vector3 } (world: the jack's mouth and
  * the way out of it); onPlug(plugged); onTap(part)
  */

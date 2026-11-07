@@ -1315,5 +1315,3 @@ export function createMusic(ctx, destination) {
   return api
 }
 
-/** The album, for a track list: [{ index, title, artist, duration }]. */
-export const tracks = TRACKS.map((t) => t.info)

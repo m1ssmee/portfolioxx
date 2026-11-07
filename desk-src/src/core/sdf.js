@@ -8,8 +8,6 @@ export const norm = (x, y, z) => {
   const l = len3(x, y, z)
   return [x / l, y / l, z / l]
 }
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 /** Smooth union and intersection with blend radius k (polynomial). */
 export function smin(a, b, k) {

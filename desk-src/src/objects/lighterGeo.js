@@ -3,7 +3,7 @@
 // burner nozzle; a flush pill-shaped push button on one side near the top (a separate part: it
 // moves); a faint parting line round the body; a tiny screw in the base. Plain JS (worker).
 // Frame: y up (chimney at +y), x across its width (button at +x), z its thickness; mm, centred.
-import { smax, smin, clamp } from '../core/sdf.js'
+import { smax } from '../core/sdf.js'
 
 export const LIGHTER = {
   w: 24,
@@ -22,11 +22,6 @@ function sdRoundBox(px, py, pz, bx, by, bz, r) {
   const qy = Math.abs(py) - by + r
   const qz = Math.abs(pz) - bz + r
   return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, Math.max(qy, qz)), 0) - r
-}
-// an ellipse's distance, approximately (scaled circle, good for the near-round chimney)
-function sdEllipse(x, z, a, b) {
-  const k = Math.hypot(x / a, z / b)
-  return ((k - 1) * Math.min(a, b)) / Math.max(1, 0.25 + 0.75 * k)
 }
 
 export function lighterSDF(x, y, z) {

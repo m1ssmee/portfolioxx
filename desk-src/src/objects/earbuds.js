@@ -7,7 +7,7 @@
 //             import { earbudsMeshJobs } from './earbudsGeom.js'      (no three.js in there)
 //             for (const j of earbudsMeshJobs()) out[j.name] = j.run(meshSDF)   // { bud, remote }
 //             (optional: earbudsTextures() from earbudsTex.js, posted with earbudsTextureTransfer)
-//   (page)    const eb = createEarbuds({ renderer, meshes: out, colorway: 'black' })
+//   (page)    const eb = await createEarbudsAsync({ renderer, meshes: out, colorway: 'black' }, tick)
 //             scene.add(eb.group)
 //             eb.applyState(state)   // whenever the physics posts a render state (no allocation)
 //
@@ -27,7 +27,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import * as G from './earbudsGeom.js'
 import { earbudsTextures, letterPixels } from './earbudsTex.js'
-import { runSteps, runStepsAsync } from '../core/steps.js'
+import { runStepsAsync } from '../core/steps.js'
 import VALUE_NOISE from '../shaders/valueNoise.glsl'
 
 export { BODY_ORDER, BODY_COM, CHAINS, SPACING, PLUG35, plugBody, plugCollide35, PLUG35_COLLIDE_BOUNDS, earbudsMeshJobs, earbudsStateLayout } from './earbudsGeom.js'
@@ -70,7 +70,7 @@ export const COLORWAYS = {
  */
 /** The earbuds, built in steps (core/steps.js): it yields between its heavier parts. */
 function* earbudsSteps({ renderer = null, meshes, colorway = 'black', envIntensity, layout = G.earbudsStateLayout(), textures = null } = {}) {
-  if (!meshes || !meshes.bud || !meshes.remote) throw new Error('createEarbuds: meshes { bud, remote } (earbudsMeshJobs) are required')
+  if (!meshes || !meshes.bud || !meshes.remote) throw new Error('createEarbudsAsync: meshes { bud, remote } (earbudsMeshJobs) are required')
   layout = G.earbudsStateLayout(layout)
   const disposables = []
 
@@ -1047,10 +1047,6 @@ function* earbudsSteps({ renderer = null, meshes, colorway = 'black', envIntensi
   }
 }
 
-/** The earbuds, built at once. */
-export function createEarbuds(opts) {
-  return runSteps(earbudsSteps(opts))
-}
 /** The earbuds, built a part per task (`tick`: a promise between them), for a page that is loading. */
 export function createEarbudsAsync(opts, tick) {
   return runStepsAsync(earbudsSteps(opts), tick)

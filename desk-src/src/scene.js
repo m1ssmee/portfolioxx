@@ -9,6 +9,7 @@ import { withEmber, setEmberLight, setFlameLight, installEmberLight, FLAME_COLOR
 import { createGrab } from './core/grab.js'
 import { createAudio } from './core/audio.js'
 import { createFocus } from './core/focus.js'
+import { smoothToward } from './core/follow.js'
 import { createPhysics } from './core/physics.js'
 import * as LAYOUT from './layout.js'
 import { createPlayerAsync } from './objects/player.js'
@@ -76,8 +77,8 @@ const CSS = `
 .cg-keys{position:absolute;right:max(24px,env(safe-area-inset-right));bottom:max(94px,calc(env(safe-area-inset-bottom) + 76px));margin:0;padding:0;list-style:none;display:flex;flex-direction:column;align-items:flex-end;gap:10px;color:var(--label);pointer-events:none}
 .cg-keys{transition:opacity .4s}
 .cg-close .cg-keys{opacity:0}
-.cg-veil{position:absolute;inset:0;background:rgba(214,219,226,.42);-webkit-backdrop-filter:blur(14px) saturate(.9);backdrop-filter:blur(14px) saturate(.9);opacity:0;visibility:hidden;cursor:pointer;transition:opacity .45s ease,visibility 0s .45s}
-.cg-projecting .cg-veil{opacity:1;visibility:visible;transition:opacity .45s ease}
+.cg-veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(232,236,241,.22) 0%,rgba(235,238,243,.5) 46%,rgba(240,242,246,.78) 100%);-webkit-backdrop-filter:blur(34px) saturate(.45) brightness(1.05) contrast(.86);backdrop-filter:blur(34px) saturate(.45) brightness(1.05) contrast(.86);-webkit-mask-image:linear-gradient(#000 0 0),var(--hole,linear-gradient(transparent 0 0));mask-image:linear-gradient(#000 0 0),var(--hole,linear-gradient(transparent 0 0));-webkit-mask-size:100% 100%,var(--hole-size,0 0);mask-size:100% 100%,var(--hole-size,0 0);-webkit-mask-position:0 0,var(--hole-pos,0 0);mask-position:0 0,var(--hole-pos,0 0);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;visibility:hidden;cursor:pointer;transition:opacity .6s cubic-bezier(.3,0,.2,1),visibility 0s .6s}
+.cg-projecting .cg-veil{opacity:1;visibility:visible;transition:opacity .6s cubic-bezier(.3,0,.2,1)}
 .cg-projecting .cg-keys,.cg-projecting .cg-copy{opacity:0;pointer-events:none}
 .cg-keys,.cg-copy{transition:opacity .4s}
 .cg-proj{position:absolute;z-index:3;right:max(5vw,28px);top:50%;box-sizing:border-box;width:min(500px,42vw);max-height:min(80vh,720px);overflow:auto;padding:4px 6px 4px 0;color:var(--ink);font:400 14.5px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:0;opacity:0;visibility:hidden;transform:translate(18px,-50%);transition:opacity .3s ease,transform .3s ease,visibility 0s .3s;scrollbar-width:thin}
@@ -189,11 +190,9 @@ export function createScene(container, options = {}) {
     ready: null,
   }
   let root
-  let lastInput = performance.now() // (any input: back to the full frame rate)
   const initSteps = []
   // (between heavy steps of the set-up, the page gets the main thread back)
   const yieldNow = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise((r) => setTimeout(r, 0)))
-  const active = () => (lastInput = performance.now())
   handle.ready = init().catch((e) => {
     if (!destroyed) console.error('desk:', e)
     handle.failed = true
@@ -483,7 +482,6 @@ export function createScene(container, options = {}) {
     let projOpen = null // (a project open beside the player: its id)
     let podSlide = false // (the camera sliding between two views of the player: its page stays up, following it)
     let osAlpha = 0 // (the page's opacity: it fades in over the texture, and out)
-    let osIdle = 0 // (s since anyone touched it)
     let glare = 1 // (the glass's reflections: 1 across the desk, 0 up close on a lit screen)
     const osCanvas = document.createElement('canvas')
     osCanvas.width = TEX_W
@@ -516,7 +514,7 @@ export function createScene(container, options = {}) {
     await yieldNow()
     player.group.position.copy(DESK.player)
     player.group.rotation.y = LAYOUT.PLAYER.yaw
-    player.group.updateMatrixWorld(true)
+    player.syncFrame()
     scene.add(player.group)
     player.group.traverse((o) => {
       if (!o.isMesh) return
@@ -1173,7 +1171,7 @@ export function createScene(container, options = {}) {
 
     const controls = new OrbitControls(camera, canvas)
     controls.enableDamping = true
-    controls.dampingFactor = 0.06
+    controls.dampingFactor = 0.05
     controls.enablePan = false
     controls.rotateSpeed = 0.35
     controls.zoomSpeed = 0.6
@@ -1207,6 +1205,47 @@ export function createScene(container, options = {}) {
       if (dragFrom && camera.position.distanceTo(dragFrom) > 2) orbited = true
       dragFrom = null
     })
+    // ---- the wheel (and a trackpad's pinch): the camera eased in and out, a notch a short glide,
+    // never a jump (a touch pinch stays with the controls, it is smooth already)
+    // (the distance followed in its logarithm, by a critically damped spring: each notch of a wheel
+    // starts and ends softly, a run of them is one glide, and a zoom feels the same near and far)
+    const zoom = { on: false, to: 0, l: new Float64Array(1), v: new Float64Array(1), t: new Float64Array(1) }
+    const zoomV = new THREE.Vector3()
+    listen(
+      canvas,
+      'wheel',
+      (e) => {
+        if (grab.held || projOpen || focus.moving) return
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY
+        if (!zoom.on) {
+          zoom.to = camera.position.distanceTo(controls.target)
+          zoom.l[0] = Math.log(zoom.to)
+          zoom.v[0] = 0
+        }
+        zoom.to = THREE.MathUtils.clamp(zoom.to * Math.exp(THREE.MathUtils.clamp(d, -120, 120) * 0.0016), controls.minDistance, controls.maxDistance)
+        zoom.t[0] = Math.log(zoom.to)
+        zoom.on = true
+        orbited = true
+        wake()
+      },
+      { passive: false, capture: true },
+    )
+    /** Each frame: the camera's distance drawn towards the wheel's (about 0.15 s to get there). */
+    function stepZoom(dt) {
+      if (!zoom.on) return
+      if (focus.moving || grab.held) return void (zoom.on = false)
+      smoothToward(zoom.l, zoom.v, zoom.t, Math.min(dt, 1 / 20), 0.15, Infinity, 1)
+      // (there, within a tenth of a percent and nearly still: the last of a spring's tail is a
+      // creep nobody sees, and it would keep the view from settling)
+      if (Math.abs(zoom.l[0] - zoom.t[0]) < 1e-3 && Math.abs(zoom.v[0]) < 0.03) {
+        zoom.l[0] = zoom.t[0]
+        zoom.on = false
+      }
+      zoomV.subVectors(camera.position, controls.target).normalize()
+      camera.position.copy(controls.target).addScaledVector(zoomV, Math.exp(zoom.l[0]))
+    }
     camera.position.copy(HOME.pos)
     controls.target.copy(HOME.target)
     controls.update()
@@ -1261,7 +1300,6 @@ export function createScene(container, options = {}) {
         if (name === 'player' && os) {
           osOff = false
           os.wake()
-          osIdle = 0
         }
         wake()
       },
@@ -1319,7 +1357,6 @@ export function createScene(container, options = {}) {
       // (up close, the arrows reach Pod OS wherever the page's focus is)
       if (osUp && (e.key || '').startsWith('Arrow') && !os.el.contains(e.target) && os.onKeyDown(e)) {
         e.preventDefault()
-        osIdle = 0
         return
       }
       if (e.key !== 'Escape' || grab.held) return
@@ -1331,7 +1368,6 @@ export function createScene(container, options = {}) {
       if (osUp && os.back()) {
         e.preventDefault()
         e.stopPropagation()
-        osIdle = 0
         return
       }
       if (focus.focused) focus.back()
@@ -1361,7 +1397,7 @@ export function createScene(container, options = {}) {
     }
     const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode })
     // where things are on the screen (UV boxes): the ember region, the ember, the smoke
-    const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, seed: 0, truth: false, shim: null, time: 0 }
+    const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0 }
     const bv = new THREE.Vector3()
     const box = { x0: 0, y0: 0, x1: 0, y1: 0, behind: false }
     function boxStart() {
@@ -1509,7 +1545,6 @@ export function createScene(container, options = {}) {
     }
     const passive = { passive: true }
     listen(canvas, 'pointermove', (e) => {
-      active()
       ptr.x = e.clientX
       ptr.y = e.clientY
       ptr.inside = true
@@ -1536,10 +1571,7 @@ export function createScene(container, options = {}) {
     }
 
     // ---- tap to flick: a short press on the cigarette
-    listen(canvas, 'wheel', active, passive)
-    listen(window, 'keydown', active)
     listen(canvas, 'pointerdown', () => {
-      active()
       wake()
     }, passive)
     function flick(c) {
@@ -1561,7 +1593,7 @@ export function createScene(container, options = {}) {
       camera,
       controls,
       listen,
-      onActive: () => (active(), wake()),
+      onActive: () => wake(),
       tapFirst: (hit) => {
         const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
@@ -1632,7 +1664,6 @@ export function createScene(container, options = {}) {
       } catch {
         // (a synthetic or already-ended pointer)
       }
-      active()
       lighter.ignite(true)
       wake()
     }
@@ -1653,7 +1684,6 @@ export function createScene(container, options = {}) {
       e.preventDefault()
       if (e.repeat || spaceDown) return
       spaceDown = true
-      active()
       lighter.ignite(true)
       wake()
     })
@@ -1743,7 +1773,6 @@ export function createScene(container, options = {}) {
       key.press(true)
       setTimeout(() => key.press(false), 140)
       keyAnim = 0.5
-      osIdle = 0
       // the keys: ◀ back (or the previous track), ▶ next (the next item, or the next track), the red
       // one select on Pod OS (held: play or pause) and play or pause for the music
       if (osUp && !held) {
@@ -1760,7 +1789,6 @@ export function createScene(container, options = {}) {
           os.wake()
         }
       }
-      active()
       wake()
     }
     // ---- Pod OS, each frame: asleep, waking, awake; the texture painted when it changed (and nothing
@@ -1773,8 +1801,6 @@ export function createScene(container, options = {}) {
       osOff = os.power !== 'asleep'
       if (osOff) os.sleep()
       else os.wake()
-      osIdle = 0
-      active()
       wake()
     }
     listen(window, 'keydown', (e) => {
@@ -1864,7 +1890,6 @@ export function createScene(container, options = {}) {
         podSlide = podView()
         focus.focusOn('project')
       }
-      active()
       wake()
     }
     function closeProject() {
@@ -1887,6 +1912,18 @@ export function createScene(container, options = {}) {
     }
     const veilP = new THREE.Vector3()
     let veilClip = null
+    let veilHole = ''
+    // (the veil's hole: a soft-edged rounded rectangle round the player, as a mask image (its
+    // feather all outside the player), and the player's own outline as a clip, so the player's
+    // keys and page still take clicks through it)
+    const FEATHER = 30
+    function holeImage(w, h, r) {
+      const W = Math.round(w + 2 * FEATHER)
+      const H = Math.round(h + 2 * FEATHER)
+      const g = FEATHER * 0.55 // (the rectangle grown by this much: the feather starts at the player's edge, opaque)
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}'><filter id='f' x='-30%' y='-30%' width='160%' height='160%'><feGaussianBlur stdDeviation='${(FEATHER / 2.8).toFixed(1)}'/></filter><rect x='${(FEATHER - g).toFixed(1)}' y='${(FEATHER - g).toFixed(1)}' width='${(w + 2 * g).toFixed(1)}' height='${(h + 2 * g).toFixed(1)}' rx='${(r + g).toFixed(1)}' fill='#000' filter='url(#f)'/></svg>`
+      return { url: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`, W, H }
+    }
     function stepProject() {
       const v = os.view
       const id = v.startsWith('project:') ? v.slice(8) : null
@@ -1920,18 +1957,23 @@ export function createScene(container, options = {}) {
         const r = (x1 - x0) * 0.13
         const f = (n) => n.toFixed(1)
         clip = `path(evenodd, "M0 0H${w}V${h}H0Z M${f(x0 + r)} ${f(y0)}H${f(x1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1)} ${f(y0 + r)}V${f(y1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1 - r)} ${f(y1)}H${f(x0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0)} ${f(y1 - r)}V${f(y0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0 + r)} ${f(y0)}Z")`
+        // (the soft hole: drawn again only when the player's size on the screen changes)
+        const size = `${Math.round(x1 - x0)}x${Math.round(y1 - y0)}`
+        if (size !== veilHole) {
+          veilHole = size
+          const im = holeImage(x1 - x0, y1 - y0, r)
+          veilEl.style.setProperty('--hole', im.url)
+          veilEl.style.setProperty('--hole-size', `${im.W}px ${im.H}px`)
+        }
+        veilEl.style.setProperty('--hole-pos', `${f(x0 - FEATHER)}px ${f(y0 - FEATHER)}px`)
+      } else if (veilHole) {
+        veilHole = ''
+        veilEl.style.removeProperty('--hole')
       }
       if (clip !== veilClip) veilEl.style.clipPath = veilClip = clip
     }
-    /** (debug) Why Pod OS's page is, or is not, laid over the glass now. */
-    api.osWhy = () => {
-      camera.updateMatrixWorld()
-      osCam.copy(camera.position).applyMatrix4(playerInv)
-      return { pod: podView(), moving: focus.moving, level: os && os.level, glare, held: !!grab.held, visible, steep: osCam.y - GY > 0.35 * Math.hypot(osCam.x, osCam.y - GY, osCam.z - (GZ0 + GZ1) / 2), covered: glassCovered() }
-    }
     function stepOS(dt) {
       if (!os) return
-      osIdle += dt
       if (podSlide && !focus.moving) podSlide = false
       stepProject()
       if (os.power === 'asleep') {
@@ -2026,7 +2068,6 @@ export function createScene(container, options = {}) {
     }
     for (const b of root.querySelectorAll('[data-act]'))
       listen(b, 'click', () => {
-        active()
         if (b.dataset.act === 'reset') resetView()
         else if (b.dataset.act === 'back') focus.back()
         else if (b.dataset.act === 'os') {
@@ -2057,8 +2098,8 @@ export function createScene(container, options = {}) {
     // reports a change every frame from round-off alone)
     let camMoved = true
     let dofK = 0
-    let bakeClock = 0
-    let stillFrames = 0
+    let stillTime = 0
+    let shadowsDrawn = false
     const bakedCam = new THREE.Matrix4()
     const bakedProj = new THREE.Matrix4()
     // (OrbitControls rewrites the camera on every update, with round-off even when it stands still)
@@ -2152,6 +2193,7 @@ export function createScene(container, options = {}) {
       simTime += dt * (reduceMotion ? 0.35 : 1)
       U.uTime.value = simTime
       focus.update(now)
+      stepZoom(dt)
       controls.update()
       grab.hover()
       // the held object aimed at the pointer, eased (core/grab.js), then every simulation at its
@@ -2268,11 +2310,12 @@ export function createScene(container, options = {}) {
       const changing = carried || lighterBusy || cableBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
-      stillFrames = changing ? 0 : stillFrames + 1
-      const moving = changing || stillFrames < 4
+      // (the cache is baked once the view has been still for a fifth of a second: a slow zoom or
+      // pinch with small pauses goes on drawing whole frames, it does not bake at every pause)
+      stillTime = changing ? 0 : stillTime + Math.max(dt, 1 / 240)
+      const moving = changing || stillTime < 0.2
       // shadows: drawn again only when the shadow casters changed (the burn moves slowly: every 2 s)
       shadowClock += dt
-      bakeClock += dt
       const burnStep = shadowClock > 2
       if (burnStep) shadowClock = 0
       // (the depth of field: on what the view is about; deep over the whole desk, the still life's
@@ -2284,15 +2327,18 @@ export function createScene(container, options = {}) {
       F.focus.home = F.focus.s * (ft ? ft.deep || 1 : 2.2)
       // (the frame's own work before drawing: input, simulations, poses; for the debug tools)
       api.simMs = performance.now() - t0
-      // (tests: the simulation only, nothing drawn: a software renderer takes seconds a frame)
+      api.moving = moving
+      // (tests: the simulation only, nothing drawn: a software renderer takes seconds a frame; the
+      // camera taken as drawn, as either path would)
       if (!dbgFlags.draw) {
         shadowDirty = shadowDirty || moving
+        bakedCam.copy(camera.matrixWorld)
+        bakedProj.copy(camera.projectionMatrix)
         wake()
         return
       }
       dbg?.begin()
       if (moving) {
-        dofK = 0
         frameCache.valid = false
         // (the camera as it is now: if it stays, the next frame bakes for it)
         bakedCam.copy(camera.matrixWorld)
@@ -2303,20 +2349,25 @@ export function createScene(container, options = {}) {
         }
       } else {
         if (!frameCache.valid || shadowDirty || burnStep) {
-          key.shadow.needsUpdate = true
-          frameCache.bake(scene, F.focus, shadowDirty || burnStep || !frameCache.valid)
+          // (the shadows drawn again only if what casts them changed: the camera does not change them)
+          const shadows = shadowDirty || burnStep || !shadowsDrawn
+          if (shadows) key.shadow.needsUpdate = true
+          shadowsDrawn = true
+          frameCache.bake(scene, F.focus, shadows)
           bakedCam.copy(camera.matrixWorld)
           bakedProj.copy(camera.projectionMatrix)
           shadowDirty = false
-          bakeClock = 0
           if (dbg) dbg.bakes++
         }
-        dofK = Math.min(1, dofK + dt / 0.4)
       }
+      // (the depth of field: eased in once, at the start, then kept, moving or still: a zoom or a
+      // glide never switches it off and on, so the soft edges of the picture do not pop)
+      dofK = Math.min(1, dofK + dt / 0.7)
       F.still = !moving
       F.truth = !!dbgFlags.truth
       F.emberI = emberNow / EMBER_CD
-      F.dofK = dofK
+      // (the depth of field eased in, not switched on)
+      F.dofK = dofK * dofK * (3 - 2 * dofK)
       cigBox(c, c.b - 4.6, c.b + 0.7 + c.ashLen + 0.8, 4.7, F.regionBox)
       // (the player's screen is drawn over the cache too: the box takes it in)
       boxStart()
@@ -2422,7 +2473,7 @@ export function createScene(container, options = {}) {
     // without it if it cannot)
     stage('os', 'start')
     try {
-      const [{ createPodOS }, { portfolio }] = await Promise.all([import('./os/os.js'), import('./content/portfolio.ts')])
+      const { createPodOS } = await import('./os/os.js')
       stage('os', 0.4)
       // (its face: Inter, which the player has loaded)
       await player.ready
@@ -2431,10 +2482,6 @@ export function createScene(container, options = {}) {
         content: portfolio,
         audio,
         canvas: osCanvas,
-        onActivity: () => {
-          osIdle = 0
-          active()
-        },
       })
       stageEl.after(os.el)
       cleanups.push(() => os.destroy())
@@ -2483,7 +2530,6 @@ export function createScene(container, options = {}) {
       root.classList.add('cg-ready', 'cg-reveal')
       loopReady = true
       last = performance.now()
-      active()
       wake()
     }
     /** Where the cigarette's ember is on the screen (CSS px), for the loader's ember to travel to. */
@@ -2503,9 +2549,6 @@ export function createScene(container, options = {}) {
         },
         get osUp() {
           return osUp
-        },
-        set osIdle(v) {
-          osIdle = v
         },
         osTex,
         placeOS,

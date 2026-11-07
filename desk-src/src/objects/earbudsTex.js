@@ -1,7 +1,7 @@
 // The earbuds' procedural textures' pixels (ported from the Drift Wired viewer's textures.js): the
 // braid's normal / roughness / colour maps (computed) and the etched L and R (drawn on a canvas).
 // No three.js here: earbudsTextures() runs in a worker (the letters need OffscreenCanvas there) or
-// on the page; createEarbuds() takes its output, or makes it itself.
+// on the page; createEarbudsAsync() takes its output, or makes it itself.
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 
 /** The braided sleeve: one 256 x 256 tile, 8 strands per family, over two, under two. */
@@ -96,8 +96,8 @@ export function letterPixels() {
 }
 
 /**
- * Everything createEarbuds() needs: { braid: { normal, rough, albedo }, letters } (letters null in
- * a worker without OffscreenCanvas: createEarbuds then draws them on the page). In a worker, post
+ * Everything createEarbudsAsync() needs: { braid: { normal, rough, albedo }, letters } (letters null in
+ * a worker without OffscreenCanvas: createEarbudsAsync then draws them on the page). In a worker, post
  * it with transfer: earbudsTextureTransfer(t).
  */
 export function earbudsTextures() {

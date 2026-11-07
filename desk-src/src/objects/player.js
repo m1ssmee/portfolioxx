@@ -3,7 +3,7 @@
 // given a body 10.5 mm thick with softly rounded sides. Units mm. It lies face up: +y is the face's
 // normal, y = 0 the bottom it rests on, the screen end towards -z, the keys and the AUX jack
 // towards +z, centred in x and z.
-//   shell   one piece of slightly warm white plastic with a satin clearcoat: the rim rolls over at
+//   shell   one piece of clean white plastic with a glossy clearcoat: the rim rolls over at
 //           the top and under at the bottom and stands 0.3 mm proud of the face, a fine seam
 //           between. The face, its print (one atlas texture), the speaker grille's 140 real holes,
 //           the mic hole, the keypad's well, the side button and the jack's bore are all in the
@@ -14,13 +14,13 @@
 //           atlas); the rec key's dome is glossy red (its own mesh, the key's child)
 //   jack    a 3.5 mm bore in the bottom edge under the AUX label, a nickel ring at its mouth
 //
-// createPlayer(THREE, opts) -> { group, meshes, keys, port, screen, update, dispose, ready, bounds }
+// await createPlayerAsync(THREE, opts, tick) -> { group, meshes, keys, port, screen, update, dispose, ready, bounds, syncFrame }
 // opts (all optional):
 //   fontUrl          a URL of Inter (or any sans) to load with FontFace for the print (relative to the
 //                    page); without it the family below is used if the page has it, else a system
 //                    sans. `ready` resolves once the print is redrawn in it
 //   fontFamily       'Inter'
-//   color            the plastic's colour (0xf2f0eb, a slightly warm white)
+//   color            the plastic's colour (0xe7e5e0, a soft porcelain white)
 //   screenTexture    the display: a texture over the glass (uv 0..1 across its 59.1 x 62.9 mm, top
 //                    left at the screen end), or none for a dark glass; screen.setLevel(0..1) lights it
 //   screenEmissive   its emissive intensity at full brightness (1)
@@ -28,7 +28,7 @@
 //   contactShadow    a soft contact shadow on the desk under it (true; one transparent quad)
 //   castShadow / receiveShadow   for the meshes (true / true)
 
-import { runSteps, runStepsAsync } from '../core/steps.js'
+import { runStepsAsync } from '../core/steps.js'
 
 // ---- the design's frame
 const SVG_W = 663
@@ -285,7 +285,7 @@ function* playerSteps(THREE, opts = {}) {
   const o = {
     fontUrl: opts.fontUrl ?? null,
     fontFamily: opts.fontFamily ?? 'Inter',
-    color: opts.color ?? 0xf2f0eb,
+    color: opts.color ?? 0xe7e5e0,
     screenTexture: opts.screenTexture ?? null,
     screenEmissive: opts.screenEmissive ?? 1,
     anisotropy: opts.anisotropy ?? 8,
@@ -375,14 +375,14 @@ function* playerSteps(THREE, opts = {}) {
       c.rect(it.px, it.py, it.w, it.h)
       c.clip()
       c.setTransform(ATLAS_S, 0, 0, ATLAS_S, it.px - it.rect[0] * ATLAS_S, it.py - it.rect[1] * ATLAS_S)
-      if (it.text) drawText(c, it.text[0], it.text[1], it.text[2], it.text[3], 500, 14.5, 2.3, '#9a9a9a')
+      if (it.text) drawText(c, it.text[0], it.text[1], it.text[2], it.text[3], 500, 14.5, 2.3, '#7c8087')
       else if (it.id === 'hd') {
-        c.fillStyle = '#c3c3c1'
+        c.fillStyle = '#a9adb3'
         rrect(c, 55, 689, 89.4, 25, 5)
         c.fill()
         drawText(c, 'HD AUDIO', 100.1, 706.41, 'middle', 650, 13.5, 0.8, '#ffffff')
       } else if (it.id === 'phones') {
-        c.fillStyle = '#c3c3c1'
+        c.fillStyle = '#a9adb3'
         rrect(c, 562, 689, 46, 25, 5)
         c.fill()
         c.strokeStyle = '#ffffff'
@@ -402,7 +402,7 @@ function* playerSteps(THREE, opts = {}) {
         c.fill()
       } else if (it.id === 'prev' || it.id === 'play') {
         const v = it.id === 'prev' ? [107.17, 998, 134.17, 983, 134.17, 1013] : [349.5, 998, 322.5, 983, 322.5, 1013]
-        c.fillStyle = '#8a8a8a'
+        c.fillStyle = '#6e7279'
         c.beginPath()
         c.moveTo(v[0], v[1])
         c.lineTo(v[2], v[3])
@@ -925,28 +925,38 @@ function* playerSteps(THREE, opts = {}) {
   // =============================================================================================
   // materials (one instance each)
   // =============================================================================================
+  // (a soft porcelain white, a touch warm against the cool ground, a clear lacquer that takes the
+  // studio's highlights crisply, and a soft sheen along its rounded edges, as molded plastic has)
   const plastic = new THREE.MeshPhysicalMaterial({
     name: 'player.plastic',
     color: o.color,
     map: atlasTex,
     vertexColors: true,
-    roughness: 0.46,
+    roughness: 0.34,
     metalness: 0,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.24,
-    specularIntensity: 0.7,
+    clearcoat: 1,
+    clearcoatRoughness: 0.09,
+    specularIntensity: 0.85,
+    sheen: 0.35,
+    sheenRoughness: 0.55,
+    sheenColor: 0xffffff,
   })
   // (a molded surface is never quite even: its roughness wanders a little, in object space, so the
   // keys keep theirs as they move)
+  // (and a studio's soft falloff across it: a touch lighter towards the key, at the picture's top
+  // left, a touch darker away from it; in the player's own frame, so the keys and the body agree)
+  const uPlInv = { value: new THREE.Matrix4() }
   plastic.onBeforeCompile = (sh2) => {
+    sh2.uniforms.uPlInv = uPlInv
     sh2.vertexShader = sh2.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vPlObj;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlObj = transformed;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vPlObj;\nvarying vec3 vPlP;\nuniform mat4 uPlInv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlObj = transformed;\nvPlP = (uPlInv * modelMatrix * vec4(transformed, 1.0)).xyz;')
     sh2.fragmentShader = sh2.fragmentShader
       .replace(
         '#include <common>',
         /* glsl */ `#include <common>
         varying vec3 vPlObj;
+        varying vec3 vPlP;
         float plH(vec3 p) {
           p = fract(p * 0.3183099 + 0.1);
           p *= 17.0;
@@ -959,6 +969,19 @@ function* playerSteps(THREE, opts = {}) {
           return mix(mix(mix(plH(i), plH(i + vec3(1, 0, 0)), f.x), mix(plH(i + vec3(0, 1, 0)), plH(i + vec3(1, 1, 0)), f.x), f.y),
                      mix(mix(plH(i + vec3(0, 0, 1)), plH(i + vec3(1, 0, 1)), f.x), mix(plH(i + vec3(0, 1, 1)), plH(i + vec3(1, 1, 1)), f.x), f.y), f.z);
         }`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        /* glsl */ `#include <map_fragment>
+        float plG = clamp(0.5 - 0.5 * (vPlP.x / 33.0 * 0.55 + vPlP.z / 59.5 * 0.85), 0.0, 1.0);
+        diffuseColor.rgb *= 0.9 + 0.11 * plG;`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        /* glsl */ `#include <normal_fragment_maps>
+        // (its rolled rim turning away a little darker: the shape reads, not a flat white sheet)
+        float plF = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+        diffuseColor.rgb *= 0.82 + 0.18 * sqrt(plF);`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
@@ -1164,11 +1187,13 @@ function* playerSteps(THREE, opts = {}) {
     }
   }
 
-  return { group, meshes, keys, port, screen, update, dispose, ready, bounds }
-}
-/** The player, built at once. */
-export function createPlayer(THREE, opts = {}) {
-  return runSteps(playerSteps(THREE, opts))
+  /** After the group is placed: the frame the plastic's falloff is drawn in. */
+  function syncFrame() {
+    group.updateMatrixWorld(true)
+    uPlInv.value.copy(group.matrixWorld).invert()
+  }
+  syncFrame()
+  return { group, meshes, keys, port, screen, update, dispose, ready, bounds, syncFrame }
 }
 /** The player, built a part per task (`tick`: a promise between them), for a page that is loading. */
 export function createPlayerAsync(THREE, opts = {}, tick) {
