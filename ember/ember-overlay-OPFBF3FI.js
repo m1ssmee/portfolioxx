@@ -1,0 +1,13 @@
+import"./ember-chunk-LNKPV2WA.js";function w(T,s,_,b){let u=document.createElement("pre");u.style.cssText="position:absolute;left:8px;top:8px;margin:0;padding:8px 10px;z-index:9;pointer-events:none;font:11px/1.45 ui-monospace,Menlo,monospace;color:#ddd;background:rgba(0,0,0,.6);border-radius:8px",T.appendChild(u),s.info.autoReset=!1;let t=s.getContext(),i=t.getExtension("EXT_disjoint_timer_query_webgl2"),p=[],r=null,d=null,m=0,E=0,h=performance.now(),x=0,$=0,f="",n={samples:[],firstFrameAt:null,longTasks:[],init:b||[]},g=null;try{g=new PerformanceObserver(l=>{for(let o of l.getEntries())n.longTasks.push({at:Math.round(o.startTime),ms:Math.round(o.duration)}),console.warn(`[still life] long task ${Math.round(o.duration)} ms at ${Math.round(o.startTime)} ms`)}),g.observe({type:"longtask",buffered:!0})}catch{g=null}let y={stats:n,bakes:0,begin(){s.info.reset(),i&&!r&&p.length<4&&(r=t.createQuery(),t.beginQuery(i.TIME_ELAPSED_EXT,r))},end(l,o){for(r&&(t.endQuery(i.TIME_ELAPSED_EXT),p.push(r),r=null);p.length&&t.getQueryParameter(p[0],t.QUERY_RESULT_AVAILABLE);){let e=p.shift();t.getParameter(i.GPU_DISJOINT_EXT)||(d=t.getQueryParameter(e,t.QUERY_RESULT)/1e6),t.deleteQuery(e)}f=o||f,m++,E+=l;let a=performance.now();if(n.firstFrameAt===null&&(n.firstFrameAt=a,y.report()),n.samples.push({t:a,cpu:l,gpu:d,calls:s.info.render.calls,tris:s.info.render.triangles,path:f}),n.samples.length>4e3&&n.samples.splice(0,2e3),a-h>500){x=m*1e3/(a-h),$=E/m,m=E=0,h=a;let e=_(),c=s.info.memory;u.textContent=`fps        ${x.toFixed(0)}
+cpu ms     ${$.toFixed(2)}
+gpu ms     ${d===null?i?"\u2026":"n/a":d.toFixed(2)}
+calls      ${s.info.render.calls}
+triangles  ${s.info.render.triangles.toLocaleString("en")}
+geometries ${c.geometries}
+textures   ${c.textures}
+targets    ${e.targets}
+heap MB    ${performance.memory?(performance.memory.usedJSHeapSize/1048576).toFixed(1):"n/a"}
+tier       ${e.tier}
+scale      ${e.scale}
+path       ${f}
+bakes      ${y.bakes}`}},report(){let o=performance.getEntriesByType("resource").filter(e=>e.initiatorType==="script"||/\.m?js(\?|$)/.test(e.name)),a=o.reduce((e,c)=>e+(c.transferSize||c.encodedBodySize||0),0)/1024;console.groupCollapsed?.("[still life] load"),console.table?.(n.init.map(e=>({step:e.step,ms:Math.round(e.ms)}))),console.log(`JS downloaded ${a.toFixed(1)} KB (${o.length} files) \xB7 poster at ${window.__posterAt?Math.round(window.__posterAt)+" ms":"n/a"} \xB7 first live frame at ${Math.round(n.firstFrameAt)} ms`),console.groupEnd?.(),n.jsKB=a},dispose(){g?.disconnect();for(let l of p)t.deleteQuery(l);r&&(t.endQuery(i.TIME_ELAPSED_EXT),t.deleteQuery(r)),u.remove()}};return y}export{w as createOverlay};
