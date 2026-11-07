@@ -51,11 +51,11 @@
         vec4 s = smokeAt(vUv);
         c = c * (1.0 - s.a) + s.rgb;
         c += texture2D(tBloom, vUv).rgb;
-        { vec2 dv = (vUv - 0.5) * vec2(1.0, 0.8); c *= mix(0.62, 1.0, smoothstep(0.85, 0.2, length(dv))); }
-        c = ACESFilmicToneMapping(c);
+        // (a product shot's tone curve: colours as they are, the light parts compressed, never clipped)
+        c = NeutralToneMapping(c);
         vec4 o = sRGBTransferOETF(vec4(c, 1.0));
         float n = fract(sin(dot(gl_FragCoord.xy + seed * 37.0, vec2(12.9898, 78.233))) * 43758.5453);
         float l = dot(o.rgb, vec3(0.33));
-        o.rgb += (n - 0.5) * (0.004 + 0.03 * l * (1.0 - l));
+        o.rgb += (n - 0.5) * (0.003 + 0.012 * l * (1.0 - l));
         gl_FragColor = o;
       }

@@ -67,6 +67,10 @@ export function createAudio() {
     get plugged() {
       return state.plugged
     },
+    /** The sound switch. */
+    get on() {
+      return state.on
+    },
     get playing() {
       return state.playing
     },

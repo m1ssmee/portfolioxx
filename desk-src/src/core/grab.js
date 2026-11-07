@@ -4,10 +4,15 @@
 //   touch:     press and hold ~150 ms on an object: picked up; a quick swipe orbits as usual.
 //   while held: the camera stays put; the wheel (or two fingers twisting) turns the object about
 //              the vertical; Escape (or the reset button, through drop('home')) sends it home.
+//   the hand:  a held object is aimed once a frame (update()), at the pointer eased exponentially
+//              (time constant POINTER_TAU): pointer events come unevenly, several a frame or none,
+//              and each one straight to the object would jerk it.
 // Each grabbable: { meshes, canGrab(), pick(hit), aim(ray), twist(rad), release(), home(), cancel(), onTap() }
 import * as THREE from 'three'
 
 export const GRAB_LAYER = 5
+/** The held object's aim follows the pointer with this time constant (s). */
+export const POINTER_TAU = 0.12
 
 export function createGrab({ canvas, camera, controls, listen, onActive }) {
   const items = []
@@ -21,6 +26,8 @@ export function createGrab({ canvas, camera, controls, listen, onActive }) {
   let hoverAt = null
   let twistPrev = null // (two fingers: the angle between them)
   const touches = new Map()
+  // the pointer as it is (raw), and as the held object is aimed at it (eased)
+  const aim = { rx: 0, ry: 0, x: 0, y: 0, at: -1, ax: NaN, ay: NaN }
 
   function rayAt(cx, cy) {
     const r = canvas.getBoundingClientRect()
@@ -50,6 +57,9 @@ export function createGrab({ canvas, camera, controls, listen, onActive }) {
       // (the pointer may already be gone; the window still hears the release)
     }
     held.pick(p.hit, rayAt(p.x, p.y))
+    aim.rx = aim.x = p.x
+    aim.ry = aim.y = p.y
+    aim.ax = aim.ay = NaN
     navigator.vibrate?.(8)
   }
   function end(how) {
@@ -131,7 +141,9 @@ export function createGrab({ canvas, camera, controls, listen, onActive }) {
       // (only the pointer that holds it: a second thumb on the flame button does not move it)
       if (heldFrom && e.pointerId !== heldFrom.id) return
       onActive()
-      held.aim(rayAt(e.clientX, e.clientY))
+      // (where it is: the object is aimed at it once a frame, eased: update())
+      aim.rx = e.clientX
+      aim.ry = e.clientY
       return
     }
     if (e.pointerType === 'mouse' && !e.buttons && e.target === canvas) hoverAt = { x: e.clientX, y: e.clientY }
@@ -198,6 +210,18 @@ export function createGrab({ canvas, camera, controls, listen, onActive }) {
       if (press) clearTimeout(press.timer)
       press = null
       end(how)
+    },
+    /** Once a frame, before the physics: the held object aimed at the pointer, eased. */
+    update(dt) {
+      if (!held) return
+      const k = 1 - Math.exp(-Math.min(dt, 0.1) / POINTER_TAU)
+      aim.x += (aim.rx - aim.x) * k
+      aim.y += (aim.ry - aim.y) * k
+      // (settled to a hundredth of a pixel: aimed no more until the pointer moves)
+      if (Math.abs(aim.x - aim.ax) < 0.01 && Math.abs(aim.y - aim.ay) < 0.01) return
+      aim.ax = aim.x
+      aim.ay = aim.y
+      held.aim(rayAt(aim.x, aim.y))
     },
     /** Once a frame: the hover cursor (one raycast, only for a mouse that moved). */
     hover() {

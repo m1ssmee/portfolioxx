@@ -25,7 +25,8 @@
         float a = vAlpha * prof * mix(1.0, along, vTwist);
         a *= depthFade(vViewZ);
         if (a < 0.0015) discard;
-        // bluish where thin, greyer where dense
-        vec3 col = vLight * mix(vec3(0.9, 0.94, 1.0), vec3(0.97), clamp(a * 3.0, 0.0, 1.0));
+        // (on the light ground: darker where dense, a faint lighter edge where it thins)
+        a = min(1.0, a * 2.2);
+        vec3 col = vLight * mix(vec3(1.32, 1.34, 1.36), vec3(0.94, 0.96, 1.0), clamp(a * 2.5, 0.0, 1.0));
         gl_FragColor = vec4(col * a, a);
       }

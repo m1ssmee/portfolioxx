@@ -22,6 +22,9 @@ void main() {
   col += vec3(1.9, 0.95, 0.32) * body * tip * (1.0 - 0.75 * core);
   col += vec3(1.2, 0.55, 0.18) * body * (1.0 - tip) * (1.0 - base) * 0.6;
   col *= uFlame;
-  // (its alpha adds to the bloom mask: over anything drawn it rises above 1, so it blooms)
-  gl_FragColor = vec4(col, min(1.0, dot(col, vec3(0.4))));
+  // its alpha: how much of what is behind it the flame hides (premultiplied over): the yellow body
+  // nearly all, the blue base a little; it also adds to the bloom mask (over anything drawn it rises
+  // above 1, so it blooms)
+  float a = clamp(body * (0.5 + 0.45 * tip) * (1.0 - 0.35 * core) + base * 0.3, 0.0, 1.0) * uFlame;
+  gl_FragColor = vec4(col, a);
 }

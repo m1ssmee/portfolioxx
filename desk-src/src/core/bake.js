@@ -1,5 +1,4 @@
 // The scene's textures, baked once (in the worker) as RGBA8 pixel arrays: every one tiles.
-//   walnut   colour (sRGB) + its height (for the normal map) — the tabletop's grain and pores
 //   speckle  the stoneware's iron speckles and clay mottling (grey-scale masks in r, g, b)
 //   cork     the filter's tipping paper: mottled cork-tan with fine speckles (sRGB)
 //   paper    laid-paper lines and fibre noise (masks)
@@ -10,57 +9,6 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v)
 const smooth = (a, b, x) => {
   const t = clamp01((x - a) / (b - a))
   return t * t * (3 - 2 * t)
-}
-
-/**
- * Walnut, one tile = 400 mm: five boards across the grain, each its own tone and figure; ring lines
- * a few millimetres apart, wavy along the board; small dark pores drawn out along the grain; now
- * and then a darker mineral streak. Colour (sRGB), roughness (g) and a height for the normal map.
- */
-function walnut(S) {
-  const px = new Uint8Array(S * S * 4)
-  const rough = new Uint8Array(S * S * 4)
-  const hgt = new Float32Array(S * S)
-  const BOARDS = 5
-  const tone = [0.0, 0.07, -0.05, 0.04, -0.08]
-  const lines = [64, 78, 70, 86, 60]
-  for (let j = 0; j < S; j++)
-    for (let i = 0; i < S; i++) {
-      const u = i / S
-      const v = j / S
-      const k = Math.min(BOARDS - 1, Math.floor(v * BOARDS))
-      const vb = v * BOARDS - k // across this board, 0..1
-      // the ring lines: across the board, wandering slowly along it
-      const warp = fbm2t(u * 2, v * 5, 2, 5, 3, 11 + k * 7) * 1.6 + fbm2t(u * 7, v * 5, 7, 5, 2, 23 + k) * 0.25
-      const g = vb * lines[k] / BOARDS + warp * 2.4 + k * 0.37
-      const ring = g - Math.floor(g)
-      const late = smooth(0.45, 0.8, ring) * (1 - smooth(0.86, 1, ring))
-      // pores: short dark flecks along the grain (about 3 mm by 0.8)
-      // (two lattices, the finer one sheared and warped, so the flecks never line up in rows)
-      const wv = fbm2t(u * 9, v * 60, 9, 60, 2, 47) * 0.012
-      const pn = Math.max(noise2t(u * 130, (v + wv) * 500, 130, 500, 41), noise2t((u + v * 0.37) * 170, (v - wv) * 640, 170, 640, 43)) * 0.5 + 0.5
-      const pores = smooth(0.68, 0.86, pn) * (0.3 + 0.7 * late)
-      // figure and the occasional mineral streak
-      const fig = fbm2t(u * 3, v * 15, 3, 15, 3, 77 + k)
-      const streak = smooth(0.5, 0.8, fbm2t(u * 1, v * 40, 1, 40, 3, 5 + k) * 0.5 + 0.5) * 0.6
-      const t = (1 + tone[k] + 0.06 * fig) * 1.25
-      let r = (0.245 - 0.06 * late - 0.07 * pores - 0.03 * streak) * t
-      let gg = (0.158 - 0.04 * late - 0.045 * pores - 0.022 * streak) * t
-      let b = (0.102 - 0.026 * late - 0.03 * pores - 0.008 * streak) * t
-      const o = (j * S + i) * 4
-      px[o] = Math.round(clamp01(r) * 255)
-      px[o + 1] = Math.round(clamp01(gg) * 255)
-      px[o + 2] = Math.round(clamp01(b) * 255)
-      px[o + 3] = 255
-      // oiled: the open pores a little duller
-      rough[o] = rough[o + 2] = 0
-      rough[o + 1] = Math.round(clamp01(0.38 + 0.08 * late + 0.25 * pores + 0.03 * fig) * 255)
-      rough[o + 3] = 255
-      // (a hairline where two boards meet)
-      const seam = Math.min(vb, 1 - vb) * S / BOARDS < 0.8 ? 1 : 0
-      hgt[j * S + i] = -0.5 * pores - 0.12 * late - 0.4 * seam
-    }
-  return { px, rough, nrm: normalFrom(hgt, S, 2.0) }
 }
 
 /** A tangent-space normal map from a height field (tiling). */
@@ -181,7 +129,6 @@ function bead(S) {
 /** Every texture, with the sizes the scene uses. */
 export function bakeAll() {
   return {
-    walnut: { size: 1024, ...walnut(1024) },
     speckle: { size: 512, ...speckle(512) },
     cork: { size: 256, ...cork(256) },
     paper: { size: 256, ...paper(256) },

@@ -3,7 +3,8 @@
 // cigarette; its light is a term in the lit materials (core/flamelight.js).
 //   at rest:  lying on its side in the lit pool
 //   held:     turned upright, chimney up, as if picked up in a hand; follows the pointer through a
-//             spring-damper, leans with motion; kept out of the ashtray, the cigarette, the table
+//             critically damped follower (never overshooting, its speed capped), leans with
+//             motion; kept out of the ashtray, the cigarette, the table
 //   lit:      press and hold the flame button (or Space): the button sinks, a spark, the flame grows
 //             in 80 ms; it flickers, sputters now and then, bends away from motion and blows out if
 //             swung too fast
@@ -13,6 +14,7 @@
 //   home:     glides back to where it lay (Escape, the reset button)
 import * as THREE from 'three'
 import { createBody } from '../core/body.js'
+import { followVec } from '../core/follow.js'
 import { noise3 } from '../core/noise.js'
 import { LIGHTER, CHIMNEY } from './lighterGeo.js'
 import flameVert from '../shaders/flame.vert'
@@ -87,7 +89,11 @@ function chimneyGeometry(segs = 96) {
   return g
 }
 
-/** The flame: a camera-facing card shaped in its shader (no edges, no outline), additive. */
+/**
+ * The flame: a camera-facing card shaped in its shader (no edges, no outline). Premultiplied over:
+ * its light adds, and its yellow body hides what is behind it, so it reads on a light ground as on
+ * a dark one; its alpha adds (the bloom's mask).
+ */
 function flameMaterial(U) {
   return new THREE.ShaderMaterial({
     uniforms: { uTime: U.uTime, uFlame: U.uFlame, uSeed: { value: 0.37 } },
@@ -98,7 +104,7 @@ function flameMaterial(U) {
     blending: THREE.CustomBlending,
     blendEquation: THREE.AddEquation,
     blendSrc: THREE.OneFactor,
-    blendDst: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
     blendSrcAlpha: THREE.OneFactor,
     blendDstAlpha: THREE.OneFactor,
     side: THREE.DoubleSide,
@@ -111,6 +117,11 @@ function flameMaterial(U) {
  * cigarette's distance (and normal); target: the cigarette's ends this frame, kept up to date by
  * the scene: { on, foot: Vector3, filter: Vector3, filterOn, axis: Vector3 (unit, filter to foot) }
  */
+// (held: it follows the hand's target, critically damped over about this long (s), never faster
+// than this (mm/s))
+const HOLD_SMOOTH = 0.12
+const HOLD_MAX_SPEED = 550
+
 export function createLighter({ mesh, tex, U, sdf, sdfGrad, groundGrad, cigCapsule, target, onIgnite, rest = { x: -30, z: 92, theta: 0 } }) {
   // ---- materials: olive anodized aluminium (bead-blasted), brushed steel chimney, polished button
   const bodyMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0.62, roughness: 0.46, vertexColors: true })
@@ -568,19 +579,12 @@ export function createLighter({ mesh, tex, U, sdf, sdfGrad, groundGrad, cigCapsu
           if (Math.hypot(st.P.x - st.G.x, st.P.z - st.G.z) > 8) st.G.y = Math.max(st.G.y, 74)
         }
         prevV.copy(st.V)
-        const k = 200
-        const damp = 2 * Math.sqrt(k) * 0.72
-        for (let i = 0; i < 3; i++) {
-          const h = dt / 3
-          st.V.x += (k * (st.G.x - st.P.x) - damp * st.V.x) * h
-          st.V.y += (k * (st.G.y - st.P.y) - damp * st.V.y) * h
-          st.V.z += (k * (st.G.z - st.P.z) - damp * st.V.z) * h
-          st.P.addScaledVector(st.V, h)
-        }
+        // (critically damped, its speed capped: core/follow.js)
+        followVec(st.P, st.V, st.G, dt, HOLD_SMOOTH, HOLD_MAX_SPEED)
         acc.subVectors(st.V, prevV).divideScalar(Math.max(dt, 1e-4))
         // it leans a little with the motion (a spring on its tilt)
         const kl = 80
-        const cl = 2 * Math.sqrt(kl) * 0.5
+        const cl = 2 * Math.sqrt(kl) * 0.9
         st.leanV.x += (-kl * st.lean.x - cl * st.leanV.x + (acc.z / 9000) * kl * 0.25) * dt
         st.leanV.y += (-kl * st.lean.y - cl * st.leanV.y - (acc.x / 9000) * kl * 0.25) * dt
         st.lean.x = THREE.MathUtils.clamp(st.lean.x + st.leanV.x * dt, -0.3, 0.3)

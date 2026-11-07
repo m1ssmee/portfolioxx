@@ -15,6 +15,7 @@
         float a = vAlpha * (1.0 - r2) * (1.0 - r2) * smoothstep(0.3, 0.8, n);
         a *= depthFade(vViewZ);
         if (a < 0.0008) discard;
-        vec3 col = vLight * vec3(0.9, 0.94, 1.0);
+        a = min(1.0, a * 1.5);
+        vec3 col = vLight * vec3(1.06, 1.08, 1.12);
         gl_FragColor = vec4(col * a, a);
       }

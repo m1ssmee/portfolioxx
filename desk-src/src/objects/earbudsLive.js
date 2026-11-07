@@ -4,7 +4,7 @@
 //   pull the plug out (by the plug itself, or by the cable hard enough) and the music pauses; bring
 //   it back to the jack and it seats itself, pointing in, and the music plays on.
 import * as THREE from 'three'
-import { Rig } from '../core/rope.js'
+import { Rig, STEP } from '../core/rope.js'
 import { rigSpec, writeRopeState, ropeStateSize } from './earbudsRig.js'
 import { BODY_ORDER, PLUG35 } from './earbudsGeom.js'
 import { poseParticles, poseState } from './earbudsPose.js'
@@ -19,6 +19,7 @@ const SNAP_AIM = 8 // (mm: held, the pointer's line passing this near the mouth:
 const AWAY = 25 // (mm)
 const PULL = 0.55 // (the cable stretched this much at the plug, it comes out)
 const SETTLE_MS = 500 // (after seating, the cable's pull is not counted while it settles)
+const SEAT_S = 0.2 // (seating: the plug glides into the jack over this long, turning as it goes)
 
 /**
  * visual: createEarbuds(...) (parts, cable, applyState); collision: earbudsRig.collisionData();
@@ -35,10 +36,7 @@ export function createEarbudsLive({ visual, collision, ground, jack, onPlug, onT
     // (each part's rotation as it was: the shape fit refines a rotation, it does not find one
     // from nothing)
     const st0 = poseState(rig.bodies.length)
-    rig.bodies.forEach((b, k) => {
-      for (let i = 0; i < 9; i++) b.R[i] = st0[k * 12 + i]
-      for (let i = 0; i < 3; i++) b.c[i] = st0[k * 12 + 9 + i]
-    })
+    rig.bodies.forEach((b, k) => rig.setFrame(b, st0.subarray(k * 12 + 9, k * 12 + 12), st0.subarray(k * 12, k * 12 + 9)))
   }
   for (let it = 0; it < 4; it++) for (const b of rig.bodies) rig.matchShape(b)
   const plug = rig.byName.plug
@@ -56,8 +54,9 @@ export function createEarbudsLive({ visual, collision, ground, jack, onPlug, onT
   const state = new Float32Array(ropeStateSize(rig))
   const tv = new Float64Array(4)
   let dirty = true
-  function draw() {
-    writeRopeState(rig, state, tv)
+  /** Drawn as it is between its last two steps (alpha: core/physics.js). */
+  function draw(alpha = 1) {
+    writeRopeState(rig.blended(alpha), state, tv)
     visual.applyState(state)
   }
   draw()
@@ -80,36 +79,44 @@ export function createEarbudsLive({ visual, collision, ground, jack, onPlug, onT
     seatC[1] = o.y + seatR[1] * com[0] + seatR[4] * com[1] + seatR[7] * com[2]
     seatC[2] = o.z + seatR[2] * com[0] + seatR[5] * com[1] + seatR[8] * com[2]
   }
+  const seatQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().set(seatR[0], seatR[3], seatR[6], 0, seatR[1], seatR[4], seatR[7], 0, seatR[2], seatR[5], seatR[8], 0, 0, 0, 0, 1))
+  // (the glide in: from where the plug was to the seat, a step at a time)
+  let seating = null // { t, c0, q0 }
+  const gq = new THREE.Quaternion()
+  const gm = new THREE.Matrix4()
+  const gR = new Float64Array(9)
+  const gC = new Float64Array(3)
+  function seatStep() {
+    seating.t = Math.min(1, seating.t + STEP / SEAT_S)
+    const t = seating.t
+    const e = t * t * (3 - 2 * t)
+    for (let a = 0; a < 3; a++) gC[a] = seating.c0[a] + (seatC[a] - seating.c0[a]) * e
+    gq.slerpQuaternions(seating.q0, seatQ, e)
+    const m = gm.makeRotationFromQuaternion(gq).elements
+    gR.set([m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]])
+    rig.placeBody(plug, gC, gR)
+    if (t >= 1) seating = null
+  }
   const pv = new Float64Array(3)
-  const pinWas = new Float64Array(3)
   const top = new THREE.Vector3()
   const tip = new THREE.Vector3()
   const near = new THREE.Vector3()
   const seg = new THREE.Line3(top, tip)
   let armed = false // (may it snap in: only once it has been away from the jack)
+  let wasAwake = false
   let seatedAt = 0
   function setPlugged(on) {
     if (plugged === on) return
     plugged = on
     if (on) {
-      // seated: the plug moved into the jack, the cable's last few particles brought along with it
-      rig.pointOf(plug, main.to.point.b, pinWas, 0)
-      rig.placeBody(plug, seatC, seatR)
+      // seated: the plug glides into the jack (seatStep, each step), turning as it goes; the cable
+      // follows it
       pin()
-      rig.pointOf(plug, main.to.point.b, pv, 0)
-      const ids = main.ids
-      const K = Math.min(8, ids.length)
-      for (let k = 0; k < K; k++) {
-        const i = ids[ids.length - 1 - k] * 3
-        const w = ((K - k) / K) ** 2
-        for (let a = 0; a < 3; a++) {
-          const d = (pv[a] - pinWas[a]) * w
-          rig.x[i + a] += d
-          rig.p[i + a] += d
-        }
-      }
+      const q = plug.quat
+      seating = { t: 0, c0: Float64Array.from(plug.c), q0: new THREE.Quaternion(q[0], q[1], q[2], q[3]) }
       seatedAt = performance.now()
     } else {
+      seating = null
       unpin()
       armed = false
     }
@@ -252,10 +259,18 @@ export function createEarbudsLive({ visual, collision, ground, jack, onPlug, onT
       return plugged
     },
     /** For the physics scheduler. */
-    physics: { awake: () => !rig.asleep, step: () => rig.step() },
-    /** Each frame: the pose drawn, the plug watched. Returns true while anything of it moved. */
-    update() {
-      const moving = !rig.asleep
+    physics: {
+      awake: () => !rig.asleep,
+      step: () => {
+        rig.step()
+        if (seating) seatStep()
+      },
+    },
+    /** Each frame: the pose drawn (alpha: core/physics.js), the plug watched. Returns true while anything of it moved. */
+    update(alpha = 1) {
+      // (one more frame once it falls asleep: drawn where it came to rest)
+      const moving = !rig.asleep || wasAwake
+      wasAwake = !rig.asleep
       if (plugged) {
         // pulled by the cable hard enough, the plug comes out
         if (performance.now() - seatedAt > SETTLE_MS) {
@@ -277,7 +292,7 @@ export function createEarbudsLive({ visual, collision, ground, jack, onPlug, onT
         }
       }
       if (moving || dirty) {
-        draw()
+        draw(alpha)
         dirty = false
         return true
       }

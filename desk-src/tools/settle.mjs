@@ -1,6 +1,7 @@
-// The earbuds' opening pose on the desk: the plug seated in the player's jack, each part placed
-// where the desk's layout wants it, each chain laid along a gently waving way across the desk, then
-// let fall and settle under gravity on the desk, against the player, the ashtray and the lighter.
+// The earbuds' opening pose: the plug seated in the player's jack, each part placed where the
+// layout wants it, the main cable laid in one loop round the player and the leads out to the buds at
+// its lower left, each along a gently waving way, then let fall and settle under gravity on the
+// ground, against the player, the ashtray and the lighter.
 // Written to src/objects/earbudsPose.js as the render state plus the particles (int16, compact).
 //   node tools/settle.mjs [--plot layout.json]   (--plot: the settled layout, for a top-down plot)
 import { writeFileSync } from 'fs'
@@ -9,7 +10,7 @@ import { collisionData, rigSpec, writeRopeState, ropeStateSize } from '../src/ob
 import { PLUG35 } from '../src/objects/earbudsGeom.js'
 import { ashtraySDF } from '../src/objects/ashtray.js'
 import { createDeskGround } from '../src/objects/deskGround.js'
-import { PLAYER, DESK, FWD, deskAt } from '../src/layout.js'
+import { PLAYER, DESK, FWD, VIEW, deskAt } from '../src/layout.js'
 import { PLAYER_PORT } from '../src/objects/playerPort.js'
 
 // ---- the player's and the lighter's boxes (world from local: rotation columns, then position)
@@ -21,7 +22,7 @@ const yawM = (yaw, x, y, z) => {
 }
 const player = { m: yawM(PLAYER.yaw, PLAYER.x, 0, PLAYER.z), half: PLAYER.half, r: PLAYER.r, y0: PLAYER.half[1], reach: 75 }
 // (the lighter as it lies: its length along theta, flat on its broad face)
-const theta = Math.atan2(FWD[2], FWD[0]) + 0.55
+const theta = Math.atan2(FWD[2], FWD[0]) + DESK.lighterTurn
 const lighterM = (() => {
   // local y (its length) along (cos t, 0, sin t); local z (its thickness) down; local x across
   const ly = [Math.cos(theta), 0, Math.sin(theta)]
@@ -45,21 +46,23 @@ const pinAt = [mouth[0] + out[0] * (PLUG35.faceDist + PLUG35.relief.top), mouth[
 const at = (u, v, y) => { const p = deskAt(u, v, y); return [p[0], p[1], p[2]] }
 const hv = (du, dv) => { const p = deskAt(du, dv); return Math.atan2(p[2], p[0]) } // (a heading from a view direction)
 const BODIES = {
-  splitter: { at: at(-150, 52, 9), heading: hv(0.15, 1) },
-  bead: { at: at(-146, 86, 10), heading: hv(0.1, 1) },
-  remote: { at: at(-196, 104, 11), heading: hv(-0.8, 0.4) },
-  budL: { pin: 'cable', at: at(-238, 112, 15), heading: hv(-0.9, -0.2), face: 'outer' },
-  budR: { pin: 'cable', at: at(-122, 120, 15), heading: hv(0.9, 0.3), face: 'inner' },
+  splitter: { at: at(-265, 55, 9), heading: hv(0, -1) },
+  bead: { at: at(-264, 33, 10), heading: hv(0, -1) },
+  remote: { at: at(-250, -20, 11), heading: hv(0.7, -0.7) },
+  budL: { pin: 'cable', at: at(-205, -65, 15), heading: hv(-0.7, 0.7), face: 'outer' },
+  budR: { pin: 'cable', at: at(-310, -40, 15), heading: hv(0.45, 0.9), face: 'inner' },
   plug: { pin: 'cable', at: pinAt, heading: Math.atan2(out[2], out[0]) },
 }
 // (how many half-waves each chain makes along its way)
-const DESK_WAVES = { leadL1: 2, leadL2: 2, leadR: 3, main: 7 }
-// (each chain's way across the desk, in the view's axes, from its start to its end)
+const DESK_WAVES = { leadL1: 1, leadL2: 1, leadR: 1, main: 2 }
+// (each chain's way, in the view's axes, from its start to its end: the main cable from the
+// splitter at the player's left down and round under its foot to the plug in the jack; the leads
+// up from the splitter to the buds above the player's top-left corner)
 const DESK_ROUTES = {
   leadL1: [],
   leadL2: [],
-  leadR: [[-126, 88]],
-  main: [[-118, -10], [-102, -110], [-150, -172], [-206, -120], [-200, -22], [-214, 54]],
+  leadR: [],
+  main: [[-270, 90], [-250, 118], [-212, 127], [-178, 120]],
 }
 // ---- place, pin the plug in the jack, settle
 const t0 = Date.now()
@@ -177,21 +180,12 @@ export function poseParticles() {
 // rays down to y = 0)
 const plotAt = process.argv.indexOf('--plot')
 if (plotAt > 0) {
-  const T = [DESK.centre[0], 16, DESK.centre[2]]
-  const el = (29 * Math.PI) / 180
-  const P = [T[0] - FWD[0] * Math.cos(el) * 720, T[1] + Math.sin(el) * 720, T[2] - FWD[2] * Math.cos(el) * 720]
-  const f = [T[0] - P[0], T[1] - P[1], T[2] - P[2]]
-  const fl = Math.hypot(...f)
-  const fw = f.map((v) => v / fl)
-  const rl = Math.hypot(fw[2], fw[0])
-  const rt = [-fw[2] / rl, 0, fw[0] / rl]
-  const up = [rt[1] * fw[2] - rt[2] * fw[1], rt[2] * fw[0] - rt[0] * fw[2], rt[0] * fw[1] - rt[1] * fw[0]]
-  const tanH = Math.tan((12 * Math.PI) / 180) * 1.25
-  const tanV = tanH / (16 / 9)
+  // (the wide view's frame on the ground, for the plot)
+  const [su, sv] = VIEW.wide.span
+  const c = VIEW.wide.at
   const view = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => {
-    const d = [0, 1, 2].map((k) => fw[k] + rt[k] * a * tanH + up[k] * b * tanV)
-    const t = d[1] < -1e-6 ? -P[1] / d[1] : 3000
-    return [P[0] + d[0] * t, P[2] + d[2] * t]
+    const p = deskAt(a * su * 0.5, b * sv * 0.5)
+    return [c[0] + p[0], c[2] + p[2]]
   })
   writeFileSync(process.argv[plotAt + 1], JSON.stringify({ x: Array.from(rig.x), chains: rig.chains.map((c) => c.ids), bodies: rig.bodies.map((b) => ({ name: b.name, c: Array.from(b.c) })), player: Array.from(player.m), lighter: Array.from(lighter.m), mouth, view }))
 }

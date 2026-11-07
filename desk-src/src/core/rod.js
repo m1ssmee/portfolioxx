@@ -2,6 +2,7 @@
 // based dynamics), with spheres along it that collide with a signed distance field and the table.
 // The heavier end (the filter) lands first and settles lower; friction stops it sliding; the roll
 // about its own axis is worked out from how far it rolled. Allocation-free once made.
+import { unbounce } from './body.js'
 const G = -9810 // mm/s²
 
 export function createRod({ length, radius, massA, massB, samples = 9, sdf, floorY = 0 }) {
@@ -15,6 +16,7 @@ export function createRod({ length, radius, massA, massB, samples = 9, sdf, floo
   const wB = 1 / massB
   const grad = new Float64Array(3)
   const s = new Float64Array(3)
+  const D = new Float64Array(6) // (each end's contact pushes this substep)
   const rod = {
     A,
     B,
@@ -60,6 +62,7 @@ export function createRod({ length, radius, massA, massB, samples = 9, sdf, floo
       B[i] += vB[i] * h
     }
     rod.contact = false
+    D.fill(0)
     for (let it = 0; it < 2; it++) {
       // the length
       let dx = B[0] - A[0]
@@ -102,6 +105,12 @@ export function createRod({ length, radius, massA, massB, samples = 9, sdf, floo
         B[0] += nx * fb
         B[1] += ny * fb
         B[2] += nz * fb
+        D[0] += nx * fa
+        D[1] += ny * fa
+        D[2] += nz * fa
+        D[3] += nx * fb
+        D[4] += ny * fb
+        D[5] += nz * fb
       }
     }
     // velocities from the motion; friction where it touches (and a little rolling resistance)
@@ -109,6 +118,9 @@ export function createRod({ length, radius, massA, massB, samples = 9, sdf, floo
       vA[i] = (A[i] - pA[i]) / h
       vB[i] = (B[i] - pB[i]) / h
     }
+    // (no bounce: core/body.js)
+    unbounce(vA, D, 0, h)
+    unbounce(vB, D.subarray(3), 0, h)
     cap(vA)
     cap(vB)
     if (rod.contact) {

@@ -6,7 +6,7 @@ import posterUrl from './assets/poster.webp?url'
 
 const LINES = {
   fetch: 'fetching the furniture',
-  desk: 'dusting off the desk',
+  desk: 'clearing a space',
   earbuds: 'untangling the earphones',
   player: 'plugging in',
   ashtray: 'rolling one up',
@@ -136,7 +136,7 @@ function fail(e) {
   lines[1 - flip].textContent = ''
   lines[flip === 0 ? 1 : 0].textContent = ''
   const l = ld.querySelector('.ld-line.on') || lines[0]
-  l.textContent = 'the desk could not be set here.'
+  l.textContent = 'the still life could not be set here.'
   l.classList.add('on')
   const go = ld.querySelector('.ld-go')
   go.innerHTML = '<button type="button" data-go="still">enter</button>'

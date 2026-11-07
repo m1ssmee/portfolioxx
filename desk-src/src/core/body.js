@@ -20,6 +20,7 @@ export function createBody({ spheres, s = 12, mass = [4, 1, 1, 1], sdf, floorY =
   const grad = new Float64Array(3)
   const F = new Float64Array(9) // the frame: x, y, z axes
   const wts = new Float64Array(4)
+  const D = new Float64Array(12) // (each particle's contact pushes this substep)
   const body = {
     P,
     awake: false,
@@ -106,6 +107,7 @@ export function createBody({ spheres, s = 12, mass = [4, 1, 1, 1], sdf, floorY =
     for (let i = 0; i < 12; i++) Q[i] = P[i]
     for (let i = 0; i < 4; i++) V[i * 3 + 1] += G * h
     for (let i = 0; i < 12; i++) P[i] += V[i] * h
+    D.fill(0)
     body.contact = false
     for (let it = 0; it < 3; it++) {
       // stay rigid
@@ -159,10 +161,15 @@ export function createBody({ spheres, s = 12, mass = [4, 1, 1, 1], sdf, floorY =
           P[i * 3] += nx * f
           P[i * 3 + 1] += ny * f
           P[i * 3 + 2] += nz * f
+          D[i * 3] += nx * f
+          D[i * 3 + 1] += ny * f
+          D[i * 3 + 2] += nz * f
         }
       }
     }
     for (let i = 0; i < 12; i++) V[i] = (P[i] - Q[i]) / h
+    // no bounce: a contact's push puts it back on the surface, but adds no outward speed
+    for (let i = 0; i < 4; i++) unbounce(V, D, i * 3, h)
     for (let i = 0; i < 4; i++) {
       // (no contact correction turns into a launch)
       const sp = Math.hypot(V[i * 3], V[i * 3 + 1], V[i * 3 + 2])
@@ -177,4 +184,24 @@ export function createBody({ spheres, s = 12, mass = [4, 1, 1, 1], sdf, floorY =
     }
   }
   return body
+}
+
+/**
+ * Zero restitution for a position-based contact: of the velocity at v[o..o+2], the outward part
+ * the substep's pushes d[o..o+2] gave it beyond any it already had is taken away (it lands and
+ * stays; a correction never becomes a hop). Shared with core/rod.js.
+ */
+export function unbounce(v, d, o, h) {
+  const dl = Math.hypot(d[o], d[o + 1], d[o + 2])
+  if (dl < 1e-12) return
+  const nx = d[o] / dl
+  const ny = d[o + 1] / dl
+  const nz = d[o + 2] / dl
+  const vn = v[o] * nx + v[o + 1] * ny + v[o + 2] * nz
+  const vn0 = vn - dl / h // (without the pushes)
+  const ex = vn - Math.max(vn0, 0)
+  if (ex <= 0) return
+  v[o] -= nx * ex
+  v[o + 1] -= ny * ex
+  v[o + 2] -= nz * ex
 }

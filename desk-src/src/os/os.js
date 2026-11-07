@@ -34,13 +34,12 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
   el.inert = true
   el.setAttribute('aria-hidden', 'true')
 
-  // ---- the look: the visitor's own (their system's colour scheme and motion), as it changes
-  const lightQ = matchMedia('(prefers-color-scheme: light)')
+  // ---- the look: the scene's light theme; the visitor's own motion setting, as it changes
   const motionQ = matchMedia('(prefers-reduced-motion: reduce)')
   const st = {
     power: 'asleep', // asleep | awake
     view: 'home', // home | about | project:<id>
-    theme: lightQ.matches ? 'light' : 'dark',
+    theme: 'light',
     reduced: motionQ.matches,
     mode: 'texture', // texture | dom
   }
@@ -52,17 +51,10 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
     el.dataset.wallTile = 'grain'
     el.classList.toggle('pos-quiet', st.reduced)
   }
-  const onScheme = () => {
-    st.theme = lightQ.matches ? 'light' : 'dark'
-    applyLook()
-    drawPlaceholders()
-    dirty()
-  }
   const onMotion = () => {
     st.reduced = motionQ.matches
     applyLook()
   }
-  lightQ.addEventListener('change', onScheme)
   motionQ.addEventListener('change', onMotion)
 
   // ---- the markup: the status bar, the projects list, each project's page, About & contact
@@ -552,7 +544,6 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
     destroy() {
       window.removeEventListener('keydown', onKeyAny, true)
       window.removeEventListener('pointerdown', onPointerAny, true)
-      lightQ.removeEventListener('change', onScheme)
       motionQ.removeEventListener('change', onMotion)
       el.remove()
       style.remove()

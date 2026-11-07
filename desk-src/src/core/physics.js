@@ -23,6 +23,11 @@ export function createPhysics({ step = STEP, maxSteps = 6 } = {}) {
     get steps() {
       return steps
     },
+    /** How far into the next step the frame's time has gone (0..1): what is drawn is blended
+     * between the last two steps by this much, so motion is even at any frame rate. */
+    get alpha() {
+      return acc / step
+    },
     /** Advance by a frame's time (seconds). Returns true while anything moved. */
     update(dt) {
       steps = 0

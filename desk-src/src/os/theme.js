@@ -1,23 +1,14 @@
-// Pod OS's colours: two themes, chosen by the visitor's system (prefers-color-scheme), and one accent,
-// a dusty sage, a deeper shade of it in the light theme so it still reads as text at AA contrast.
+// Pod OS's colours: one light theme, the scene's own cool paper and slate ink, with one accent, a
+// muted slate blue, deep enough to read as text at AA contrast on every surface.
 export const THEMES = {
-  dark: {
-    bg: '#1d1c1a',
-    tile: '#292825',
-    press: '#232220',
-    line: '#383632',
-    text: '#e8e4dc',
-    muted: '#a29d93',
-    accent: '#9aa894',
-  },
   light: {
-    bg: '#efebe3',
-    tile: '#e4dfd5',
-    press: '#dad4c9',
-    line: '#cfc8bb',
-    text: '#2b2a27',
-    muted: '#615d56',
-    accent: '#56624f',
+    bg: '#eceff3',
+    tile: '#e1e5eb',
+    press: '#d6dbe2',
+    line: '#c9cfd8',
+    text: '#1f252d',
+    muted: '#4f5866',
+    accent: '#3d5670',
   },
 }
 
@@ -49,7 +40,7 @@ export function contrast(a, b) {
 
 /**
  * The wallpaper: a small tile of soft tonal grain (light and dark specks of very low alpha, at most
- * 10/255), laid over the theme's background, so one tile suits both themes. Returned as a canvas
+ * 10/255), laid over the theme's background. Returned as a canvas
  * (the screen texture draws it as a pattern) and a data URL (the DOM's background).
  */
 export function wallpaperTile() {

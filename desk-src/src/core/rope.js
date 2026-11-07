@@ -12,17 +12,31 @@
 // distance (two sweeps), bending, strain reliefs, contacts (the desk and what stands on it, with Coulomb
 // friction, cable against the parts, part against part, cable against cable through a spatial
 // hash), and finally restores each body's shape. 8 substeps x 2 distance sweeps = 16 iterations
-// per step.
+// per step, always (a solver whose iteration count changed with the motion would change its own
+// stiffness mid-motion, and pop).
+//
+// Calm, by design: contacts never bounce (a push puts a particle back on the surface but adds no
+// outward speed: the desk, the parts, cable against cable); what lies on something and moves
+// slower than restSpeed is held still (static friction alone, a particle's weight times mu, loses
+// to the solver's own back-and-forth, and a resting cable would dither); a held point is tied to
+// an anchor that follows the hand through a critically damped follower (core/follow.js) a step at
+// a time, never a jump; after a release the rope is damped harder for a while, so it eases into
+// its curves; and the rig keeps its last step, so a frame is drawn between two steps (blended).
 //
 // No three.js here: it also runs under Node for tests.
+import { smoothToward } from './follow.js'
 
 export const G = 9810
 export const STEP = 1 / 120
 export const SUBSTEPS = 8
 /** The largest angle the cable may turn through at one particle (a bend radius of about 7 mm). */
 const MAX_JOINT = (36 * Math.PI) / 180
-/** Substeps while settling (fewer: cheaper; the motion left is slow by then). */
-export const SUBSTEPS_SETTLE = 5
+/** A held point's anchor: drawn to the hand by a critically damped follower (s), at most this fast (mm/s). */
+const GRAB_SMOOTH = 0.09
+const GRAB_MAX_SPEED = 240
+/** After a release, the rope's motion is damped harder, easing off over this long (s): it relaxes
+ * slowly into its curves, it does not whip. */
+const RELAX = 1.6
 let H = STEP / SUBSTEPS
 
 // ---------------------------------------------------------------------------------- small math
@@ -112,9 +126,14 @@ export class Rig {
     this.spec = spec
     const C = spec.cable
     this.radius = C.radius
-    this.mu = { s: 0.95, k: 0.7 }
-    this.air = 0.9 // 1/s
+    this.mu = { s: 0.8, k: 0.7 }
+    this.air = 2.0 // 1/s
     this.smooth = 0.05 // internal damping, per substep
+    this.relaxT = RELAX // (s since the last release: the rope is calmed for a while after it)
+    // what lies on something and moves slower than this (mm/s) is held still: below it, static
+    // friction (weight times mu, a hundredth of a millimetre a substep) loses to the solver's own
+    // back-and-forth, and a resting cable would dither in place instead of lying still
+    this.restSpeed = 14
     this.groundFn = spec.ground
     this.groundTop = spec.groundTop ?? 40 // (above this, nothing to lie on)
 
@@ -274,7 +293,6 @@ export class Rig {
     this.bendB = B
     this.spacing = C.spacing
     this.substeps = SUBSTEPS
-    this.adaptive = spec.adaptive !== false
     this.selfCollision = spec.selfCollision !== false
     this.setSubsteps(SUBSTEPS, true)
 
@@ -302,6 +320,57 @@ export class Rig {
     this.grip = 1 // contact ageing: a multiplier on friction, 1 while things move
     this.awakeTime = 0 // seconds since anything disturbed the set
     this.tmp = new Float64Array(16)
+    // the state a step ago, so a frame can be drawn between steps (blended)
+    this.prevX = new Float64Array(n * 3)
+    for (const b of this.bodies) {
+      b.prevQuat = new Float64Array([0, 0, 0, 1])
+      b.prevC = v3()
+    }
+    this.view = null
+  }
+
+  /** Forget the motion of the last step (after the rig was placed, not moved): drawn as it is. */
+  syncPrev() {
+    this.prevX.set(this.x)
+    for (const b of this.bodies) {
+      b.prevQuat.set(b.quat)
+      b.prevC.set(b.c)
+    }
+  }
+  /**
+   * The rig as it is drawn: between its last two steps, `alpha` (0..1) of the way (the physics
+   * scheduler's time left over). Stepped at a fixed 120 Hz, a frame gets one step, or two, or
+   * three: drawn as they are, the parts would move by uneven amounts frame to frame, a judder on
+   * any screen whose rate is not a divisor of 120 Hz. For writeRopeState: { x, bodies, chains, pointOf }.
+   */
+  blended(alpha) {
+    const v =
+      this.view ||
+      (this.view = {
+        x: new Float64Array(this.x.length),
+        chains: this.chains,
+        bodies: this.bodies.map((b) => ({ name: b.name, index: b.index, f: b.f, R: new Float64Array(9), c: v3(), quat: new Float64Array(4) })),
+        pointOf: Rig.prototype.pointOf,
+      })
+    const a = this.asleep ? 1 : Math.min(1, Math.max(0, alpha))
+    const { x, prevX } = this
+    const vx = v.x
+    for (let i = 0; i < x.length; i++) vx[i] = prevX[i] + (x[i] - prevX[i]) * a
+    for (let k = 0; k < this.bodies.length; k++) {
+      const b = this.bodies[k]
+      const vb = v.bodies[k]
+      // (nlerp: a step turns a part a degree or two at most)
+      const q0 = b.prevQuat
+      const q1 = b.quat
+      const sgn = q0[0] * q1[0] + q0[1] * q1[1] + q0[2] * q1[2] + q0[3] * q1[3] < 0 ? -1 : 1
+      let l = 0
+      for (let i = 0; i < 4; i++) l += (vb.quat[i] = q0[i] * (1 - a) + q1[i] * sgn * a) ** 2
+      l = Math.sqrt(l) || 1
+      for (let i = 0; i < 4; i++) vb.quat[i] /= l
+      quatToMat(vb.quat, vb.R)
+      for (let i = 0; i < 3; i++) vb.c[i] = b.prevC[i] + (b.c[i] - b.prevC[i]) * a
+    }
+    return v
   }
 
   // ---------------------------------------------------------------------------------- placement
@@ -314,6 +383,25 @@ export class Rig {
     return out
   }
 
+  /** How far a body point moved this substep along (nx, ny, nz). */
+  pointVel(body, b, nx, ny, nz) {
+    const { x, p } = this
+    const f = body.f
+    let v = 0
+    for (let k = 0; k < 4; k++) {
+      const i = f[k] * 3
+      v += b[k] * ((x[i] - p[i]) * nx + (x[i + 1] - p[i + 1]) * ny + (x[i + 2] - p[i + 2]) * nz)
+    }
+    return v
+  }
+  /** A body's frame as it was (a stored pose): its rotation (and the quaternion the shape fit starts
+   * from) and centre, its particles left where they are. */
+  setFrame(body, c, R) {
+    body.R.set(R)
+    matToQuat(R, body.quat)
+    body.c.set(c)
+    this.syncPrev()
+  }
   /** Put a body at centre-of-mass position c with rotation R (column-major 3x3), at rest. */
   placeBody(body, c, R) {
     const t = this.tmp
@@ -387,6 +475,7 @@ export class Rig {
     }
     this.release()
     this.asleep = true
+    this.syncPrev()
   }
   wake() {
     this.asleep = false
@@ -400,27 +489,28 @@ export class Rig {
   /** Take hold of a cable particle, or a design-frame point on a body. */
   grab(what, target) {
     this.release()
-    const g = { ...what, from: Float64Array.from(target), to: Float64Array.from(target), now: Float64Array.from(target) }
-    if (what.body) {
-      g.b = what.body.bary(what.s)
-    } else {
-      this.w[what.i] = 0
-    }
+    // the anchor the held point is tied to: from where that point is now, drawn to the hand's target
+    // a step at a time (never a jump, whatever the pointer does)
+    const b = what.body ? what.body.bary(what.s) : null
+    const at = b ? Float64Array.from(this.pointOf(what.body, b, this.tmp, 0).subarray(0, 3)) : Float64Array.from(this.x.subarray(what.i * 3, what.i * 3 + 3))
+    const g = { ...what, b, T: Float64Array.from(at), a: at, va: new Float64Array(3), from: Float64Array.from(at), to: Float64Array.from(at), now: Float64Array.from(at) }
+    if (!b) this.w[what.i] = 0
     this.grabbed = g
-    this.wake()
+    this.moveGrab(target)
   }
   moveGrab(target) {
     const g = this.grabbed
     if (!g) return
-    g.to.set(target)
+    g.T.set(target)
     // not into the floor
     const r = g.body ? 1.2 : this.radius
-    if (g.to[1] < r) g.to[1] = r
+    if (g.T[1] < r) g.T[1] = r
     this.wake()
   }
   release() {
     const g = this.grabbed
     if (g && g.i !== undefined) this.w[g.i] = this.w0[g.i]
+    if (g) this.relaxT = 0
     this.grabbed = null
     this.wake()
   }
@@ -442,24 +532,29 @@ export class Rig {
   }
 
   step() {
+    this.syncPrev()
     const g = this.grabbed
     if (g) {
-      g.from.set(g.now)
-    }
-    // full substeps while held, just disturbed or moving fast; fewer once it is settling
-    if (this.adaptive) {
-      const fast = this.lastBig / H > 25 // mm/s
-      this.setSubsteps(g || this.awakeTime < 0.75 || fast ? SUBSTEPS : SUBSTEPS_SETTLE)
+      // the anchor's way this step (each substep takes its share of it)
+      g.from.set(g.a)
+      smoothToward(g.a, g.va, g.T, STEP, GRAB_SMOOTH, GRAB_MAX_SPEED)
+      g.to.set(g.a)
     }
     const n = this.substeps
     let big = 0
     for (let s = 0; s < n; s++) big = this.substep((s + 1) / n)
     this.lastBig = big
-    if (g) g.now.set(g.to)
-    // rest: over the last quarter second nothing has moved more than a hundredth of a mm, and
+    // rest: over the last quarter second nothing has moved more than a twentieth of a mm, and
     // nobody is holding anything
     this.quiet++
     this.awakeTime += STEP
+    this.relaxT += STEP
+    // once it has had its time to relax, what lies still grips harder and harder (contact ageing,
+    // over a second): the stress left in its curves no longer slips it along in small jerks; it rests
+    if (!g && this.relaxT > RELAX) {
+      const a = Math.min(1, (this.relaxT - RELAX) / 1.0)
+      this.grip = Math.max(this.grip, 1 + 3 * a * a * (3 - 2 * a))
+    }
     if (g) {
       this.quiet = 0
       this.grip = 1
@@ -470,7 +565,10 @@ export class Rig {
       if (this.quiet > 30) {
         let big = 0
         for (let i = 0; i < this.x.length; i++) big = Math.max(big, Math.abs(this.x[i] - snap[i]))
-        if (big < 0.01 || (this.awakeTime > 7 && big < 1)) this.asleep = true
+        // (asleep: nothing has moved a twentieth of a millimetre in a quarter second, 0.2 mm/s;
+        // or, well after a release (its relaxing done, its grip grown), nothing faster than 2 mm/s:
+        // what is left is a creep no one would see, and it stops)
+        if (big < 0.05 || (this.relaxT > RELAX + 1.5 && big < 0.5) || (this.awakeTime > 7 && big < 1)) this.asleep = true
         // static friction grows the longer things lie still (contact ageing): once nothing has
         // moved more than half a millimetre in a quarter second, a little more grip each time, so a
         // tight curl that would otherwise creep straight for ever holds the shape it fell in
@@ -491,7 +589,8 @@ export class Rig {
     // settling: from 4 s after the last disturbance, motion is damped harder and harder (by then
     // all that is left is a slow creep or sway; this lets the scene come to rest, then sleep)
     const late = Math.max(0, Math.min(1, (this.awakeTime - 4) / 2))
-    const keep = (1 - this.air * H) * (1 - 0.008 * late)
+    const calm = this.relaxT < RELAX ? 1 - this.relaxT / RELAX : 0
+    const keep = (1 - (this.air + 9 * calm * calm) * H) * (1 - 0.008 * late)
     const gy = G * H * H
     for (let i = 0; i < n; i++) {
       const j = i * 3
@@ -574,9 +673,8 @@ export class Rig {
     this.pushBody(body, b, -lam * nx, -lam * ny, -lam * nz)
   }
 
-  /** Move a body point by (dx, dy, dz) / its generalized mass: each frame particle by w b. */
-  pushBody(body, b, dx, dy, dz) {
-    const x = this.x
+  /** Move a body point by (dx, dy, dz) / its generalized mass: each frame particle by w b (in x, or in p). */
+  pushBody(body, b, dx, dy, dz, x = this.x) {
     const wf = 4 / body.mass
     for (let k = 0; k < 4; k++) {
       const i = body.f[k]
@@ -897,9 +995,18 @@ export class Rig {
         if (!noFriction) cN[i * 4 + 3] = 0
         continue
       }
+      // (no bounce: the push puts it back on the surface, but what it gives along the normal is not
+      // kept as velocity: only an outward speed it already had)
+      const vn0 = Math.max(0, (x[j] - p[j]) * o[3] + (x[j + 1] - p[j + 1]) * o[4] + (x[j + 2] - p[j + 2]) * o[5])
       x[j] += o[0]
       x[j + 1] += o[1]
       x[j + 2] += o[2]
+      const vn = (x[j] - p[j]) * o[3] + (x[j + 1] - p[j + 1]) * o[4] + (x[j + 2] - p[j + 2]) * o[5] - vn0
+      if (vn > 0) {
+        p[j] += o[3] * vn
+        p[j + 1] += o[4] * vn
+        p[j + 2] += o[5] * vn
+      }
       if (noFriction) continue
       // remember the contact: friction is applied to the whole substep's motion, at its end
       const pen = Math.sqrt(o[0] * o[0] + o[1] * o[1] + o[2] * o[2])
@@ -941,7 +1048,11 @@ export class Rig {
         bw[2] = b2
         bw[3] = b3
         const wb = b.wOf(bw)
+        const vn0 = Math.max(0, this.pointVel(b, bw, o[3], o[4], o[5]))
         this.pushBody(b, bw, o[0] / wb, o[1] / wb, o[2] / wb)
+        // (no bounce, as for the cable)
+        const vn = this.pointVel(b, bw, o[3], o[4], o[5]) - vn0
+        if (vn > 0) this.pushBody(b, bw, (o[3] * vn) / wb, (o[4] * vn) / wb, (o[5] * vn) / wb, this.p)
         // remember it: friction is applied at the end of the substep
         const pen = Math.sqrt(o[0] * o[0] + o[1] * o[1] + o[2] * o[2])
         const bc = this.bodyContacts
@@ -960,6 +1071,8 @@ export class Rig {
     if (!cN) return
     const muS = this.mu.s * this.grip
     const muK = this.mu.k * this.grip
+    // (not while anything is held: a dragged cable slides evenly; after a release it eases in)
+    const rest = this.grabbed ? 0 : this.restSpeed * H * Math.min(1, this.relaxT / 0.5) * this.grip
     // the parts, at each point they touch the floor
     const bc = this.bodyContacts || []
     const bw = this.tmp3 || (this.tmp3 = new Float64Array(4))
@@ -992,7 +1105,7 @@ export class Rig {
       tz -= dn * nz
       const tl = Math.sqrt(tx * tx + ty * ty + tz * tz)
       if (tl < 1e-12) continue
-      const f = tl < muS * pen ? 1 : Math.min(1, (muK * pen) / tl)
+      const f = tl < muS * pen + rest ? 1 : Math.min(1, (muK * pen) / tl)
       if (f < 1) b.held = false
       const wb = b.wOf(bw)
       this.pushBody(b, bw, (-tx * f) / wb, (-ty * f) / wb, (-tz * f) / wb)
@@ -1015,7 +1128,7 @@ export class Rig {
       tz -= dn * nz
       const tl = Math.sqrt(tx * tx + ty * ty + tz * tz)
       if (tl < 1e-12) continue
-      const f = tl < muS * pen ? 1 : Math.min(1, (muK * pen) / tl)
+      const f = tl < muS * pen + rest ? 1 : Math.min(1, (muK * pen) / tl)
       if (f === 1) stuck[i] = 1
       x[j] -= tx * f
       x[j + 1] -= ty * f
@@ -1083,9 +1196,27 @@ export class Rig {
               x[j * 3 + 1] += ny * lam * w[j] * 0.5
               x[j * 3 + 2] += nz * lam * w[j] * 0.5
             } else {
+              const p = this.p
+              const vn0 = Math.max(0, (x[i * 3] - p[i * 3]) * nx + (x[i * 3 + 1] - p[i * 3 + 1]) * ny + (x[i * 3 + 2] - p[i * 3 + 2]) * nz)
               x[i * 3] += nx * lam * w[i]
               x[i * 3 + 1] += ny * lam * w[i]
               x[i * 3 + 2] += nz * lam * w[i]
+              // (no bounce off a part either; and the contact is remembered for friction, as the
+              // desk's is: a cable lying over a part does not slide off it for ever)
+              const vn = (x[i * 3] - p[i * 3]) * nx + (x[i * 3 + 1] - p[i * 3 + 1]) * ny + (x[i * 3 + 2] - p[i * 3 + 2]) * nz - vn0
+              if (vn > 0) {
+                p[i * 3] += nx * vn
+                p[i * 3 + 1] += ny * vn
+                p[i * 3 + 2] += nz * vn
+              }
+              const cN = this.cN
+              const pen = lam * w[i]
+              if (cN && pen > cN[i * 4 + 3]) {
+                cN[i * 4] = nx
+                cN[i * 4 + 1] = ny
+                cN[i * 4 + 2] = nz
+                cN[i * 4 + 3] = pen
+              }
             }
             this.pushBody(b, bw, -nx * lam, -ny * lam, -nz * lam)
           }
@@ -1163,11 +1294,22 @@ export class Rig {
           const c = segA[o]
           const d = segB[o]
           if (this.chainOf[c] === ca && Math.abs(this.chainIdx[c] - ka) < 3) continue
+          // (two leads threaded through the same part, the bead or the splitter, lie closer there
+          // than two cables can: the part holds them, they do not push each other apart)
+          if (this.sharesPart(a, c)) continue
           this.segSeg(a, b, c, d, rr)
         }
       }
     }
     void w
+  }
+
+  /** Are particles i and j both near (along the cable) the same part they come out of or pass through? */
+  sharesPart(i, j) {
+    const nb = this.bodies.length
+    const nearBody = this.nearBody
+    for (let k = 0; k < nb; k++) if (nearBody[i * nb + k] && nearBody[j * nb + k]) return true
+    return false
   }
 
   segSeg(a, b, c, d, rr) {
@@ -1204,11 +1346,29 @@ export class Rig {
     const wd = w[d] * tN
     const W = w[a] * (1 - sN) ** 2 + w[b] * sN * sN + w[c] * (1 - tN) ** 2 + w[d] * tN * tN
     if (W < 1e-12) return
-    const lam = (rr - dist) / dist / W
+    // (how fast the two were already parting, along the normal, this substep)
+    const p = this.p
+    const rel = (i, k) => x[i * 3 + k] - p[i * 3 + k]
+    let vn0 = 0
+    for (let k = 0; k < 3; k++) vn0 += ((1 - sN) * rel(a, k) + sN * rel(b, k) - (1 - tN) * rel(c, k) - tN * rel(d, k)) * [nx, ny, nz][k]
+    vn0 /= dist
+    const pen = rr - dist
+    const lam = pen / dist / W
     x[a * 3] += nx * lam * wa; x[a * 3 + 1] += ny * lam * wa; x[a * 3 + 2] += nz * lam * wa
     x[b * 3] += nx * lam * wb; x[b * 3 + 1] += ny * lam * wb; x[b * 3 + 2] += nz * lam * wb
     x[c * 3] -= nx * lam * wc; x[c * 3 + 1] -= ny * lam * wc; x[c * 3 + 2] -= nz * lam * wc
     x[d * 3] -= nx * lam * wd; x[d * 3 + 1] -= ny * lam * wd; x[d * 3 + 2] -= nz * lam * wd
+    // no bounce: the push separates them, but any parting speed it adds beyond what they had is
+    // not kept (the same push made in p as well, in that proportion): cables lying side by side
+    // rest against each other instead of kicking each other apart every substep
+    const keep = Math.max(0, Math.min(1, (pen + Math.min(vn0, 0)) / pen))
+    if (keep > 0) {
+      const l = lam * keep
+      p[a * 3] += nx * l * wa; p[a * 3 + 1] += ny * l * wa; p[a * 3 + 2] += nz * l * wa
+      p[b * 3] += nx * l * wb; p[b * 3 + 1] += ny * l * wb; p[b * 3 + 2] += nz * l * wb
+      p[c * 3] -= nx * l * wc; p[c * 3 + 1] -= ny * l * wc; p[c * 3 + 2] -= nz * l * wc
+      p[d * 3] -= nx * l * wd; p[d * 3 + 1] -= ny * l * wd; p[d * 3 + 2] -= nz * l * wd
+    }
   }
 
   // ---------------------------------------------------------------------------------- damping
@@ -1237,8 +1397,11 @@ export class Rig {
   /** A part lying on the floor doesn't spin or roll on forever: damp its turning. */
   rollResistance() {
     const { x, p } = this
+    const held = this.grabbed && this.grabbed.body
     for (const b of this.bodies) {
-      if (!b.contact) continue
+      // (lying on something: it does not spin or roll on for ever; held, or in the air, it does not
+      // swing or tumble on either: a lighter damping of its turning, about its centre's motion)
+      const k = b.contact ? 0.04 : b === held ? 0.008 : 0.004
       let mx = 0
       let my = 0
       let mz = 0
@@ -1250,7 +1413,6 @@ export class Rig {
       mx /= 4
       my /= 4
       mz /= 4
-      const k = 0.04
       for (const i of b.f) {
         p[i * 3] += (x[i * 3] - p[i * 3] - mx) * k
         p[i * 3 + 1] += (x[i * 3 + 1] - p[i * 3 + 1] - my) * k
@@ -1258,6 +1420,7 @@ export class Rig {
       }
     }
   }
+
 
   // ---------------------------------------------------------------------------------- measures
 

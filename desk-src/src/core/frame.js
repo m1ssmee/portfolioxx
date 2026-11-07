@@ -7,7 +7,7 @@
 // Each frame then restores static + I x ember (colour and depth) into the multisampled target,
 // draws the ember region (coal, ash, tobacco, the last millimetres of paper) over it, refocuses
 // only the region's box, draws the smoke at a reduced resolution, blooms only around the ember,
-// and finishes in one composite pass (smoke, glow, vignette, tone mapping, grain).
+// and finishes in one composite pass (smoke, glow, tone mapping, grain).
 // While the camera moves everything is drawn normally (no depth of field; SMAA after).
 import * as THREE from 'three'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
@@ -86,7 +86,8 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   })
   // bloom: UnrealBloomPass's own maths and targets, its bright pass also seeing the smoke (as the
   // whole-frame bloom did), each step clipped to where the ember's glow can reach
-  const bloom = new UnrealBloomPass(new THREE.Vector2(16, 16), 0.5, 0.3, 3.2)
+  // (in a bright scene a glow reads as a blob: the ember and the flame keep only a little)
+  const bloom = new UnrealBloomPass(new THREE.Vector2(16, 16), 0.2, 0.18, 3.2)
   {
     const hp = bloom.materialHighPassFilter
     hp.uniforms.tSmoke = { value: smoke.texture }

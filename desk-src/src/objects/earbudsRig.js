@@ -132,10 +132,12 @@ export function rigSpec(C, { ground, groundTop }) {
       plug: { ...plugBody, shape: C.plug },
     },
     chains: [
-      { name: 'leadL1', from: ['budL', 'cable'], to: ['remote', 'top'], length: 120 },
-      { name: 'leadL2', from: ['remote', 'bottom'], to: ['splitter', 'left'], length: 148, bead: { body: 'bead', hole: 'left', at: 40 } },
-      { name: 'leadR', from: ['budR', 'cable'], to: ['splitter', 'right'], length: 300, bead: { body: 'bead', hole: 'right', at: 40 } },
-      { name: 'main', from: ['splitter', 'main'], to: ['plug', 'cable'], length: 900 },
+      // (product-shot lengths, not a real cable's: laid round the player in a few open curves,
+      // never a pile)
+      { name: 'leadL1', from: ['budL', 'cable'], to: ['remote', 'top'], length: 70 },
+      { name: 'leadL2', from: ['remote', 'bottom'], to: ['splitter', 'left'], length: 88, bead: { body: 'bead', hole: 'left', at: 27 } },
+      { name: 'leadR', from: ['budR', 'cable'], to: ['splitter', 'right'], length: 125, bead: { body: 'bead', hole: 'right', at: 27 } },
+      { name: 'main', from: ['splitter', 'main'], to: ['plug', 'cable'], length: 185 },
     ],
   }
 }

@@ -1,13 +1,20 @@
 // The burning cigarette, picked up and moved (registered with core/grab.js):
 //   held:  lifted 25 mm, held where it was grabbed, following the pointer across a horizontal
-//          plane through a spring-damper (it lags a little, swings a little, leans with motion);
+//          plane, critically damped (it lags a little, swings a little, leans with motion; never
+//          overshoots or wags);
 //          its capsule kept out of the ashtray and the table; kept in the lit pool and the view.
-//   glide: released within 12 mm of a notch, it glides into it and settles with a small bounce.
+//   glide: released within 12 mm of a notch, it glides into it and settles.
 //   fall:  released anywhere else, it drops (core/rod.js), rolls a little, settles; still burning.
 // While it moves the ember is fanned (brighter with speed), the ash sways on a spring and breaks
 // off if the motion is too sudden. Everything preallocated.
 import * as THREE from 'three'
 import { createRod } from '../core/rod.js'
+import { followVec } from '../core/follow.js'
+
+// (held: the point it is held by follows the hand's target, critically damped over about this
+// long (s), never faster than this (mm/s))
+const HOLD_SMOOTH = 0.11
+const HOLD_MAX_SPEED = 600
 
 const L = 84 // mm, filter end to foot
 const R = 4.1 // (the ash is a little wider than the paper)
@@ -255,29 +262,20 @@ export function createPickup({ camera, sdfGrad, notchPose, notchSeat, cigLength,
         st.T.y = st.baseY + 25 * st.lift * st.lift * (3 - 2 * st.lift)
         prevP.copy(st.P)
         prevV.copy(st.V)
-        // the held point follows the target: a spring, slightly under-damped (a little lag, a
-        // little overshoot); then the swing of the rest of it, and the lean
-        const k = 220
-        const damp = 2 * Math.sqrt(k) * 0.72
-        const n = 3
-        const h = dt / n
-        // (the jolt the hand gives it now: the spring's pull, whatever the frame rate)
-        tv.set(k * (st.T.x - st.P.x) - damp * st.V.x, k * (st.T.y - st.P.y) - damp * st.V.y, k * (st.T.z - st.P.z) - damp * st.V.z)
-        for (let i = 0; i < n; i++) {
-          st.V.x += (k * (st.T.x - st.P.x) - damp * st.V.x) * h
-          st.V.y += (k * (st.T.y - st.P.y) - damp * st.V.y) * h
-          st.V.z += (k * (st.T.z - st.P.z) - damp * st.V.z) * h
-          st.P.addScaledVector(st.V, h)
-        }
+        // the held point follows the target: critically damped (a little lag, never an overshoot),
+        // its speed capped (core/follow.js); then the swing of the rest of it, and the lean
+        followVec(st.P, st.V, st.T, dt, HOLD_SMOOTH, HOLD_MAX_SPEED)
         st.acc.subVectors(st.V, prevV).divideScalar(Math.max(dt, 1e-4))
-        st.accF.lerp(tv, 1 - Math.exp(-Math.max(dt, 0.016) / 0.03))
+        // (the jolt the hand gives it, eased)
+        st.accF.lerp(st.acc, 1 - Math.exp(-Math.max(dt, 0.016) / 0.03))
         // the swing: the far part lags the held point (a damped pendulum about it)
         const lever = 0.35 + Math.abs(L * 0.42 - st.xg) / L
         const sideX = -Math.sin(st.yaw)
         const sideZ = Math.cos(st.yaw)
         const accSide = st.acc.x * sideX + st.acc.z * sideZ
+        // (well damped: it lags and comes back, it does not wag)
         const ks = 90
-        const cs = 2 * Math.sqrt(ks) * 0.45
+        const cs = 2 * Math.sqrt(ks) * 0.9
         st.vYaw += (-ks * st.dYaw - cs * st.vYaw - (accSide / 9000) * lever * ks) * dt
         st.vPitch += (-ks * st.dPitch - cs * st.vPitch - (st.acc.y / 9000) * lever * ks) * dt
         st.dYaw = THREE.MathUtils.clamp(st.dYaw + st.vYaw * dt, -0.26, 0.26)
@@ -294,10 +292,10 @@ export function createPickup({ camera, sdfGrad, notchPose, notchSeat, cigLength,
       } else if (st.mode === 'glide') {
         st.glideT = Math.min(1, st.glideT + dt / 0.45)
         const t = st.glideT
-        // ease out, with a small bounce as it lands
-        const e = 1 - Math.pow(1 - t, 3)
+        // eased in and out, lifted a little on the way so it clears the rim, and set down softly
+        const e = t * t * (3 - 2 * t)
         tv.lerpVectors(st.p0, st.p1, e)
-        tv.y += Math.sin(Math.min(1, t * 1.25) * Math.PI) * 6 * (1 - t) + (t > 0.8 ? -0.6 * Math.sin(((t - 0.8) / 0.2) * Math.PI) : 0)
+        tv.y += Math.sin(t * Math.PI) * 6 * (1 - t)
         qv.slerpQuaternions(st.q0, st.q1, e)
         m4.compose(tv, qv, sv)
         setMatrix(m4)
