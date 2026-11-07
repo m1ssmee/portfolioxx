@@ -3,7 +3,7 @@
 // inertia, the pins the cable is tied to, and the four chains. No three.js here: it also runs
 // under Node, to settle the opening pose (tools/settle.mjs).
 import { meshSDF, len2, len3, norm, sdEllipsoid, sdEllipse2, roundExtrude, sdRoundCone } from '../core/sdf.js'
-import { BUD, REMOTE, REMOTE_CAP, SPLITTER, BEAD, CABLE, SPACING, budSDF, stemAt, fromFrame, plugBody, plugCollide35, PLUG35_COLLIDE_BOUNDS } from './earbudsGeom.js'
+import { CHAINS, BUD, REMOTE, REMOTE_CAP, SPLITTER, BEAD, CABLE, SPACING, budSDF, stemAt, fromFrame, plugBody, plugCollide35, PLUG35_COLLIDE_BOUNDS } from './earbudsGeom.js'
 
 // ---- what each part collides with: its shell, plus the bits that stand off it
 const budTipA = fromFrame(BUD.nozzle.frame, 0, 0, 6.0)
@@ -131,14 +131,9 @@ export function rigSpec(C, { ground, groundTop }) {
       },
       plug: { ...plugBody, shape: C.plug },
     },
-    chains: [
-      // (product-shot lengths, not a real cable's: laid round the player in a few open curves,
-      // never a pile)
-      { name: 'leadL1', from: ['budL', 'cable'], to: ['remote', 'top'], length: 70 },
-      { name: 'leadL2', from: ['remote', 'bottom'], to: ['splitter', 'left'], length: 88, bead: { body: 'bead', hole: 'left', at: 27 } },
-      { name: 'leadR', from: ['budR', 'cable'], to: ['splitter', 'right'], length: 125, bead: { body: 'bead', hole: 'right', at: 27 } },
-      { name: 'main', from: ['splitter', 'main'], to: ['plug', 'cable'], length: 185 },
-    ],
+    // (the chains and their lengths: earbudsGeom.js's CHAINS, which the cable's mesh reads too; the
+    // cinch bead rides the two leads 27 mm above the splitter)
+    chains: CHAINS.map((c) => (c.name === 'leadL2' || c.name === 'leadR' ? { ...c, bead: { body: 'bead', hole: c.name === 'leadR' ? 'right' : 'left', at: 27 } } : { ...c })),
   }
 }
 

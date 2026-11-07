@@ -5,6 +5,11 @@ plugged into it, a cigarette burning in a stoneware ashtray, and a lighter, seen
 through a long lens on a soft grey-blue ground. The player's screen runs Pod OS, a small portfolio
 OS. A minimal loader fetches and builds everything before entry. The production build is `../desk`.
 
+Views: home is the player in focus, upright and large, Pod OS live on its screen (the rest of the
+still life at the edges); "step back" (or zooming out) shows the whole still life; a double-click
+closes in on anything; Escape or back returns to the player. The view holds still: no parallax, a
+still dither instead of film grain, so a frame changes only where something moves.
+
 ```
 npm ci
 npm run dev      # http://localhost:5173 (add ?debug for the overlay)
@@ -25,8 +30,11 @@ npm run build    # writes ../desk (and ../desk/plain.html)
   rig, its ground and a replayed pointer, under Node: `node tools/grab-jitter.mjs`, or `--legacy`
   for the pointer straight to the rig, as before)
 
-Keys: `P` the player's screen off and on, `Esc` back (and an object held goes home), `Space` the
-lighter's flame while it is held.
+Keys: `P` the player's screen off and on, `Esc` back (Pod OS a level up, then the view back to the
+player; an object held goes home), `Space` the lighter's flame while it is held.
+
+The cable's chains and their lengths are set in one place, `CHAINS` in `src/objects/earbudsGeom.js`:
+the physics and the cable's mesh both read it.
 
 ## The earbuds: calm by design
 
@@ -56,7 +64,7 @@ page's hidden semantic HTML (for search engines and screen readers) and the plai
 - From across the desk the screen is a canvas texture painted from the OS's own DOM (only when
   something changed), lit by the scene; double-click or tap the player (or tap its screen) and the
   OS's real DOM is laid exactly over the glass, crisp and selectable, then swapped back as the view
-  leaves. It is on from the start; `P` switches it off and on
+  leaves. At home it is live from the start; `P` switches it off and on
 - The player's keys, up close: the left one back, the middle one select (hold it to play or pause),
   the red one next item; across the desk they are the music's. The keyboard: Tab to "use the
   player's screen", then arrows, Enter, Escape or Backspace

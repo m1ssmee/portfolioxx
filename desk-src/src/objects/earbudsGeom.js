@@ -319,12 +319,17 @@ export const BODY_COM = {
   bead: [0, 0, 0],
   plug: plugBody.com,
 }
-/** The cable's chains, in the rig's order (as in geom.rigSpec), and their lengths (mm). */
+/**
+ * The cable's chains, in the rig's order, and their lengths (mm): the one place they are set. The
+ * physics (earbudsRig.js's rigSpec) and the cable's mesh (earbudsStateLayout) both read them, so the
+ * mesh always reads each chain's own points. (Product-shot lengths, not a real cable's: laid round
+ * the player in a few open curves, never a pile.)
+ */
 export const CHAINS = [
-  { name: 'leadL1', from: ['budL', 'cable'], to: ['remote', 'top'], length: 120 },
-  { name: 'leadL2', from: ['remote', 'bottom'], to: ['splitter', 'left'], length: 148 },
-  { name: 'leadR', from: ['budR', 'cable'], to: ['splitter', 'right'], length: 300 },
-  { name: 'main', from: ['splitter', 'main'], to: ['plug', 'cable'], length: 900 },
+  { name: 'leadL1', from: ['budL', 'cable'], to: ['remote', 'top'], length: 72 },
+  { name: 'leadL2', from: ['remote', 'bottom'], to: ['splitter', 'left'], length: 86 },
+  { name: 'leadR', from: ['budR', 'cable'], to: ['splitter', 'right'], length: 116 },
+  { name: 'main', from: ['splitter', 'main'], to: ['plug', 'cable'], length: 185 },
 ]
 /** The particle spacing along the cable (the original's high tier). */
 export const SPACING = 4.5

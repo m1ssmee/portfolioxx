@@ -15,7 +15,7 @@
 // part in BODY_ORDER (its rotation R, column-major 3 x 3, then its centre of mass, world space),
 // then per chain (leadL1, leadL2, leadR, main) its tube points, x y z each: the two ends run 1.6 mm
 // into the parts they leave, so a chain of n particles has n + 4 points. With the original's
-// 4.5 mm spacing: 30, 36, 70 and 203 points, 1089 floats in all (earbudsStateLayout()).
+// 4.5 mm spacing and earbudsGeom.js's CHAINS: 19, 22, 29 and 44 points (earbudsStateLayout()).
 // Each part's matrix is centre + R (local - com) (BODY_COM; the plug's is plugBody.com), the right
 // bud the left one's meshes mirrored in x. "World" is eb.group's frame: move the group to move all.
 //

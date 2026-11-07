@@ -46,23 +46,24 @@ const pinAt = [mouth[0] + out[0] * (PLUG35.faceDist + PLUG35.relief.top), mouth[
 const at = (u, v, y) => { const p = deskAt(u, v, y); return [p[0], p[1], p[2]] }
 const hv = (du, dv) => { const p = deskAt(du, dv); return Math.atan2(p[2], p[0]) } // (a heading from a view direction)
 const BODIES = {
-  splitter: { at: at(-265, 55, 9), heading: hv(0, -1) },
-  bead: { at: at(-264, 33, 10), heading: hv(0, -1) },
-  remote: { at: at(-250, -20, 11), heading: hv(0.7, -0.7) },
-  budL: { pin: 'cable', at: at(-205, -65, 15), heading: hv(-0.7, 0.7), face: 'outer' },
-  budR: { pin: 'cable', at: at(-310, -40, 15), heading: hv(0.45, 0.9), face: 'inner' },
+  splitter: { at: at(-262, 62, 9), heading: hv(0, -1) },
+  bead: { at: at(-262, 42, 10), heading: hv(0, -1) },
+  remote: { at: at(-300, -6, 11), heading: hv(-0.5, -0.87) },
+  budL: { pin: 'cable', at: at(-330, -58, 15), heading: hv(0.5, 0.87), face: 'outer' },
+  budR: { pin: 'cable', at: at(-212, -30, 15), heading: hv(-0.45, 0.89), face: 'inner' },
   plug: { pin: 'cable', at: pinAt, heading: Math.atan2(out[2], out[0]) },
 }
-// (how many half-waves each chain makes along its way)
-const DESK_WAVES = { leadL1: 1, leadL2: 1, leadR: 1, main: 2 }
+// (how many half-waves each chain makes along its way; negative: bowing to the other side)
+const DESK_WAVES = { leadL1: 1, leadL2: -1, leadR: -1, main: 2 }
 // (each chain's way, in the view's axes, from its start to its end: the main cable from the
 // splitter at the player's left down and round under its foot to the plug in the jack; the leads
-// up from the splitter to the buds above the player's top-left corner)
+// up from the splitter in a V, each on its own side of it (the splitter's right hole on the right):
+// the right bud's up and to the right, the left one's up to the remote and on to the left bud)
 const DESK_ROUTES = {
   leadL1: [],
   leadL2: [],
   leadR: [],
-  main: [[-270, 90], [-250, 118], [-212, 127], [-178, 120]],
+  main: [[-268, 92], [-250, 118], [-212, 127], [-178, 120]],
 }
 // ---- place, pin the plug in the jack, settle
 const t0 = Date.now()

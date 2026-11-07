@@ -100,7 +100,7 @@ const CSS = `
 .cg-flame[aria-pressed='true'] svg{fill:#9a4a14}
 .cg-flame:focus-visible{outline:1.5px solid var(--ink);outline-offset:3px}
 @container cg (max-width: 1000px){.cg-swatches .cg-cap{display:none}}
-@container cg (max-width: 600px){.cg-keys{top:max(76px,calc(env(safe-area-inset-top) + 62px));bottom:auto;left:max(24px,env(safe-area-inset-left));right:auto;align-items:flex-start;gap:8px}.cg-copy{bottom:max(72px,calc(env(safe-area-inset-bottom) + 60px))}.cg-flame{bottom:max(100px,calc(env(safe-area-inset-bottom) + 88px))}}
+@container cg (max-width: 600px){.cg-keys{display:none}.cg-id{max-width:52%}.cg-tools{flex-direction:column;align-items:flex-end;gap:0}.cg-txt{padding:5px 8px}.cg-copy{bottom:max(72px,calc(env(safe-area-inset-bottom) + 60px))}.cg-flame{bottom:max(100px,calc(env(safe-area-inset-bottom) + 88px))}}
 .cg-root{container:cg/inline-size}
 `
 const UI = `<div class="cg-ui">
@@ -108,6 +108,7 @@ const UI = `<div class="cg-ui">
   <button class="cg-os cg-cap" data-act="os">use the player's screen</button>
   <div class="cg-tools">
     <button class="cg-txt cg-cap" data-act="back" hidden><span>&larr; back</span></button>
+    <button class="cg-txt cg-cap" data-act="all"><span>step back</span></button>
     <button class="cg-txt cg-cap" data-act="sound" aria-pressed="false"><span class="off">sound off</span><span class="on">sound on</span></button>
     <button class="cg-txt cg-cap" data-act="reset"><span>reset</span></button>
   </div>
@@ -1085,28 +1086,41 @@ export function createScene(container, options = {}) {
     emberPos(cigs[0], emberWorld)
     history.fill([emberWorld.x, emberWorld.y, emberWorld.z], 1)
 
-    // ---- the camera: nearly straight down through a long lens (about 90 mm on a full frame: the
-    // picture's shorter side sees 15.2 degrees), so the scene reads flat, graphic and calm, like a
-    // product flat-lay. A wide screen frames the player a little left of the middle, the ashtray
-    // and the lighter to its right; a tall one turns the picture a quarter, so they lie below it.
+    // ---- the camera: through a long lens (about 90 mm on a full frame: the picture's shorter side
+    // sees 15.2 degrees), so the scene reads flat, graphic and calm. Two views:
+    //   home   the player in focus: upright (its screen at the top), from nearly straight above,
+    //          as large as fits with a margin round it, the rest of the still life at the edges;
+    //          Pod OS is live there
+    //   all    the whole still life (step back): the player in the middle, the earbuds to its
+    //          left, the ashtray and lighter to its right; a tall screen turns it a quarter
     const LENS = THREE.MathUtils.degToRad(15.2)
-    const HOME_EL = THREE.MathUtils.degToRad(78)
+    const HOME_EL = THREE.MathUtils.degToRad(84)
+    const OVER_EL = THREE.MathUtils.degToRad(78)
     const HOME = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0 }
+    const OVER = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0 }
     const upGround = new THREE.Vector3()
-    /** The home view for the screen's shape (the field of view: resize()). */
+    const viewFrom = (V, up, el) => {
+      V.pos.copy(up).multiplyScalar(-Math.cos(el) * V.dist).add(V.target)
+      V.pos.y += Math.sin(el) * V.dist
+      V.az = Math.atan2(V.pos.x - V.target.x, V.pos.z - V.target.z)
+    }
+    /** Both views for the screen's shape (the field of view: resize()). */
     function fitHome() {
-      const tall = camera.aspect < 0.9
-      const V = tall ? LAYOUT.VIEW.tall : LAYOUT.VIEW.wide
-      HOME.target.set(V.at[0], 0, V.at[2])
-      // (up the picture, on the ground: wide, FWD; tall, a quarter turn, what lies right now below)
-      upGround.copy(tall ? RIGHT : FWD)
-      if (tall) upGround.negate()
       const tanV = camera.aspect >= 1 ? Math.tan(LENS / 2) : Math.tan(LENS / 2) / camera.aspect
       const tanH = tanV * camera.aspect
-      HOME.dist = Math.max(V.span[0] / 2 / tanH, (V.span[1] / 2) * Math.sin(HOME_EL) / tanV)
-      HOME.pos.copy(upGround).multiplyScalar(-Math.cos(HOME_EL) * HOME.dist).add(HOME.target)
-      HOME.pos.y += Math.sin(HOME_EL) * HOME.dist
-      HOME.az = Math.atan2(HOME.pos.x - HOME.target.x, HOME.pos.z - HOME.target.z)
+      // home: the player, 76% of the picture's height at most, 80% of its width
+      const PH = LAYOUT.PLAYER.half
+      HOME.target.set(LAYOUT.PLAYER.x, 5, LAYOUT.PLAYER.z)
+      HOME.dist = Math.max(((2 * PH[2]) / 0.76 / 2) * Math.sin(HOME_EL) / tanV, (2 * PH[0]) / 0.8 / 2 / tanH)
+      viewFrom(HOME, FWD, HOME_EL)
+      // all: the span (up the picture, on the ground: wide, FWD; tall, a quarter turn)
+      const tall = camera.aspect < 0.9
+      const V = tall ? LAYOUT.VIEW.tall : LAYOUT.VIEW.wide
+      OVER.target.set(V.at[0], 0, V.at[2])
+      upGround.copy(tall ? RIGHT : FWD)
+      if (tall) upGround.negate()
+      OVER.dist = Math.max(V.span[0] / 2 / tanH, (V.span[1] / 2) * Math.sin(OVER_EL) / tanV)
+      viewFrom(OVER, upGround, OVER_EL)
     }
     fitHome()
     {
@@ -1132,36 +1146,25 @@ export function createScene(container, options = {}) {
     function limitOrbit(home) {
       const polar = Math.PI / 2 - HOME_EL
       if (home) {
-        controls.minPolarAngle = Math.max(0.02, polar - THREE.MathUtils.degToRad(8))
-        controls.maxPolarAngle = polar + THREE.MathUtils.degToRad(12)
+        controls.minPolarAngle = Math.max(0.02, polar - THREE.MathUtils.degToRad(6))
+        controls.maxPolarAngle = polar + THREE.MathUtils.degToRad(14)
         controls.minAzimuthAngle = HOME.az - 0.3
         controls.maxAzimuthAngle = HOME.az + 0.3
-        controls.minDistance = HOME.dist * 0.6
-        controls.maxDistance = HOME.dist * 1.15
+        controls.minDistance = HOME.dist * 0.7
+        controls.maxDistance = OVER.dist * 1.15 // (zoomed out, the whole still life)
       } else {
         controls.minPolarAngle = THREE.MathUtils.degToRad(4)
         controls.maxPolarAngle = THREE.MathUtils.degToRad(62) // (never so low that the ground ends)
         controls.minAzimuthAngle = -Infinity
         controls.maxAzimuthAngle = Infinity
         controls.minDistance = 60
-        controls.maxDistance = HOME.dist * 1.15
+        controls.maxDistance = OVER.dist * 1.15
       }
     }
     limitOrbit(true)
-    // ---- parallax: at home the camera leans a few degrees towards the mouse, eased slowly. A
-    // drag or a zoom on the scene, or a close-up, and it lets go until the view comes home again.
+    // (the view turned or zoomed by hand: the resize keeps it where it is, rather than taking it home)
     let orbited = false
     let dragFrom = null
-    const par = { x: 0, y: 0, tx: 0, ty: 0, k: 0 } // (k: how much of the lean, eased in after a glide home)
-    const parV = new THREE.Vector3()
-    const parQ = new THREE.Quaternion()
-    const parAxis = new THREE.Vector3()
-    const Y_AXIS = new THREE.Vector3(0, 1, 0)
-    listen(window, 'pointermove', (e) => {
-      if (e.pointerType !== 'mouse') return
-      par.tx = THREE.MathUtils.clamp((e.clientX / innerWidth) * 2 - 1, -1, 1)
-      par.ty = THREE.MathUtils.clamp((e.clientY / innerHeight) * 2 - 1, -1, 1)
-    }, { passive: true })
     controls.addEventListener('start', () => {
       dragFrom = camera.position.clone()
     })
@@ -1169,34 +1172,6 @@ export function createScene(container, options = {}) {
       if (dragFrom && camera.position.distanceTo(dragFrom) > 2) orbited = true
       dragFrom = null
     })
-    /** Returns true while it moves the camera. */
-    function stepParallax(dt) {
-      if (reduceMotion) return false
-      // (something held: the camera keeps still where it is, so what is held stays under the
-      // pointer; let go, it eases on from there)
-      if (grab.held) return false
-      const k = 1 - Math.exp(-dt / 0.8)
-      par.x += (par.tx - par.x) * k
-      par.y += (par.ty - par.y) * k
-      if (orbited || dragFrom || focus.focused || focus.moving) {
-        par.k = 0
-        return false
-      }
-      par.k = Math.min(1, par.k + dt / 1.2)
-      const lean = par.k * par.k * (3 - 2 * par.k)
-      // (round the target: up to 3 degrees across, 2 up and down)
-      parV.subVectors(HOME.pos, HOME.target)
-      parQ.setFromAxisAngle(Y_AXIS, -par.x * 0.052 * lean)
-      parV.applyQuaternion(parQ)
-      parAxis.crossVectors(parV, Y_AXIS).normalize()
-      parQ.setFromAxisAngle(parAxis, -par.y * 0.035 * lean)
-      parV.applyQuaternion(parQ)
-      parV.add(HOME.target)
-      if (parV.distanceToSquared(camera.position) < 1e-6) return false
-      camera.position.copy(parV)
-      controls.target.copy(HOME.target)
-      return true
-    }
     camera.position.copy(HOME.pos)
     controls.target.copy(HOME.target)
     controls.update()
@@ -1212,31 +1187,16 @@ export function createScene(container, options = {}) {
       // OS's page, laid over it up close, is. On a phone the close-up is tighter and steeper, along the
       // player's own length, so the screen is big enough to use: upright the whole player still fits,
       // keys and all; on its side, the screen fills the height)
+      // (the player: home itself, its depth of field on the glass)
       player: {
-        center: (o) => (phone() && camera.aspect >= 1 ? o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld) : o.copy(DESK.player).setY(6)),
+        view: () => HOME,
         dof: (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld),
         deep: 2.4,
-        get radius() {
-          return phone() ? 32 : 68
-        },
-        get el() {
-          return THREE.MathUtils.degToRad(phone() ? 76 : 52)
-        },
-        get az() {
-          return phone() ? playerAz : Math.atan2(-FWD.x, -FWD.z)
-        },
-        get azPull() {
-          return phone() ? 1 : 0.6
-        },
       },
+      // (the whole still life)
+      all: { view: () => OVER, deep: 2.2 },
       earbuds: { center: (o) => earbudsLive.focusCenter(o), radius: 52, el: THREE.MathUtils.degToRad(50) },
     }
-    const phone = () => Math.min(canvas.clientWidth, canvas.clientHeight) < 600
-    // (the player's own length on the desk: from its screen end to its keys)
-    const playerAz = (() => {
-      const v = new THREE.Vector3(0, 0, 1).transformDirection(player.group.matrixWorld)
-      return Math.atan2(v.x, v.z)
-    })()
     const focusMeshes = { ashtray: [trayMesh, ...cigs.flatMap((c) => [c.body, c.ash, c.ember])], lighter: lighter.meshes, player: [] }
     player.group.traverse((o) => o.isMesh && focusMeshes.player.push(o))
     focusMeshes.earbuds = earbudsLive.item.meshes
@@ -1247,9 +1207,10 @@ export function createScene(container, options = {}) {
       targets: focusTargets,
       reduceMotion,
       onChange: (name) => {
-        backBtn.hidden = !name
-        // (up close the view is the object's: the key hints step aside; back is at the top)
-        root.classList.toggle('cg-close', !!name)
+        backBtn.hidden = !name || name === 'player'
+        allBtn.hidden = !!name && name !== 'player'
+        // (up close on something else, the view is the object's: the key hints step aside)
+        root.classList.toggle('cg-close', !!name && name !== 'player' && name !== 'all')
         frameCache.valid = false
         limitOrbit(!name)
         if (!name) orbited = false
@@ -1309,8 +1270,8 @@ export function createScene(container, options = {}) {
         focusAt(e.clientX, e.clientY)
       } else lastTap = { ...lastTap, t: e.timeStamp, x: e.clientX, y: e.clientY }
     }, { passive: true })
-    // (Escape: an object held goes home first, core/grab.js; with nothing held, the view goes back;
-    // up close on Pod OS, the OS goes back a level first, and from its home the view leaves)
+    // (Escape: an object held goes home first, core/grab.js; with nothing held, Pod OS goes back a
+    // level; from its home, a close-up or the whole still life goes back to the player)
     listen(window, 'keydown', (e) => {
       // (up close, the arrows reach Pod OS wherever the page's focus is)
       if (osUp && (e.key || '').startsWith('Arrow') && !os.el.contains(e.target) && os.onKeyDown(e)) {
@@ -1318,16 +1279,19 @@ export function createScene(container, options = {}) {
         osIdle = 0
         return
       }
-      if (e.key !== 'Escape' || grab.held || !focus.focused) return
+      if (e.key !== 'Escape' || grab.held) return
       if (osUp && os.back()) {
         e.preventDefault()
         e.stopPropagation()
         osIdle = 0
         return
       }
-      focus.back()
+      if (focus.focused) focus.back()
     }, { capture: true })
     const backBtn = root.querySelector('[data-act="back"]')
+    const allBtn = root.querySelector('[data-act="all"]')
+    /** Is the view on the player (home, or gliding to it): Pod OS is live there. */
+    const podView = () => !focus.focused || focus.focused === 'player'
 
     // ---- the frame, cached (core/frame.js): what does not move is drawn once and re-used; each
     // frame draws the smoke, the ember's few millimetres and one composite pass
@@ -1394,11 +1358,13 @@ export function createScene(container, options = {}) {
       camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tanV))
       camera.updateProjectionMatrix()
       // (the home view follows the screen's shape; the camera with it, if it is there)
-      const wasHome = !focus.focused && !orbited
+      const wasHome = (!focus.focused || focus.focused === 'player') && !orbited
+      const wasAll = focus.focused === 'all'
       fitHome()
-      if (wasHome && !focus.moving) {
-        controls.target.copy(HOME.target)
-        camera.position.copy(HOME.pos)
+      if ((wasHome || wasAll) && !focus.moving) {
+        const V = wasAll ? OVER : HOME
+        controls.target.copy(V.target)
+        camera.position.copy(V.pos)
         controls.update()
       }
       if (!focus.focused) limitOrbit(true)
@@ -1704,11 +1670,11 @@ export function createScene(container, options = {}) {
       const key = keyAt(e.clientX, e.clientY)
       if (key) return pressKey(key)
       // (a tap on the screen from across the desk: closer, to use it)
-      if (focus.focused !== 'player' && os && focusableAt(e.clientX, e.clientY) === 'player') {
+      if (!podView() && os && focusableAt(e.clientX, e.clientY) === 'player') {
         rayAt(e.clientX, e.clientY)
         keyHits.length = 0
         keyRay.intersectObject(playerScreen, false, keyHits)
-        if (keyHits.length) focus.focusOn('player')
+        if (keyHits.length) focus.back()
       }
     }, { passive: true })
     listen(canvas, 'pointercancel', endHold, { passive: true })
@@ -1810,7 +1776,7 @@ export function createScene(container, options = {}) {
       // (up close on a lit screen, the glass's reflections fade as the glide closes in, as a screen's
       // coating takes them: the page laid over it then shows exactly what it shows; across the desk
       // the glass reflects the room)
-      const gw = focus.focused === 'player' && os.power !== 'asleep' ? 0 : 1
+      const gw = podView() && !focus.moving && os.power !== 'asleep' ? 0 : 1
       if (glare !== gw) {
         const g2 = glare + (gw - glare) * (1 - Math.exp(-dt * (reduceMotion ? 30 : 5)))
         glare = Math.abs(gw - g2) < 0.004 ? gw : g2
@@ -1820,7 +1786,7 @@ export function createScene(container, options = {}) {
       }
       // up close: the page, once the glide is over and the screen fully lit (the texture shows what
       // the page shows), while the camera looks onto the glass and nothing covers it or is carried
-      let want = focus.focused === 'player' && !focus.moving && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom
+      let want = podView() && !focus.moving && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom
       if (want) {
         camera.updateMatrixWorld()
         osCam.copy(camera.position).applyMatrix4(playerInv)
@@ -1905,7 +1871,11 @@ export function createScene(container, options = {}) {
         active()
         if (b.dataset.act === 'reset') resetView()
         else if (b.dataset.act === 'back') focus.back()
-        else if (b.dataset.act === 'os') focus.focusOn('player')
+        else if (b.dataset.act === 'os') {
+          // (into Pod OS: home if the view is elsewhere; there, the first project takes the focus)
+          if (!podView()) focus.back()
+          else if (osUp) os.focusFirst()
+        } else if (b.dataset.act === 'all') focus.focusOn('all')
         else if (b.dataset.act === 'sound') {
           const on = b.getAttribute('aria-pressed') !== 'true'
           b.setAttribute('aria-pressed', String(on))
@@ -2024,7 +1994,6 @@ export function createScene(container, options = {}) {
       U.uTime.value = simTime
       focus.update(now)
       controls.update()
-      stepParallax(dt)
       grab.hover()
       // the held object aimed at the pointer, eased (core/grab.js), then every simulation at its
       // fixed step (the cable, the dropped lighter and cigarette, the ash)
@@ -2150,7 +2119,7 @@ export function createScene(container, options = {}) {
       // (the depth of field: on what the view is about; deep over the whole desk, the still life's
       // own aperture in a close-up)
       const ft = focus.focused && focusTargets[focus.focused]
-      if (ft) (ft.dof || ft.center)(focusPt)
+      if (ft && (ft.dof || ft.center)) (ft.dof || ft.center)(focusPt)
       else focusPt.copy(controls.target)
       F.focus.s = camera.position.distanceTo(focusPt)
       F.focus.home = F.focus.s * (ft ? ft.deep || 1 : 2.2)
@@ -2189,7 +2158,6 @@ export function createScene(container, options = {}) {
       F.truth = !!dbgFlags.truth
       F.emberI = emberNow / EMBER_CD
       F.dofK = dofK
-      if (!dbgFlags.freeze) F.seed = (F.seed + 0.6180339) % 7
       cigBox(c, c.b - 4.6, c.b + 0.7 + c.ashLen + 0.8, 4.7, F.regionBox)
       // (the player's screen is drawn over the cache too: the box takes it in)
       boxStart()

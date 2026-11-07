@@ -54,8 +54,9 @@
         // (a product shot's tone curve: colours as they are, the light parts compressed, never clipped)
         c = NeutralToneMapping(c);
         vec4 o = sRGBTransferOETF(vec4(c, 1.0));
+        // (a still dither, a level either way at most: no banding in the soft ground, and nothing
+        // that crawls from frame to frame)
         float n = fract(sin(dot(gl_FragCoord.xy + seed * 37.0, vec2(12.9898, 78.233))) * 43758.5453);
-        float l = dot(o.rgb, vec3(0.33));
-        o.rgb += (n - 0.5) * (0.003 + 0.012 * l * (1.0 - l));
+        o.rgb += (n - 0.5) * (1.6 / 255.0);
         gl_FragColor = o;
       }

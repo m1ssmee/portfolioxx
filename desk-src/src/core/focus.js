@@ -3,7 +3,7 @@
 // side the camera is looking from (turned a little towards the object's best side) and eases in
 // and out; the orbit controls take over again at either end.
 //   targets: { name: { center(out): Vector3, radius, el?: radians, az?: radians (a preferred view),
-//              azPull?: how far towards it the view turns, 0..1 (0.6) } }
+//              azPull?: how far towards it the view turns, 0..1 (0.6) } or { view(): { pos, target } } }
 import * as THREE from 'three'
 
 export function createFocus({ camera, controls, home, targets, reduceMotion, onChange }) {
@@ -34,6 +34,13 @@ export function createFocus({ camera, controls, home, targets, reduceMotion, onC
     focusOn(name) {
       const T = targets[name]
       if (!T) return
+      if (T.view) {
+        const v = T.view()
+        current = name
+        glide(v.pos, v.target)
+        onChange?.(current)
+        return
+      }
       T.center(c)
       // from where the camera looks now, nudged towards the object's preferred side
       d.subVectors(camera.position, controls.target)
@@ -42,7 +49,7 @@ export function createFocus({ camera, controls, home, targets, reduceMotion, onC
       const el = T.el ?? THREE.MathUtils.clamp(Math.asin(d.y / Math.max(d.length(), 1e-6)), 0.25, 1.0)
       const fov = THREE.MathUtils.degToRad(camera.fov)
       const fit = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * camera.aspect))
-      const dist = THREE.MathUtils.clamp((T.radius / Math.sin(fit / 2)) * 1.12, controls.minDistance, controls.maxDistance)
+      const dist = THREE.MathUtils.clamp((T.radius / Math.sin(fit / 2)) * 1.12, 60, controls.maxDistance)
       d.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(dist).add(c)
       current = name
       glide(d, c)

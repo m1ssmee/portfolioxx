@@ -539,6 +539,8 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
     key,
     onKeyDown,
     setMode,
+    /** The keyboard's way in: the first project (or a page's first link). */
+    focusFirst,
     fade,
     placeOver,
     destroy() {
