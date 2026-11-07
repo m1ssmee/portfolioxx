@@ -13,7 +13,7 @@ still dither instead of film grain, so a frame changes only where something move
 ```
 npm ci
 npm run dev      # http://localhost:5173 (add ?debug for the overlay)
-npm run build    # writes ../desk (and ../desk/plain.html)
+npm run build    # writes ../desk
 ```
 
 - `index.html`: the loader (inline markup and styles); `src/main.js`: what drives it
@@ -48,13 +48,18 @@ lighter are held through the same follower.
 
 ## Pod OS (the player's screen)
 
-**Your content lives in one file: `src/content/portfolio.ts`.** Replace every `TODO: your text here`,
-put your projects in `projects`, and set your email and links. Screenshots and a photo: put the files
-in `public/media/` and list them as `'./media/shot.png'` (they are loaded before entry); until then
-the OS draws quiet placeholders. Keep the file plain data, without imports: the build reads it too.
-The same file also gives the name and role at the top left and the copyright line, and becomes the
-page's hidden semantic HTML (for search engines and screen readers) and the plain view, `plain.html`
-(both made by `vite.config.js` from `src/content/pages.js`).
+**Your content lives in one file: `src/content/portfolio.ts`:** your name and role, the bio, the four
+projects (BodyMap, Codebase Tavern, the Lunar Habitat Safety Rover, CropScan) and your links.
+Anything left empty is simply not shown: add your email, LinkedIn and X there when you want them on
+the contact page, and a city in `basedIn`. Screenshots and a photo are optional: put the files in
+`public/media/` and list them as `'./media/shot.png'` (they are loaded before entry). Keep the file
+plain data, without imports: the build reads it too. The same file also gives the name and role at
+the top left and the copyright line, and becomes the page's hidden semantic HTML, for search
+engines and screen readers (made by `vite.config.js` from `src/content/pages.js`).
+
+Opening a project (a card, or the keys) slides the player to the left, blurs the rest and tells
+the project on the right, with a button to its live site (or its code); on a phone it comes up as a
+sheet. Back, Escape, ◀ or a click on the blur closes it.
 
 - Three screens: the projects list (home), a project's page, About & contact. One light theme, the
   scene's own paper and slate, and calmer with reduced motion
@@ -65,7 +70,7 @@ page's hidden semantic HTML (for search engines and screen readers) and the plai
   something changed), lit by the scene; double-click or tap the player (or tap its screen) and the
   OS's real DOM is laid exactly over the glass, crisp and selectable, then swapped back as the view
   leaves. At home it is live from the start; `P` switches it off and on
-- The player's keys, up close: the left one back, the middle one select (hold it to play or pause),
-  the red one next item; across the desk they are the music's. The keyboard: Tab to "use the
+- The player's keys: ◀ back (on Pod OS) or the previous track, ▶ the next item or the next track,
+  the red one select on Pod OS (hold it to play or pause) or play and pause for the music. The keyboard: Tab to "use the
   player's screen", then arrows, Enter, Escape or Backspace
 - Font: Inter, under the SIL Open Font License (`public/fonts/`)

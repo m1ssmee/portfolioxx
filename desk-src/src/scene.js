@@ -76,6 +76,32 @@ const CSS = `
 .cg-keys{position:absolute;right:max(24px,env(safe-area-inset-right));bottom:max(94px,calc(env(safe-area-inset-bottom) + 76px));margin:0;padding:0;list-style:none;display:flex;flex-direction:column;align-items:flex-end;gap:10px;color:var(--label);pointer-events:none}
 .cg-keys{transition:opacity .4s}
 .cg-close .cg-keys{opacity:0}
+.cg-veil{position:absolute;inset:0;background:rgba(214,219,226,.42);-webkit-backdrop-filter:blur(14px) saturate(.9);backdrop-filter:blur(14px) saturate(.9);opacity:0;visibility:hidden;cursor:pointer;transition:opacity .45s ease,visibility 0s .45s}
+.cg-projecting .cg-veil{opacity:1;visibility:visible;transition:opacity .45s ease}
+.cg-projecting .cg-keys,.cg-projecting .cg-copy{opacity:0;pointer-events:none}
+.cg-keys,.cg-copy{transition:opacity .4s}
+.cg-proj{position:absolute;z-index:3;right:max(5vw,28px);top:50%;box-sizing:border-box;width:min(500px,42vw);max-height:min(80vh,720px);overflow:auto;padding:4px 6px 4px 0;color:var(--ink);font:400 14.5px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:0;opacity:0;visibility:hidden;transform:translate(18px,-50%);transition:opacity .3s ease,transform .3s ease,visibility 0s .3s;scrollbar-width:thin}
+.cg-projecting .cg-proj{opacity:1;visibility:visible;transform:translate(0,-50%);transition:opacity .45s ease .2s,transform .55s cubic-bezier(.2,.7,.2,1) .2s}
+.cg-proj .cg-cap{font-size:10.5px}
+.cg-proj-close{margin:0 0 18px -8px}
+.cg-proj-k{margin:0;color:var(--label);font-weight:500}
+.cg-proj-name{margin:10px 0 10px;font:600 34px/1.1 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:-.015em}
+.cg-proj-line{margin:0 0 22px;font-size:17px;line-height:1.45}
+.cg-proj-acts{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 6px}
+.cg-proj-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:999px;font:500 13px/1 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:.01em;text-decoration:none;transition:background .2s,border-color .2s,color .2s}
+.cg-proj-btn.dark{background:var(--ink);color:#f3f5f8}
+.cg-proj-btn.dark:hover{background:#11151b}
+.cg-proj-btn.line{border:1px solid var(--rule);color:var(--ink)}
+.cg-proj-btn.line:hover{border-color:var(--ink)}
+.cg-proj-btn:focus-visible{outline:1.5px solid var(--ink);outline-offset:3px}
+.cg-proj-btn[hidden]{display:none}
+.cg-proj h3{margin:24px 0 6px;color:var(--label);font-weight:500}
+.cg-proj p{margin:0;color:#2c333d}
+.cg-proj ul{margin:0;padding-left:18px;color:#2c333d}
+.cg-proj li{margin:0 0 6px}
+.cg-proj-tags{display:flex;flex-wrap:wrap;gap:6px}
+.cg-proj-tags span{padding:5px 10px 4px;border:1px solid var(--rule);border-radius:999px;font:500 11px/1 var(--mono);color:var(--ink)}
+@container cg (max-width: 760px){.cg-projecting .cg-now{opacity:0}.cg-now{transition:opacity .4s}.cg-proj{left:0;right:0;top:auto;bottom:0;width:auto;max-height:82%;padding:20px 22px 28px;border-radius:18px 18px 0 0;background:rgba(238,241,245,.94);transform:translateY(28px)}.cg-projecting .cg-proj{transform:none}.cg-proj-name{font-size:28px}}
 @media (max-height:700px){.cg-keys li.cg-fine:nth-child(-n+2){display:none}}
 @media (max-height:500px){.cg-keys{display:none}}
 .cg-keys li{display:flex;align-items:center;gap:9px}
@@ -87,23 +113,28 @@ const CSS = `
 .cg-now-t{font:500 11px/1 var(--mono);letter-spacing:.01em}
 .cg-now-t:empty{display:none}
 .cg-copy{position:absolute;left:50%;bottom:max(22px,env(safe-area-inset-bottom));margin:0;transform:translateX(-50%);white-space:nowrap;color:var(--label);pointer-events:none}
-.cg-swatches{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(44px,calc(env(safe-area-inset-bottom) + 26px));display:flex;align-items:center;gap:0}
-.cg-swatches .cg-cap{color:var(--label);margin-right:4px}
-.cg-swatch{width:26px;height:26px;padding:0;display:grid;place-items:center;background:none;border:0;border-radius:50%}
-.cg-swatch::before{content:'';width:11px;height:11px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px rgba(38,44,53,.35);transition:box-shadow .15s}
-.cg-swatch[aria-pressed='true']::before{box-shadow:inset 0 0 0 1px rgba(38,44,53,.35),0 0 0 2.5px #c0c6cf,0 0 0 3.5px var(--ink)}
-.cg-swatch:focus-visible{outline:1.5px solid var(--ink);outline-offset:-2px}
 .cg-flame{position:absolute;left:50%;bottom:max(52px,calc(env(safe-area-inset-bottom) + 40px));width:56px;height:56px;padding:0;border-radius:50%;display:grid;place-items:center;background:#dce0e6;border:1px solid var(--rule);opacity:0;visibility:hidden;transform:translate(-50%,6px);transition:opacity .2s,transform .2s,visibility 0s .2s,background .12s,border-color .12s;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 .cg-lighter .cg-flame{opacity:1;visibility:visible;transform:translate(-50%,0);transition:opacity .2s,transform .2s,visibility 0s,background .12s,border-color .12s}
 .cg-flame svg{width:22px;height:22px;fill:var(--label);transition:fill .12s}
 .cg-flame[aria-pressed='true']{background:#f1d6bb;border-color:#a8622e}
 .cg-flame[aria-pressed='true'] svg{fill:#9a4a14}
 .cg-flame:focus-visible{outline:1.5px solid var(--ink);outline-offset:3px}
-@container cg (max-width: 1000px){.cg-swatches .cg-cap{display:none}}
 @container cg (max-width: 600px){.cg-keys{display:none}.cg-id{max-width:52%}.cg-tools{flex-direction:column;align-items:flex-end;gap:0}.cg-txt{padding:5px 8px}.cg-copy{bottom:max(72px,calc(env(safe-area-inset-bottom) + 60px))}.cg-flame{bottom:max(100px,calc(env(safe-area-inset-bottom) + 88px))}}
 .cg-root{container:cg/inline-size}
 `
 const UI = `<div class="cg-ui">
+  <div class="cg-veil" data-act="proj-close" aria-hidden="true"></div>
+  <aside class="cg-proj" aria-labelledby="cg-proj-name" hidden>
+    <button class="cg-txt cg-cap cg-proj-close" data-act="proj-close"><span>&larr; back to the projects</span></button>
+    <p class="cg-proj-k cg-cap" data-p="k"></p>
+    <h2 class="cg-proj-name" id="cg-proj-name" data-p="name"></h2>
+    <p class="cg-proj-line" data-p="line"></p>
+    <div class="cg-proj-acts"><a class="cg-proj-btn dark" data-p="live" target="_blank" rel="noopener">Visit the live site <span aria-hidden="true">&nearr;</span></a><a class="cg-proj-btn line" data-p="github" target="_blank" rel="noopener">GitHub <span aria-hidden="true">&nearr;</span></a></div>
+    <h3 class="cg-cap">What it is</h3><p data-p="what"></p>
+    <h3 class="cg-cap">What I built</h3><p data-p="built"></p>
+    <h3 class="cg-cap">Challenges</h3><ul data-p="challenges"></ul>
+    <h3 class="cg-cap">Stack</h3><div class="cg-proj-tags" data-p="stack"></div>
+  </aside>
   <p class="cg-id cg-cap"><span class="cg-id-name" data-id="name"></span><span class="cg-id-role" data-id="role"></span></p>
   <button class="cg-os cg-cap" data-act="os">use the player's screen</button>
   <div class="cg-tools">
@@ -125,12 +156,6 @@ const UI = `<div class="cg-ui">
   <p class="cg-now"><span class="cg-now-k cg-cap">sound off</span><span class="cg-now-t"></span></p>
   <p class="cg-copy cg-cap" data-id="copy"></p>
   <button class="cg-flame" data-flame aria-label="Hold to light the lighter" aria-pressed="false" aria-hidden="true" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.2 2.2c.9 3.6 5.6 6.2 5.6 11.6a5.8 5.8 0 0 1-11.6 0c0-3.2 1.8-4.9 3-6.7.3 2 1.2 3.3 2.4 3.8-.6-3.4.3-6.3.6-8.7z"/></svg></button>
-  <div class="cg-swatches" role="group" aria-label="Earbuds colour">
-    <span class="cg-cap" aria-hidden="true">earbuds</span>
-    <button class="cg-swatch" data-colorway="graphite" aria-label="Graphite earbuds" aria-pressed="false" style="--c:#34363a"></button>
-    <button class="cg-swatch" data-colorway="sage" aria-label="Sage earbuds" aria-pressed="false" style="--c:#8b9984"></button>
-    <button class="cg-swatch" data-colorway="bone" aria-label="Bone earbuds" aria-pressed="true" style="--c:#e2dbcd"></button>
-  </div>
 </div>`
 
 export function createScene(container, options = {}) {
@@ -442,7 +467,7 @@ export function createScene(container, options = {}) {
     step('earbuds meshed (worker)')
     if (destroyed) return
     // (bone by default: on the dark desk the lightest of the three reads best; all three stay)
-    const earbuds = await createEarbudsAsync({ renderer, meshes: { bud: budMesh.mesh, remote: remoteMesh.mesh }, textures: earTex.tex, colorway: 'bone' }, yieldNow)
+    const earbuds = await createEarbudsAsync({ renderer, meshes: { bud: budMesh.mesh, remote: remoteMesh.mesh }, textures: earTex.tex, colorway: 'black' }, yieldNow)
     scene.add(earbuds.group)
     for (const m of earbuds.materials) if (m.isMeshStandardMaterial) withEmber(m)
     step('earbuds built')
@@ -455,6 +480,8 @@ export function createScene(container, options = {}) {
     // (stage 'os'); up close, the OS's own page laid exactly over the glass instead (stepOS)
     let os = null
     let osUp = false // (the page is the screen now)
+    let projOpen = null // (a project open beside the player: its id)
+    let podSlide = false // (the camera sliding between two views of the player: its page stays up, following it)
     let osAlpha = 0 // (the page's opacity: it fades in over the texture, and out)
     let osIdle = 0 // (s since anyone touched it)
     let glare = 1 // (the glass's reflections: 1 across the desk, 0 up close on a lit screen)
@@ -1098,6 +1125,10 @@ export function createScene(container, options = {}) {
     const OVER_EL = THREE.MathUtils.degToRad(78)
     const HOME = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0 }
     const OVER = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0 }
+    // (a project open: the player moved to the left third, the project told on the right; on a narrow
+    // screen it stays where it is, under the sheet)
+    const PROJ = { target: new THREE.Vector3(), pos: new THREE.Vector3() }
+    const narrowUI = () => canvas.clientWidth <= 760
     const upGround = new THREE.Vector3()
     const viewFrom = (V, up, el) => {
       V.pos.copy(up).multiplyScalar(-Math.cos(el) * V.dist).add(V.target)
@@ -1121,6 +1152,10 @@ export function createScene(container, options = {}) {
       if (tall) upGround.negate()
       OVER.dist = Math.max(V.span[0] / 2 / tanH, (V.span[1] / 2) * Math.sin(OVER_EL) / tanV)
       viewFrom(OVER, upGround, OVER_EL)
+      // the project view: home, slid so the player's middle is at 27% of the picture's width
+      const shift = narrowUI() ? 0 : (0.5 - 0.27) * 2 * HOME.dist * tanH
+      PROJ.target.copy(HOME.target).addScaledVector(RIGHT, shift)
+      PROJ.pos.copy(HOME.pos).addScaledVector(RIGHT, shift)
     }
     fitHome()
     {
@@ -1195,6 +1230,12 @@ export function createScene(container, options = {}) {
       },
       // (the whole still life)
       all: { view: () => OVER, deep: 2.2 },
+      // (a project open: the player to the left, still in focus)
+      project: {
+        view: () => PROJ,
+        dof: (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld),
+        deep: 2.4,
+      },
       earbuds: { center: (o) => earbudsLive.focusCenter(o), radius: 52, el: THREE.MathUtils.degToRad(50) },
     }
     const focusMeshes = { ashtray: [trayMesh, ...cigs.flatMap((c) => [c.body, c.ash, c.ember])], lighter: lighter.meshes, player: [] }
@@ -1207,8 +1248,10 @@ export function createScene(container, options = {}) {
       targets: focusTargets,
       reduceMotion,
       onChange: (name) => {
-        backBtn.hidden = !name || name === 'player'
+        backBtn.hidden = !name || name === 'player' || name === 'project'
         allBtn.hidden = !!name && name !== 'player'
+        // (a project open: the composition holds, the camera does not orbit)
+        controls.enabled = name !== 'project'
         // (up close on something else, the view is the object's: the key hints step aside)
         root.classList.toggle('cg-close', !!name && name !== 'player' && name !== 'all')
         frameCache.valid = false
@@ -1280,6 +1323,11 @@ export function createScene(container, options = {}) {
         return
       }
       if (e.key !== 'Escape' || grab.held) return
+      if (projOpen) {
+        e.preventDefault()
+        leaveProject()
+        return
+      }
       if (osUp && os.back()) {
         e.preventDefault()
         e.stopPropagation()
@@ -1291,7 +1339,7 @@ export function createScene(container, options = {}) {
     const backBtn = root.querySelector('[data-act="back"]')
     const allBtn = root.querySelector('[data-act="all"]')
     /** Is the view on the player (home, or gliding to it): Pod OS is live there. */
-    const podView = () => !focus.focused || focus.focused === 'player'
+    const podView = () => !focus.focused || focus.focused === 'player' || focus.focused === 'project'
 
     // ---- the frame, cached (core/frame.js): what does not move is drawn once and re-used; each
     // frame draws the smoke, the ember's few millimetres and one composite pass
@@ -1360,9 +1408,10 @@ export function createScene(container, options = {}) {
       // (the home view follows the screen's shape; the camera with it, if it is there)
       const wasHome = (!focus.focused || focus.focused === 'player') && !orbited
       const wasAll = focus.focused === 'all'
+      const wasProj = focus.focused === 'project'
       fitHome()
-      if ((wasHome || wasAll) && !focus.moving) {
-        const V = wasAll ? OVER : HOME
+      if ((wasHome || wasAll || wasProj) && !focus.moving) {
+        const V = wasAll ? OVER : wasProj ? PROJ : HOME
         controls.target.copy(V.target)
         camera.position.copy(V.pos)
         controls.update()
@@ -1505,7 +1554,22 @@ export function createScene(container, options = {}) {
 
     // ---- picking the cigarette up (only the cigarette: core/grab.js, objects/pickup.js)
     const seatPts = seats.map((s) => new THREE.Vector3(s.dir[0] * (TRAY.bowlTop + 2.3), s.y + CIG.radius + 0.05, s.dir[2] * (TRAY.bowlTop + 2.3)))
-    const grab = createGrab({ canvas, camera, controls, listen, onActive: () => (active(), wake()) })
+    // (a tap on an object from afar, or from another object's close-up, brings the camera to it, and
+    // only to it; once there, taps are the object's own: a flick, the remote's button)
+    const grab = createGrab({
+      canvas,
+      camera,
+      controls,
+      listen,
+      onActive: () => (active(), wake()),
+      tapFirst: (hit) => {
+        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : cigItems.includes(hit.item) ? 'ashtray' : null
+        if (!name || focus.focused === name || focus.moving) return false
+        if (projOpen) leaveProject()
+        focus.focusOn(name)
+        return true
+      },
+    })
     const pickup = createPickup({
       camera,
       sdfGrad: cigObstacles,
@@ -1650,7 +1714,8 @@ export function createScene(container, options = {}) {
       tapDown = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId }
       if (!osUp) return
       const k = keyAt(e.clientX, e.clientY)
-      if (k && k.name === 'play') {
+      // (the red key, held: play or pause, even on Pod OS)
+      if (k && k.name === 'rec') {
         endHold()
         holdTimer = setTimeout(() => {
           holdTimer = 0
@@ -1669,13 +1734,8 @@ export function createScene(container, options = {}) {
       if (!d || d.id !== e.pointerId || grab.held || e.timeStamp - d.t > 350 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return
       const key = keyAt(e.clientX, e.clientY)
       if (key) return pressKey(key)
-      // (a tap on the screen from across the desk: closer, to use it)
-      if (!podView() && os && focusableAt(e.clientX, e.clientY) === 'player') {
-        rayAt(e.clientX, e.clientY)
-        keyHits.length = 0
-        keyRay.intersectObject(playerScreen, false, keyHits)
-        if (keyHits.length) focus.back()
-      }
+      // (a tap on the player from afar: home, the player in focus)
+      if (!podView() && !focus.moving && focusableAt(e.clientX, e.clientY) === 'player') focus.back()
     }, { passive: true })
     listen(canvas, 'pointercancel', endHold, { passive: true })
     function pressKey(key, held = false) {
@@ -1684,12 +1744,14 @@ export function createScene(container, options = {}) {
       setTimeout(() => key.press(false), 140)
       keyAnim = 0.5
       osIdle = 0
+      // the keys: ◀ back (or the previous track), ▶ next (the next item, or the next track), the red
+      // one select on Pod OS (held: play or pause) and play or pause for the music
       if (osUp && !held) {
         if (key.name === 'prev') {
           if (!os.back()) focus.back()
-        } else os.key(key.name === 'play' ? 'select' : 'next')
+        } else os.key(key.name === 'rec' ? 'select' : 'next')
       } else {
-        if (key.name === 'play') audio.setPlaying(!audio.playing)
+        if (key.name === 'rec') audio.setPlaying(!audio.playing)
         else if (key.name === 'prev') audio.prev()
         else audio.next()
         // (the screen wakes to show what plays)
@@ -1765,9 +1827,113 @@ export function createScene(container, options = {}) {
       for (const q of cigs) if (q.group.visible && boxOver(cigBounds, q.group.matrixWorld)) return true
       return false
     }
+    // ---- a project open (Pod OS on a project's page): the player slides to the left, the rest of
+    // the still life blurs behind a veil with a hole the player's shape, and the project is told on
+    // the right, with the way to its live site (on a narrow screen: a sheet over the blurred scene)
+    const projEl = root.querySelector('.cg-proj')
+    const veilEl = root.querySelector('.cg-veil')
+    const pf = (k) => projEl.querySelector(`[data-p="${k}"]`)
+    let projHideT = 0
+    const two = (n) => String(n).padStart(2, '0')
+    function openProject(id) {
+      const i = portfolio.projects.findIndex((q) => q.id === id)
+      const p = portfolio.projects[i]
+      if (!p) return
+      projOpen = id
+      clearTimeout(projHideT)
+      pf('k').textContent = `Project ${two(i + 1)} / ${two(portfolio.projects.length)} · ${p.year}`
+      pf('name').textContent = p.name
+      pf('line').textContent = p.oneLiner
+      const live = pf('live')
+      const gh = pf('github')
+      live.hidden = !p.live
+      if (p.live) live.href = p.live
+      gh.hidden = !p.github
+      if (p.github) gh.href = p.github
+      // (no live site: the code is the way in)
+      gh.className = `cg-proj-btn ${p.live ? 'line' : 'dark'}`
+      gh.firstChild.textContent = p.live ? 'GitHub ' : 'View the code on GitHub '
+      pf('what').textContent = p.whatItIs
+      pf('built').textContent = p.whatIBuilt
+      pf('challenges').replaceChildren(...p.challenges.map((c) => Object.assign(document.createElement('li'), { textContent: c })))
+      pf('stack').replaceChildren(...p.stack.map((t) => Object.assign(document.createElement('span'), { textContent: t })))
+      projEl.scrollTop = 0
+      projEl.hidden = false
+      root.classList.add('cg-projecting')
+      if (focus.focused !== 'project') {
+        podSlide = podView()
+        focus.focusOn('project')
+      }
+      active()
+      wake()
+    }
+    function closeProject() {
+      if (!projOpen) return
+      projOpen = null
+      root.classList.remove('cg-projecting')
+      projHideT = setTimeout(() => {
+        if (!projOpen) projEl.hidden = true
+      }, 450)
+      if (focus.focused === 'project') {
+        podSlide = true
+        focus.back()
+      }
+      wake()
+    }
+    /** The panel's own back, the veil, Escape: Pod OS back to its list, and the panel closes. */
+    function leaveProject() {
+      if (os && os.view.startsWith('project:')) os.back()
+      closeProject()
+    }
+    const veilP = new THREE.Vector3()
+    let veilClip = null
+    function stepProject() {
+      const v = os.view
+      const id = v.startsWith('project:') ? v.slice(8) : null
+      // (the view gone elsewhere, the whole still life or a close-up: the project closes with it)
+      if (projOpen && !podView()) return leaveProject()
+      if (id && id !== projOpen && podView()) openProject(id)
+      else if (!id && projOpen) closeProject()
+      if (!projOpen) return
+      // the veil's hole: round the player as the camera sees it now (none on a narrow screen: the
+      // sheet covers it)
+      let clip = ''
+      if (!narrowUI()) {
+        const w = canvas.clientWidth
+        const h = canvas.clientHeight
+        const PH = LAYOUT.PLAYER.half
+        let x0 = Infinity
+        let y0 = Infinity
+        let x1 = -Infinity
+        let y1 = -Infinity
+        camera.updateMatrixWorld()
+        // (its face's four corners: from nearly straight above, its outline)
+        for (let i = 0; i < 4; i++) {
+          veilP.set(i & 1 ? PH[0] : -PH[0], 2 * PH[1], i & 2 ? PH[2] : -PH[2]).applyMatrix4(player.group.matrixWorld).project(camera)
+          const sx = ((veilP.x + 1) / 2) * w
+          const sy = ((1 - veilP.y) / 2) * h
+          x0 = Math.min(x0, sx)
+          x1 = Math.max(x1, sx)
+          y0 = Math.min(y0, sy)
+          y1 = Math.max(y1, sy)
+        }
+        const r = (x1 - x0) * 0.13
+        const f = (n) => n.toFixed(1)
+        clip = `path(evenodd, "M0 0H${w}V${h}H0Z M${f(x0 + r)} ${f(y0)}H${f(x1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1)} ${f(y0 + r)}V${f(y1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1 - r)} ${f(y1)}H${f(x0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0)} ${f(y1 - r)}V${f(y0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0 + r)} ${f(y0)}Z")`
+      }
+      if (clip !== veilClip) veilEl.style.clipPath = veilClip = clip
+    }
+    /** (debug) Why Pod OS's page is, or is not, laid over the glass now. */
+    api.osWhy = () => {
+      camera.updateMatrixWorld()
+      osCam.copy(camera.position).applyMatrix4(playerInv)
+      return { pod: podView(), moving: focus.moving, level: os && os.level, glare, held: !!grab.held, visible, steep: osCam.y - GY > 0.35 * Math.hypot(osCam.x, osCam.y - GY, osCam.z - (GZ0 + GZ1) / 2), covered: glassCovered() }
+    }
     function stepOS(dt) {
       if (!os) return
       osIdle += dt
+      if (podSlide && !focus.moving) podSlide = false
+      stepProject()
       if (os.power === 'asleep') {
         if (!osOff) os.wake()
       }
@@ -1776,7 +1942,7 @@ export function createScene(container, options = {}) {
       // (up close on a lit screen, the glass's reflections fade as the glide closes in, as a screen's
       // coating takes them: the page laid over it then shows exactly what it shows; across the desk
       // the glass reflects the room)
-      const gw = podView() && !focus.moving && os.power !== 'asleep' ? 0 : 1
+      const gw = podView() && (!focus.moving || podSlide) && os.power !== 'asleep' ? 0 : 1
       if (glare !== gw) {
         const g2 = glare + (gw - glare) * (1 - Math.exp(-dt * (reduceMotion ? 30 : 5)))
         glare = Math.abs(gw - g2) < 0.004 ? gw : g2
@@ -1786,7 +1952,7 @@ export function createScene(container, options = {}) {
       }
       // up close: the page, once the glide is over and the screen fully lit (the texture shows what
       // the page shows), while the camera looks onto the glass and nothing covers it or is carried
-      let want = podView() && !focus.moving && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom
+      let want = podView() && (!focus.moving || podSlide) && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom
       if (want) {
         camera.updateMatrixWorld()
         osCam.copy(camera.position).applyMatrix4(playerInv)
@@ -1858,14 +2024,6 @@ export function createScene(container, options = {}) {
       else focus.glide(HOME.pos, HOME.target, 900)
       orbited = false
     }
-    for (const b of root.querySelectorAll('[data-colorway]'))
-      listen(b, 'click', () => {
-        active()
-        earbuds.setColorway(b.dataset.colorway)
-        for (const q of root.querySelectorAll('[data-colorway]')) q.setAttribute('aria-pressed', String(q === b))
-        frameCache.valid = false
-        wake()
-      })
     for (const b of root.querySelectorAll('[data-act]'))
       listen(b, 'click', () => {
         active()
@@ -1876,6 +2034,7 @@ export function createScene(container, options = {}) {
           if (!podView()) focus.back()
           else if (osUp) os.focusFirst()
         } else if (b.dataset.act === 'all') focus.focusOn('all')
+        else if (b.dataset.act === 'proj-close') leaveProject()
         else if (b.dataset.act === 'sound') {
           const on = b.getAttribute('aria-pressed') !== 'true'
           b.setAttribute('aria-pressed', String(on))

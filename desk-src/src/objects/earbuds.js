@@ -7,7 +7,7 @@
 //             import { earbudsMeshJobs } from './earbudsGeom.js'      (no three.js in there)
 //             for (const j of earbudsMeshJobs()) out[j.name] = j.run(meshSDF)   // { bud, remote }
 //             (optional: earbudsTextures() from earbudsTex.js, posted with earbudsTextureTransfer)
-//   (page)    const eb = createEarbuds({ renderer, meshes: out, colorway: 'graphite' })
+//   (page)    const eb = createEarbuds({ renderer, meshes: out, colorway: 'black' })
 //             scene.add(eb.group)
 //             eb.applyState(state)   // whenever the physics posts a render state (no allocation)
 //
@@ -40,9 +40,9 @@ const ANISO = 8 // the braid's and the letters' anisotropic filtering
 const BRAID_TILE = (2 * Math.PI * G.CABLE.radius) / 2 // two tiles round the cable
 
 export const COLORWAYS = {
-  graphite: { name: 'Graphite', body: '#34363a', bodyRough: 0.35, tip: '#6e7176', accent: '#5f6268', braid: '#1d1e20', rubber: '#26272a' },
-  sage: { name: 'Sage', body: '#8b9984', bodyRough: 0.36, tip: '#b5c2ae', accent: '#c9ad7e', braid: '#cbbfa8', rubber: '#76826f' },
-  bone: { name: 'Bone', body: '#e2dbcd', bodyRough: 0.42, tip: '#d3c3a6', accent: '#c4c6c8', braid: '#b5b6b8', rubber: '#cfc7b8' },
+  // (black only: a glossy near-black body, the cable and rubber a shade apart, the tips and the
+  // trim dark grey so the shapes still read on a light ground)
+  black: { name: 'Black', body: '#1c1d20', bodyRough: 0.3, tip: '#3a3c40', accent: '#55585d', braid: '#18191b', rubber: '#202124' },
 }
 
 /**
@@ -50,7 +50,7 @@ export const COLORWAYS = {
  *   renderer      (optional) for the textures' anisotropy limit
  *   meshes        { bud, remote }: the mesher's outputs for earbudsMeshJobs() ({ positions, normals,
  *                 ao, indices }; the arrays are used as they are, not copied)
- *   colorway      'graphite' | 'sage' | 'bone'
+ *   colorway      'black' (the only one)
  *   envIntensity  the environment's intensity on these materials, in place of scene.environment-
  *                 Intensity (which three.js otherwise gives every material); undefined: the
  *                 scene's, as in the original (whose scene's was 1). Later: setEnvIntensity(k).
@@ -69,7 +69,7 @@ export const COLORWAYS = {
  * Colourways and the environment's intensity change colours and uniforms only: nothing recompiles.
  */
 /** The earbuds, built in steps (core/steps.js): it yields between its heavier parts. */
-function* earbudsSteps({ renderer = null, meshes, colorway = 'graphite', envIntensity, layout = G.earbudsStateLayout(), textures = null } = {}) {
+function* earbudsSteps({ renderer = null, meshes, colorway = 'black', envIntensity, layout = G.earbudsStateLayout(), textures = null } = {}) {
   if (!meshes || !meshes.bud || !meshes.remote) throw new Error('createEarbuds: meshes { bud, remote } (earbudsMeshJobs) are required')
   layout = G.earbudsStateLayout(layout)
   const disposables = []
@@ -259,7 +259,7 @@ function* earbudsSteps({ renderer = null, meshes, colorway = 'graphite', envInte
 
   const mats = {}
   {
-    const C = COLORWAYS.graphite
+    const C = COLORWAYS.black
     const B = G.BUD
     // the letter on the stem's inner face, upright for someone looking at it with the stem down
     const sa = 10.4
@@ -390,7 +390,7 @@ function* earbudsSteps({ renderer = null, meshes, colorway = 'graphite', envInte
     mixColorways(name, name, 1)
     return true
   }
-  setColorway(COLORWAYS[colorway] ? colorway : 'graphite')
+  setColorway(COLORWAYS[colorway] ? colorway : 'black')
 
   yield
 

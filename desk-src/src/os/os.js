@@ -66,13 +66,14 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
     `<button class="pos-card" data-act="project" data-id="${esc(p.id)}"><span class="pos-row"><span class="pos-strong">${esc(p.name)}</span><span class="sm mute num">${esc(p.year)}</span></span><span class="sm mute" style="display:block;margin-top:2px">${esc(p.oneLiner)}</span><span class="pos-tags">${p.stack.map(tag).join('')}</span></button>`
   const link = (url, text) => `<a class="pos-btn" href="${esc(url)}" target="_blank" rel="noopener">${icon('out', 16, 'ic')}<span>${esc(text)}</span></a>`
   const project = (p) => {
-    const shots = (p.screenshots.length ? p.screenshots : [0, 1, 2]).map((s, i) => `<span class="pos-shot" data-shot="${i}">${typeof s === 'string' ? `<img src="${esc(s)}" alt="${esc(p.name)}, screenshot ${i + 1}" decoding="async">` : ''}</span>`).join('')
+    // (its pictures, if it has any: none, no gallery)
+    const shots = p.screenshots.map((s, i) => `<span class="pos-shot" data-shot="${i}"><img src="${esc(s)}" alt="${esc(p.name)}, screenshot ${i + 1}" decoding="async"></span>`).join('')
     const links = [p.github && link(p.github, 'GitHub'), p.live && link(p.live, 'Live demo')].filter(Boolean).join('')
     return page(
       `project:${p.id}`,
       p.name,
-      `<div class="pos-shots" role="list">${shots}</div>
-      <div class="pos-sec" style="margin-top:14px"><h2 class="pos-h">What it is</h2><p>${esc(p.whatItIs)}</p></div>
+      `${shots ? `<div class="pos-shots" role="list">${shots}</div>` : ''}
+      <div class="pos-sec" style="margin-top:${shots ? 14 : 4}px"><h2 class="pos-h">What it is</h2><p>${esc(p.whatItIs)}</p></div>
       <div class="pos-sec"><h2 class="pos-h">What I built</h2><p>${esc(p.whatIBuilt)}</p></div>
       <div class="pos-sec"><h2 class="pos-h">Stack</h2><div class="pos-tags">${p.stack.map(tag).join('')}</div></div>
       <div class="pos-sec"><h2 class="pos-h">Challenges</h2><ul>${p.challenges.map((c) => `<li class="pos-li"><i class="pos-li-b"></i>${esc(c)}</li>`).join('')}</ul></div>
@@ -90,10 +91,10 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
     ${page(
       'about',
       'About & contact',
-      `<div class="pos-me"><div class="pos-avatar">${avatar}</div><div><p class="pos-strong">${esc(C.name)}</p><p class="sm mute">${esc(C.role)}</p><p class="sm mute">${esc(C.basedIn)}</p></div></div>
+      `<div class="pos-me"><div class="pos-avatar">${avatar}</div><div><p class="pos-strong">${esc(C.name)}</p><p class="sm mute">${esc(C.role)}</p>${C.basedIn ? `<p class="sm mute">${esc(C.basedIn)}</p>` : ''}</div></div>
       <div class="pos-sec" style="margin-top:14px"><p>${esc(C.bio)}</p></div>
-      <div class="pos-sec"><h2 class="pos-h">Contact</h2><div class="pos-mail-row"><span class="pos-mail">${esc(C.email)}</span><button class="pos-btn" data-act="copy" aria-label="Copy email address">${icon('copy', 16, 'ic')}<span class="pos-copy-l">Copy</span></button></div><p class="sm pos-accent pos-copied" aria-live="polite"></p></div>
-      <div class="pos-sec"><div class="pos-btns">${link(C.links.github, 'GitHub')}${link(C.links.linkedin, 'LinkedIn')}${link(C.links.x, 'X')}</div></div>`,
+      <div class="pos-sec"><h2 class="pos-h">Contact</h2>${C.email ? `<div class="pos-mail-row"><span class="pos-mail">${esc(C.email)}</span><button class="pos-btn" data-act="copy" aria-label="Copy email address">${icon('copy', 16, 'ic')}<span class="pos-copy-l">Copy</span></button></div><p class="sm pos-accent pos-copied" aria-live="polite"></p>` : ''}
+      <div class="pos-btns"${C.email ? ' style="margin-top:10px"' : ''}>${[C.links.github && link(C.links.github, 'GitHub'), C.links.linkedin && link(C.links.linkedin, 'LinkedIn'), C.links.x && link(C.links.x, 'X')].filter(Boolean).join('')}</div></div>`,
     )}
     <i class="pos-cam" aria-hidden="true"><i></i></i>
     <div class="pos-sleep" data-paint="skip"></div>`
@@ -101,35 +102,6 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
   const $ = (s) => el.querySelector(s)
   const $$ = (s) => el.querySelectorAll(s)
   const views = new Map([...$$('.pos-view')].map((v) => [v.dataset.view, v]))
-  // placeholder screenshots: quiet tonal panels (until real ones are set in portfolio.ts)
-  for (const span of $$('.pos-shot')) {
-    if (span.firstChild) continue
-    const cv = document.createElement('canvas')
-    cv.width = 472
-    cv.height = 296
-    cv.setAttribute('role', 'img')
-    span.appendChild(cv)
-  }
-  function drawPlaceholders() {
-    for (const cv of $$('.pos-shot canvas')) {
-      const c = cv.getContext('2d')
-      const T = THEMES[st.theme]
-      const i = +cv.parentNode.dataset.shot
-      c.fillStyle = T.tile
-      c.fillRect(0, 0, cv.width, cv.height)
-      c.strokeStyle = T.line
-      c.lineWidth = 3
-      for (let k = 0; k < 3; k++) {
-        c.beginPath()
-        c.roundRect(36 + k * 6, 40 + k * 70, 240 - k * 40 + i * 30, 44, 10)
-        c.stroke()
-      }
-      c.fillStyle = T.muted
-      c.font = '500 22px Inter, sans-serif'
-      c.fillText(`screenshot ${i + 1}`, 36, 262)
-      cv.setAttribute('aria-label', `placeholder screenshot ${i + 1}`)
-    }
-  }
 
   // ---- state to the screen
   let isDirty = true
@@ -484,7 +456,6 @@ export function createPodOS({ content: C, audio, canvas: into = null, onActivity
   }
 
   applyLook()
-  drawPlaceholders()
   syncClock()
   render()
 

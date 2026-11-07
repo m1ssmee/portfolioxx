@@ -14,7 +14,11 @@ export const GRAB_LAYER = 5
 /** The held object's aim follows the pointer with this time constant (s). */
 export const POINTER_TAU = 0.12
 
-export function createGrab({ canvas, camera, controls, listen, onActive }) {
+/**
+ * tapFirst(hit): called before an object's own tap; true if it took the tap instead (the scene:
+ * from afar, a tap on an object first brings the camera to it).
+ */
+export function createGrab({ canvas, camera, controls, listen, onActive, tapFirst = () => false }) {
   const items = []
   const raycaster = new THREE.Raycaster()
   raycaster.layers.set(GRAB_LAYER)
@@ -157,7 +161,7 @@ export function createGrab({ canvas, camera, controls, listen, onActive }) {
       const p = press
       press = null
       // quick and still: a tap (timed by the events themselves, not by when they are handled)
-      if (e.type === 'pointerup' && e.timeStamp - p.stamp < tapMs(p)) p.hit.item.onTap(p.hit)
+      if (e.type === 'pointerup' && e.timeStamp - p.stamp < tapMs(p) && !tapFirst(p.hit)) p.hit.item.onTap(p.hit)
       return
     }
     if (held && heldFrom && e.pointerId === heldFrom.id && e.type === 'pointerup' && !heldFrom.moved && e.timeStamp - heldFrom.stamp < tapMs(heldFrom)) {
@@ -168,7 +172,7 @@ export function createGrab({ canvas, camera, controls, listen, onActive }) {
       controls.enabled = true
       canvas.style.cursor = ''
       h.cancel()
-      h.onTap(p.hit)
+      if (!tapFirst(p.hit)) h.onTap(p.hit)
       return
     }
     // let go: a mouse or pen by its own button; a touch hold once no finger is left on the canvas

@@ -1,7 +1,7 @@
 import { defineConfig, transformWithOxc } from 'vite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { hiddenHtml, plainHtml } from './src/content/pages.js'
+import { hiddenHtml } from './src/content/pages.js'
 
 /** GLSL, minified: comments and insignificant whitespace go; preprocessor lines keep their own lines. */
 function minifyGlsl(src) {
@@ -80,24 +80,13 @@ async function loadPortfolio() {
 
 /**
  * The portfolio as plain HTML (src/content/pages.js), from the same portfolio.ts Pod OS shows: its
- * hidden semantic copy in index.html (for search engines and screen readers) and the plain view,
- * plain.html, a simple page with the same content.
+ * hidden semantic copy in index.html, for search engines and screen readers.
  */
 function contentPages() {
   return {
     name: 'content-pages',
     async transformIndexHtml(html) {
       return html.replace('<!--portfolio-->', hiddenHtml(await loadPortfolio()))
-    },
-    async generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'plain.html', source: plainHtml(await loadPortfolio()) })
-    },
-    configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        if (!req.url || !/\/plain\.html(\?|$)/.test(req.url)) return next()
-        res.setHeader('Content-Type', 'text/html; charset=utf-8')
-        res.end(plainHtml(await loadPortfolio()))
-      })
     },
   }
 }
