@@ -1,4 +1,7 @@
-import { defineConfig } from 'vite'
+import { defineConfig, transformWithOxc } from 'vite'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { hiddenHtml, plainHtml } from './src/content/pages.js'
 
 /** GLSL, minified: comments and insignificant whitespace go; preprocessor lines keep their own lines. */
 function minifyGlsl(src) {
@@ -66,9 +69,42 @@ function assetManifest() {
   }
 }
 
+/** portfolio.ts, read here at build time (its types stripped). */
+async function loadPortfolio() {
+  const file = fileURLToPath(new URL('./src/content/portfolio.ts', import.meta.url))
+  const { code } = await transformWithOxc(readFileSync(file, 'utf8'), file, { lang: 'ts' })
+  // (a fresh module each time: the file may have changed since)
+  const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}#${Date.now()}`)
+  return mod.portfolio
+}
+
+/**
+ * The portfolio as plain HTML (src/content/pages.js), from the same portfolio.ts Pod OS shows: its
+ * hidden semantic copy in index.html (for search engines and screen readers) and the plain view,
+ * plain.html, a simple page with the same content.
+ */
+function contentPages() {
+  return {
+    name: 'content-pages',
+    async transformIndexHtml(html) {
+      return html.replace('<!--portfolio-->', hiddenHtml(await loadPortfolio()))
+    },
+    async generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'plain.html', source: plainHtml(await loadPortfolio()) })
+    },
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url || !/\/plain\.html(\?|$)/.test(req.url)) return next()
+        res.setHeader('Content-Type', 'text/html; charset=utf-8')
+        res.end(plainHtml(await loadPortfolio()))
+      })
+    },
+  }
+}
+
 export default defineConfig({
   base: './',
-  plugins: [glsl(), assetManifest()],
+  plugins: [glsl(), contentPages(), assetManifest()],
   worker: { format: 'es' },
   build: {
     target: ['es2020', 'safari15'],

@@ -34,10 +34,17 @@
       .ld-fly{position:fixed;z-index:11;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#ff7a2e;box-shadow:0 0 10px 3px rgba(255,110,40,.5);pointer-events:none;transition:transform 1.3s cubic-bezier(.5,0,.2,1),opacity 1.3s ease .4s}
       .ld-fallback{position:fixed;inset:0;background:#060505 center/cover no-repeat}
       @media (prefers-reduced-motion:reduce){.ld::before,.ld-ember i{animation:none}.ld-line{transform:none}}
+      /* the portfolio as text, out of sight (search engines, screen readers), and the quiet way to it */
+      .pf-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);border:0}
+      .pf-plain{position:fixed;z-index:5;right:max(14px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));padding:6px 8px;border-radius:8px;font:500 11px/1 -apple-system,BlinkMacSystemFont,Inter,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:.04em;color:rgba(230,224,214,.6);text-decoration:none;transition:color .3s}
+      .pf-plain:hover,.pf-plain:focus-visible{color:rgba(230,224,214,.92)}
+      .pf-plain:focus-visible{outline:1.5px solid #e8a868;outline-offset:2px}
     </style>
   </head>
   <body>
     <div id="desk"></div>
+    <!--portfolio-->
+    <a class="pf-plain" href="./plain.html">plain view</a>
     <div class="ld" id="ld">
       <div class="ld-c">
         <div class="ld-ember" aria-hidden="true"><i></i></div>

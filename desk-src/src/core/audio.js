@@ -124,6 +124,22 @@ export function createAudio() {
       music?.prev()
       changed()
     },
+    /** Pod OS's soft tick: a short, quiet, rounded click (only with the sound on). */
+    tick() {
+      if (!ready()) return
+      const o = ctx.createOscillator()
+      o.type = 'sine'
+      const t = ctx.currentTime
+      o.frequency.setValueAtTime(1350, t)
+      o.frequency.exponentialRampToValueAtTime(900, t + 0.03)
+      const g = ctx.createGain()
+      g.gain.setValueAtTime(0, t)
+      g.gain.linearRampToValueAtTime(0.045, t + 0.002)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.035)
+      o.connect(g).connect(master)
+      o.start(t)
+      o.stop(t + 0.04)
+    },
     /** The cigarette's paper: one tiny crackle (k: loudness 0..1). */
     burst(k) {
       if (!ready()) return

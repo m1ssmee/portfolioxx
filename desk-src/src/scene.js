@@ -21,6 +21,7 @@ import { TRAY, notchSeat, ashtraySDF } from './objects/ashtray.js'
 import { CIG, cigaretteMaterials, bodyGeometry, emberGeometry, ashGeometry, strandGeometry, buttGeometry, flakeGeometry, matchStick } from './objects/cigarette.js'
 import { createSmoke, SmokeHistory } from './objects/smoke.js'
 import { noise3 } from './core/noise.js'
+import { TEX_W, TEX_H, GLASS } from './os/size.js'
 
 // highlights stay under the bloom threshold (only the ember blooms)
 if (!THREE.ShaderChunk.lights_fragment_end.includes('(only the ember blooms)'))
@@ -58,6 +59,8 @@ const CSS = `
 .cg-coarse{display:none}
 @media (hover:none) and (pointer:coarse){.cg-fine{display:none}.cg-coarse{display:inline}}
 .cg-hint.gone{opacity:0}
+.cg-os{position:absolute;left:max(16px,env(safe-area-inset-left));top:max(16px,env(safe-area-inset-top));z-index:2;padding:7px 13px;border-radius:14px;background:rgba(28,26,24,.85);border:1px solid rgba(255,255,255,.12);transform:translateY(-200%);opacity:0;transition:transform .2s,opacity .2s}
+.cg-os:focus-visible{transform:none;opacity:1;outline:2px solid #e8a868;outline-offset:2px}
 .cg-tools{position:absolute;right:max(16px,env(safe-area-inset-right));top:max(16px,env(safe-area-inset-top));display:flex;gap:9px}
 .cg-root button{font:inherit;cursor:pointer;color:inherit}
 .cg-round{width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;background:rgba(32,30,28,.45);border:1px solid rgba(255,255,255,.08);-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);box-shadow:0 4px 18px rgba(0,0,0,.35);transition:transform .15s,background .2s}
@@ -82,6 +85,7 @@ const CSS = `
 .cg-root{container:cg/inline-size}
 `
 const UI = `<div class="cg-ui">
+  <button class="cg-os" data-act="os">use the player's screen</button>
   <p class="cg-hint">drag to look around · <span class="cg-fine">double-click</span><span class="cg-coarse">double-tap</span> anything to look closer · pick up the cigarette, the lighter or the earbuds · hold 🔥<span class="cg-fine"> or Space</span> to light</p>
   <button class="cg-flame" data-flame aria-label="Hold to light the lighter" aria-pressed="false" aria-hidden="true" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.2 2.2c.9 3.6 5.6 6.2 5.6 11.6a5.8 5.8 0 0 1-11.6 0c0-3.2 1.8-4.9 3-6.7.3 2 1.2 3.3 2.4 3.8-.6-3.4.3-6.3.6-8.7z"/></svg></button>
   <div class="cg-swatches" role="group" aria-label="Earbuds colour">
@@ -333,12 +337,26 @@ export function createScene(container, options = {}) {
     // ---- the table: oiled walnut, lit only round the ashtray, falling off into black
     const tableMat = new THREE.MeshPhysicalMaterial({ map: tex.walnut, normalMap: tex.walnutN, roughnessMap: tex.walnutR, roughness: 1, clearcoat: 0.22, clearcoatRoughness: 0.32, normalScale: new THREE.Vector2(0.6, 0.6) })
     for (const t of [tex.walnut, tex.walnutN, tex.walnutR]) t.repeat.set(6, 6) // (a 400 mm tile)
+    // (Pod OS's screen lights the desk a little round the player: uGlow, its light now; uGlowM, the
+    // world into the glass's own frame, mm from its centre)
+    const glowU = { uGlow: { value: new THREE.Color(0, 0, 0) }, uGlowM: { value: new THREE.Matrix4() } }
     tableMat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, glowU)
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;')
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWp;\nuniform vec3 uGlow;\nuniform mat4 uGlowM;')
+        .replace(
+          '#include <opaque_fragment>',
+          /* glsl */ `{
+            vec3 gq = (uGlowM * vec4(vWp, 1.0)).xyz;
+            float gr = length(max(abs(gq.xz) - vec2(${((GLASS.w * 0.1) / 2).toFixed(2)}, ${((GLASS.h * 0.1) / 2).toFixed(2)}), 0.0));
+            outgoingLight += diffuseColor.rgb * uGlow * exp(-gr * 0.07) * smoothstep(1.0, 7.0, gr);
+          }
+          #include <opaque_fragment>`,
+        )
         .replace('#include <fog_fragment>', `gl_FragColor.rgb *= smoothstep(700.0, 240.0, length(vWp.xz - vec2(${DESK.centre.x.toFixed(1)}, ${DESK.centre.z.toFixed(1)})));\n#include <fog_fragment>`)
     }
+    tableMat.customProgramCacheKey = () => 'desk.table'
     const table = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2), tableMat)
     table.receiveShadow = true
     scene.add(table)
@@ -358,8 +376,68 @@ export function createScene(container, options = {}) {
 
     // ---- the music player (objects/player.js): centre left, face up, its jack towards the viewer;
     // the earbuds plugged into it, their cable settled across the desk (earbudsLive.js, tools/settle.mjs)
+    // ---- Pod OS (os/): the texture the player's glass shows, painted by the OS once it has booted
+    // (stage 'os'); up close, the OS's own page laid exactly over the glass instead (stepOS)
+    let os = null
+    let osUp = false // (the page is the screen now)
+    let osAlpha = 0 // (the page's opacity: it fades in over the texture, and out)
+    let osIdle = 0 // (s since anyone touched it)
+    let glare = 1 // (the glass's reflections: 1 across the desk, 0 up close on a lit screen)
+    const osCanvas = document.createElement('canvas')
+    osCanvas.width = TEX_W
+    osCanvas.height = TEX_H
+    const osTex = new THREE.CanvasTexture(osCanvas)
+    // (its bytes as they are: filtered, and mipmapped, in sRGB as the page's own text is drawn; the
+    // glass's shader decodes them)
+    osTex.colorSpace = THREE.NoColorSpace
+    osTex.flipY = false
+    osTex.anisotropy = aniso
     stage('player', 'start')
-    const player = await createPlayerAsync(THREE, { anisotropy: aniso, fontUrl: opts.fontUrl }, yieldNow)
+    const player = await createPlayerAsync(THREE, { anisotropy: aniso, fontUrl: opts.fontUrl, screenTexture: osTex, screenEmissive: 1 }, yieldNow)
+    disposables.push(osTex)
+    // (the OS's colours through the room's haze and the frame's own vignette and tone mapping,
+    // core/frame.js's composite: the glass undoes them for the light it gives, so the lit screen
+    // shows the page's own colours)
+    const vigRes = { value: new THREE.Vector2(1, 1) }
+    const glassMat = player.meshes.find((m) => m.name === 'player.screen').material
+    const GLARE = { clearcoat: glassMat.clearcoat, specularIntensity: glassMat.specularIntensity, envMapIntensity: glassMat.envMapIntensity }
+    {
+      glassMat.onBeforeCompile = (sh) => {
+        sh.uniforms.uVigRes = vigRes
+        sh.fragmentShader = sh.fragmentShader
+          .replace(
+            '#include <common>',
+            /* glsl */ `#include <common>
+            uniform vec2 uVigRes;
+            vec3 posUntone(vec3 w) {
+              w = clamp(w, 0.0, 0.98);
+              vec3 a = 1.0 - 0.983729 * w;
+              vec3 b = 0.0245786 - 0.432951 * w;
+              vec3 c = 0.000090537 + 0.238081 * w;
+              return 0.6 * (sqrt(b * b + 4.0 * a * c) - b) / (2.0 * a);
+            }`,
+          )
+          .replace(
+            '#include <emissivemap_fragment>',
+            /* glsl */ `#ifdef USE_EMISSIVEMAP
+            {
+              vec2 vq = (gl_FragCoord.xy / uVigRes - 0.5) * vec2(1.0, 0.8);
+              float vig = mix(0.62, 1.0, smoothstep(0.85, 0.2, length(vq)));
+              totalEmissiveRadiance *= posUntone(sRGBTransferEOTF(texture2D(emissiveMap, vEmissiveMapUv)).rgb) / vig;
+              // (and the room's haze, black, which the fog mixes in after)
+              #ifdef USE_FOG
+                #ifdef FOG_EXP2
+                  totalEmissiveRadiance /= max(exp(-fogDensity * fogDensity * vFogDepth * vFogDepth), 0.05);
+                #else
+                  totalEmissiveRadiance /= max(1.0 - smoothstep(fogNear, fogFar, vFogDepth), 0.05);
+                #endif
+              #endif
+            }
+            #endif`,
+          )
+      }
+      glassMat.customProgramCacheKey = () => 'player.screen.pos'
+    }
     step('player built')
     await yieldNow()
     player.group.position.copy(DESK.player)
@@ -375,6 +453,13 @@ export function createScene(container, options = {}) {
     playerScreen.layers.set(LAYER.REGION)
     // the player as the lighter and the cigarette see it: a box with rounded edges
     const playerInv = new THREE.Matrix4().copy(player.group.matrixWorld).invert()
+    // (the glass's own frame, for its glow on the desk: its centre, in the player's)
+    const GX0 = (GLASS.x0 - 331.5) * 0.1
+    const GZ0 = (GLASS.y0 - 594.5) * 0.1
+    const GX1 = GX0 + GLASS.w * 0.1
+    const GZ1 = GZ0 + GLASS.h * 0.1
+    const GY = 10.12 // (the glass's height, objects/player.js: HG)
+    glowU.uGlowM.value.makeTranslation(0, 0, (GZ0 + GZ1) / 2).premultiply(player.group.matrixWorld).invert()
     const playerRot = new THREE.Matrix4().extractRotation(player.group.matrixWorld)
     const PH = LAYOUT.PLAYER.half
     const pbox = (x, y, z) => {
@@ -1010,9 +1095,35 @@ export function createScene(container, options = {}) {
       ashtray: { center: (o) => o.set(4, 28, 2), radius: 56, el: THREE.MathUtils.degToRad(20), az: HERO_AZ },
       lighter: { center: (o) => o.setFromMatrixPosition(lighter.group.matrix), radius: 42, el: THREE.MathUtils.degToRad(24) },
       // (the player from above its keys' end, steep enough to read its screen)
-      player: { center: (o) => o.copy(DESK.player).setY(6), radius: 68, el: THREE.MathUtils.degToRad(52), az: Math.atan2(-FWD.x, -FWD.z) },
+      // (its depth of field on the glass's centre, and deep enough for the whole glass to be sharp: Pod
+      // OS's page, laid over it up close, is. On a phone the close-up is tighter and steeper, along the
+      // player's own length, so the screen is big enough to use: upright the whole player still fits,
+      // keys and all; on its side, the screen fills the height)
+      player: {
+        center: (o) => (phone() && camera.aspect >= 1 ? o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld) : o.copy(DESK.player).setY(6)),
+        dof: (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld),
+        deep: 2.4,
+        get radius() {
+          return phone() ? 32 : 68
+        },
+        get el() {
+          return THREE.MathUtils.degToRad(phone() ? 76 : 52)
+        },
+        get az() {
+          return phone() ? playerAz : Math.atan2(-FWD.x, -FWD.z)
+        },
+        get azPull() {
+          return phone() ? 1 : 0.6
+        },
+      },
       earbuds: { center: (o) => earbudsLive.focusCenter(o), radius: 52, el: THREE.MathUtils.degToRad(34) },
     }
+    const phone = () => Math.min(canvas.clientWidth, canvas.clientHeight) < 600
+    // (the player's own length on the desk: from its screen end to its keys)
+    const playerAz = (() => {
+      const v = new THREE.Vector3(0, 0, 1).transformDirection(player.group.matrixWorld)
+      return Math.atan2(v.x, v.z)
+    })()
     const focusMeshes = { ashtray: [trayMesh, ...cigs.flatMap((c) => [c.body, c.ash, c.ember])], lighter: lighter.meshes, player: [] }
     player.group.traverse((o) => o.isMesh && focusMeshes.player.push(o))
     focusMeshes.earbuds = earbudsLive.item.meshes
@@ -1025,6 +1136,11 @@ export function createScene(container, options = {}) {
       onChange: (name) => {
         backBtn.hidden = !name
         frameCache.valid = false
+        // (closer on the player: its screen wakes, on its lock screen)
+        if (name === 'player' && os) {
+          os.wake()
+          osIdle = 0
+        }
         wake()
       },
     })
@@ -1075,9 +1191,23 @@ export function createScene(container, options = {}) {
         focusAt(e.clientX, e.clientY)
       } else lastTap = { ...lastTap, t: e.timeStamp, x: e.clientX, y: e.clientY }
     }, { passive: true })
-    // (Escape: an object held goes home first, core/grab.js; with nothing held, the view goes back)
+    // (Escape: an object held goes home first, core/grab.js; with nothing held, the view goes back;
+    // up close on Pod OS, the OS goes back a level first, and from its home the view leaves)
     listen(window, 'keydown', (e) => {
-      if (e.key === 'Escape' && !grab.held && focus.focused) focus.back()
+      // (up close, the arrows reach Pod OS wherever the page's focus is)
+      if (osUp && (e.key || '').startsWith('Arrow') && !os.el.contains(e.target) && os.onKeyDown(e)) {
+        e.preventDefault()
+        osIdle = 0
+        return
+      }
+      if (e.key !== 'Escape' || grab.held || !focus.focused) return
+      if (osUp && os.back()) {
+        e.preventDefault()
+        e.stopPropagation()
+        osIdle = 0
+        return
+      }
+      focus.back()
     }, { capture: true })
     const backBtn = root.querySelector('[data-act="back"]')
 
@@ -1405,7 +1535,9 @@ export function createScene(container, options = {}) {
       const pressed = show && lighter.st.want
       if (pressed !== (flameBtn.getAttribute('aria-pressed') === 'true')) flameBtn.setAttribute('aria-pressed', String(pressed))
     }
-    // ---- the player's keys: a tap presses one (previous, play/pause, and the red one: next track)
+    // ---- the player's keys: a tap presses one. Across the desk (or with the screen asleep) they are
+    // the music's: previous, play/pause, and the red one, next track; up close on Pod OS they are its
+    // own: back, select (held half a second: play/pause), next item
     const keyRay = new THREE.Raycaster()
     keyRay.layers.enableAll()
     const keyHits = []
@@ -1413,59 +1545,217 @@ export function createScene(container, options = {}) {
     for (const k of player.keys) k.mesh.traverse((o) => o.isMesh && keyMeshes.push(o))
     let keyAnim = 0
     let tapDown = null
+    let holdTimer = 0
+    const rayAt = (cx, cy) => {
+      const r = canvas.getBoundingClientRect()
+      focusNdc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1)
+      keyRay.setFromCamera(focusNdc, camera)
+    }
+    function keyAt(cx, cy) {
+      rayAt(cx, cy)
+      keyHits.length = 0
+      keyRay.intersectObjects(keyMeshes, false, keyHits)
+      if (!keyHits.length) return null
+      const o = keyHits[0].object
+      return player.keys.find((k) => { let hit = false; k.mesh.traverse((q) => (hit = hit || q === o)); return hit }) || null
+    }
+    const endHold = () => {
+      if (holdTimer) clearTimeout(holdTimer)
+      holdTimer = 0
+    }
     listen(canvas, 'pointerdown', (e) => {
       tapDown = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId }
+      if (!osUp) return
+      const k = keyAt(e.clientX, e.clientY)
+      if (k && k.name === 'play') {
+        endHold()
+        holdTimer = setTimeout(() => {
+          holdTimer = 0
+          tapDown = null
+          pressKey(k, true)
+        }, 500)
+      }
+    }, { passive: true })
+    listen(canvas, 'pointermove', (e) => {
+      if (holdTimer && tapDown && Math.hypot(e.clientX - tapDown.x, e.clientY - tapDown.y) > 6) endHold()
     }, { passive: true })
     listen(canvas, 'pointerup', (e) => {
+      endHold()
       const d = tapDown
       tapDown = null
       if (!d || d.id !== e.pointerId || grab.held || e.timeStamp - d.t > 350 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return
-      const r = canvas.getBoundingClientRect()
-      focusNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
-      keyRay.setFromCamera(focusNdc, camera)
-      keyHits.length = 0
-      keyRay.intersectObjects(keyMeshes, false, keyHits)
-      if (!keyHits.length) return
-      let o = keyHits[0].object
-      const key = player.keys.find((k) => { let hit = false; k.mesh.traverse((q) => (hit = hit || q === o)); return hit })
-      if (!key) return
-      pressKey(key)
+      const key = keyAt(e.clientX, e.clientY)
+      if (key) return pressKey(key)
+      // (a tap on the screen from across the desk: closer, to use it)
+      if (focus.focused !== 'player' && os && focusableAt(e.clientX, e.clientY) === 'player') {
+        rayAt(e.clientX, e.clientY)
+        keyHits.length = 0
+        keyRay.intersectObject(playerScreen, false, keyHits)
+        if (keyHits.length) focus.focusOn('player')
+      }
     }, { passive: true })
-    function pressKey(key) {
+    listen(canvas, 'pointercancel', endHold, { passive: true })
+    function pressKey(key, held = false) {
+      if (!key) return
       key.press(true)
       setTimeout(() => key.press(false), 140)
       keyAnim = 0.5
-      if (key.name === 'play') audio.setPlaying(!audio.playing)
-      else if (key.name === 'prev') audio.prev()
-      else audio.next()
-      screenT = 0
+      osIdle = 0
+      if (osUp && !held) {
+        if (key.name === 'prev') {
+          if (!os.back()) focus.back()
+        } else os.key(key.name === 'play' ? 'select' : 'next')
+      } else {
+        if (key.name === 'play') audio.setPlaying(!audio.playing)
+        else if (key.name === 'prev') audio.prev()
+        else audio.next()
+        // (the screen wakes to show what plays)
+        if (os && os.power === 'asleep') os.wake()
+      }
       active()
       wake()
     }
-    // the screen: what the music is doing (a few times a second)
-    let screenT = 0
-    // (the track list, from the music's own chunk, so the screen names the first track even before
-    // the sound is on; the engine itself is made at the first unmute)
-    let trackList = null
-    import('./core/music.js').then((m) => {
-      trackList = m.tracks
-      screenT = 0
-    })
-    const screenBars = new Float32Array(16)
-    const screenState = { title: '', artist: '', playing: false, time: 0, duration: 0, bars: screenBars }
-    function stepScreen(dt) {
-      screenT -= dt
-      if (screenT > 0) return
-      screenT = 1 / 15
-      const m = audio.music
-      const t = m ? m.track : trackList ? trackList[0] : null
-      screenState.title = t ? t.title : ''
-      screenState.artist = !audio.plugged ? 'earbuds unplugged' : !audio.on ? 'sound off' : t ? t.artist : ''
-      screenState.playing = audio.audible
-      screenState.time = m ? m.time : 0
-      screenState.duration = t ? t.duration : 0
-      audio.bars(screenBars)
-      player.screen.setState(screenState)
+    // ---- Pod OS, each frame: asleep, waking, awake; the texture painted when it changed (and nothing
+    // is mid-transition); up close, its page laid over the glass, fading in over the texture, and out
+    const OS_SLEEP = 45 // (s untouched, away from the player and with no music: the screen sleeps)
+    const osPts = new Float64Array(8)
+    const osV = new THREE.Vector3()
+    const osCam = new THREE.Vector3()
+    const glassCorners = [new THREE.Vector3(GX0, GY, GZ0), new THREE.Vector3(GX1, GY, GZ0), new THREE.Vector3(GX1, GY, GZ1), new THREE.Vector3(GX0, GY, GZ1)]
+    const glowMean = new THREE.Color()
+    const glowCv = document.createElement('canvas')
+    glowCv.width = glowCv.height = 8
+    const glowCtx = glowCv.getContext('2d', { willReadFrequently: true })
+    let glowLevel = -1
+    const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+    // (the radiance the tone mapping turns into w: as the glass's shader has it)
+    const untone = (w) => {
+      w = Math.min(0.98, Math.max(0, w))
+      const a = 1 - 0.983729 * w
+      const b = 0.0245786 - 0.432951 * w
+      const c = 0.000090537 + 0.238081 * w
+      return (0.6 * (Math.sqrt(b * b + 4 * a * c) - b)) / (2 * a)
+    }
+    /** The screen's light now, its mean over the painted texture (for its glow on the desk). */
+    function measureGlow() {
+      glowCtx.drawImage(osCanvas, 0, 0, 8, 8)
+      const px = glowCtx.getImageData(0, 0, 8, 8).data
+      let r = 0
+      let g = 0
+      let b = 0
+      for (let i = 0; i < px.length; i += 4) {
+        r += lin(px[i] / 255)
+        g += lin(px[i + 1] / 255)
+        b += lin(px[i + 2] / 255)
+      }
+      // (a gentle curve: a dark page still glows, faintly; a light one more)
+      glowMean.setRGB(untone(r / 64) ** 0.6, untone(g / 64) ** 0.6, untone(b / 64) ** 0.6)
+      glowLevel = -1
+    }
+    // (does a point stand between the camera and the glass? In the player's frame: the camera, osCam)
+    const osP = new THREE.Vector3()
+    function overGlass(x, y, z, pad) {
+      osP.set(x, y, z).applyMatrix4(playerInv)
+      if (osP.y <= GY + 0.05 || osP.y >= osCam.y) return false
+      const t = (osCam.y - GY) / (osCam.y - osP.y)
+      const ix = osCam.x + (osP.x - osCam.x) * t
+      const iz = osCam.z + (osP.z - osCam.z) * t
+      const m = pad * t
+      return ix > GX0 - m && ix < GX1 + m && iz > GZ0 - m && iz < GZ1 + m
+    }
+    const glassBox = new THREE.Box3()
+    const boxPts = Array.from({ length: 8 }, () => new THREE.Vector3())
+    function boxOver(box, matrix) {
+      for (let i = 0; i < 8; i++) {
+        const q = boxPts[i].set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).applyMatrix4(matrix)
+        if (overGlass(q.x, q.y, q.z, 1)) return true
+      }
+      return false
+    }
+    // (the lighter's and a cigarette's own boxes, in their frames)
+    const lighterBounds = new THREE.Box3()
+    {
+      const inv = new THREE.Matrix4().copy(lighter.group.matrixWorld).invert()
+      const m = new THREE.Matrix4()
+      lighter.group.updateMatrixWorld(true)
+      lighter.group.traverse((o) => {
+        if (!o.isMesh || !o.geometry) return
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox()
+        lighterBounds.union(glassBox.copy(o.geometry.boundingBox).applyMatrix4(m.multiplyMatrices(inv, o.matrixWorld)))
+      })
+    }
+    const cigBounds = new THREE.Box3(new THREE.Vector3(-1, -CIG.radius - 1, -CIG.radius - 1), new THREE.Vector3(CIG.length + 1, CIG.radius + 1, CIG.radius + 1))
+    /** Something between the camera and the glass (the cable, a bud, the lighter, a cigarette): the texture shows it, the page would hide it. */
+    function glassCovered() {
+      const x = earbudsLive.rig.x
+      for (let i = 0; i < x.length; i += 3) if (overGlass(x[i], x[i + 1], x[i + 2], 4)) return true
+      if (boxOver(lighterBounds, lighter.group.matrixWorld)) return true
+      for (const q of cigs) if (q.group.visible && boxOver(cigBounds, q.group.matrixWorld)) return true
+      return false
+    }
+    function stepOS(dt) {
+      if (!os) return
+      osIdle += dt
+      if (os.power === 'asleep') {
+        if (audio.audible || focus.focused === 'player') os.wake()
+      } else if (focus.focused !== 'player' && !audio.audible && osIdle > OS_SLEEP) os.sleep()
+      os.update(dt)
+      player.screen.setLevel(os.level)
+      // (up close on a lit screen, the glass's reflections fade as the glide closes in, as a screen's
+      // coating takes them: the page laid over it then shows exactly what it shows; across the desk
+      // the glass reflects the room)
+      const gw = focus.focused === 'player' && os.power !== 'asleep' ? 0 : 1
+      if (glare !== gw) {
+        const g2 = glare + (gw - glare) * (1 - Math.exp(-dt * (reduceMotion ? 30 : 5)))
+        glare = Math.abs(gw - g2) < 0.004 ? gw : g2
+        glassMat.clearcoat = Math.max(1e-4, GLARE.clearcoat * glare) // (never 0: that would be another program)
+        glassMat.specularIntensity = GLARE.specularIntensity * glare
+        glassMat.envMapIntensity = GLARE.envMapIntensity * glare
+      }
+      // up close: the page, once the glide is over and the screen fully lit (the texture shows what
+      // the page shows), while the camera looks onto the glass and nothing covers it or is carried
+      let want = focus.focused === 'player' && !focus.moving && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom
+      if (want) {
+        camera.updateMatrixWorld()
+        osCam.copy(camera.position).applyMatrix4(playerInv)
+        want = osCam.y - GY > 0.35 * Math.hypot(osCam.x, osCam.y - GY, osCam.z - (GZ0 + GZ1) / 2) && !glassCovered()
+      }
+      if (want !== osUp) {
+        osUp = want
+        os.setMode(want ? 'dom' : 'texture')
+        if (!want) {
+          osTex.needsUpdate = true
+          measureGlow()
+        }
+      }
+      const a = want ? Math.min(1, osAlpha + dt / 0.12) : Math.max(0, osAlpha - dt / 0.12)
+      if (a !== osAlpha) os.fade((osAlpha = a))
+      if (osAlpha > 0) placeOS()
+      if (!osUp && os.dirty) {
+        os.paint()
+        osTex.needsUpdate = true
+        measureGlow()
+      }
+      // its glow on the desk (the cache drawn again when it changes: in tenths, so a wake or a sleep
+      // re-draws it ten times at most, not every frame of its fade)
+      const lv = Math.round(os.level * 10) / 10
+      if (lv !== glowLevel) {
+        glowLevel = lv
+        glowU.uGlow.value.copy(glowMean).multiplyScalar(0.3 * lv)
+        frameCache.valid = false
+      }
+    }
+    /** The page over the glass: its four corners, projected (CSS px), and the homography onto them. */
+    function placeOS() {
+      camera.updateMatrixWorld()
+      const w = canvas.clientWidth
+      const h = canvas.clientHeight
+      for (let i = 0; i < 4; i++) {
+        osV.copy(glassCorners[i]).applyMatrix4(player.group.matrixWorld).project(camera)
+        osPts[2 * i] = ((osV.x + 1) / 2) * w
+        osPts[2 * i + 1] = ((1 - osV.y) / 2) * h
+      }
+      os.placeOver(osPts)
     }
     const emberPrev = new THREE.Vector3()
     // ---- the physics scheduler (core/physics.js): one fixed step for everything that simulates
@@ -1509,6 +1799,7 @@ export function createScene(container, options = {}) {
         active()
         if (b.dataset.act === 'reset') resetView()
         else if (b.dataset.act === 'back') focus.back()
+        else if (b.dataset.act === 'os') focus.focusOn('player')
         else if (b.dataset.act === 'sound') {
           const on = b.getAttribute('aria-pressed') !== 'true'
           b.setAttribute('aria-pressed', String(on))
@@ -1541,7 +1832,7 @@ export function createScene(container, options = {}) {
       for (let i = 0; i < 16; i++) if (Math.abs(a.elements[i] - b.elements[i]) > 1e-5 * Math.max(1, Math.abs(a.elements[i]))) return false
       return true
     }
-    const dbgFlags = { emberLight: 1, flameLight: 1, cache: 1, truth: 0, freeze: 0 }
+    const dbgFlags = { emberLight: 1, flameLight: 1, cache: 1, truth: 0, freeze: 0, osDom: 1 }
     api.pressKey = (name) => pressKey(player.keys.find((k) => k.name === name))
     let dbg = null
     if (opts.debug)
@@ -1648,7 +1939,8 @@ export function createScene(container, options = {}) {
       const lighterBusy = lighter.update(dt, simTime)
       if (lighterBusy) lighterBox.set(lighter.group.matrix)
       const cableBusy = earbudsLive.update()
-      stepScreen(dt)
+      stepOS(dt)
+      vigRes.value.set(frameCache.live.width, frameCache.live.height)
       player.update(dt)
       keyAnim = Math.max(0, keyAnim - dt)
       lighterFrame()
@@ -1745,10 +2037,11 @@ export function createScene(container, options = {}) {
       if (burnStep) shadowClock = 0
       // (the depth of field: on what the view is about; deep over the whole desk, the still life's
       // own aperture in a close-up)
-      if (focus.focused) focusTargets[focus.focused].center(focusPt)
+      const ft = focus.focused && focusTargets[focus.focused]
+      if (ft) (ft.dof || ft.center)(focusPt)
       else focusPt.copy(controls.target)
       F.focus.s = camera.position.distanceTo(focusPt)
-      F.focus.home = F.focus.s * (focus.focused ? 1 : 2.2)
+      F.focus.home = F.focus.s * (ft ? ft.deep || 1 : 2.2)
       dbg?.begin()
       if (moving) {
         dofK = 0
@@ -1874,6 +2167,35 @@ export function createScene(container, options = {}) {
     stage('music', 'start')
     if (opts.hold) await audio.prepare()
     stage('music', 'done')
+    // Pod OS: its code and content, its images; booted, laid out, painted once (the desk goes on
+    // without it if it cannot)
+    stage('os', 'start')
+    try {
+      const [{ createPodOS }, { portfolio }] = await Promise.all([import('./os/os.js'), import('./content/portfolio.ts')])
+      stage('os', 0.4)
+      // (its face: Inter, which the player has loaded)
+      await player.ready
+      if (destroyed) return
+      os = createPodOS({
+        content: portfolio,
+        audio,
+        canvas: osCanvas,
+        onActivity: () => {
+          osIdle = 0
+          active()
+        },
+      })
+      stageEl.after(os.el)
+      cleanups.push(() => os.destroy())
+      stage('os', 0.7)
+      await os.prepare()
+      osTex.needsUpdate = true
+      measureGlow()
+    } catch (e) {
+      console.error('pod os:', e)
+      os = null
+    }
+    stage('os', 'done')
     // the mood: frames drawn out of sight until the cache is baked and SMAA compiled, still from
     // the cache, so every program and target is made before anyone sees a frame
     stage('mood', 'start')
@@ -1921,6 +2243,18 @@ export function createScene(container, options = {}) {
         get cur() {
           return cigs[cur]
         },
+        get os() {
+          return os
+        },
+        get osUp() {
+          return osUp
+        },
+        set osIdle(v) {
+          osIdle = v
+        },
+        osTex,
+        glowU,
+        placeOS,
         setTime: (s) => (simTime = s),
         burnTo: (b) => {
           cigs[cur].b = b

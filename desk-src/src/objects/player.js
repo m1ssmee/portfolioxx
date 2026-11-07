@@ -9,25 +9,22 @@
 //           the mic hole, the keypad's well, the side button and the jack's bore are all in the
 //           same mesh and material: one draw call
 //   screen  dark glass with a clearcoat, a hair below the face, the punch-hole camera under it; the
-//           display is its emissive map (a canvas: status, title, artist, times) plus a few lines of
-//           shader for what moves (the spectrum, the progress bar), so the canvas is redrawn only
-//           when its text changes (once a second while playing)
+//           display is its emissive map, a texture drawn elsewhere (the desk's: Pod OS, os/)
 //   keys    three meshes (they sink when pressed) in the same plastic, their symbols printed (the
 //           atlas); the rec key's dome is glossy red (its own mesh, the key's child)
 //   jack    a 3.5 mm bore in the bottom edge under the AUX label, a nickel ring at its mouth
 //
 // createPlayer(THREE, opts) -> { group, meshes, keys, port, screen, update, dispose, ready, bounds }
 // opts (all optional):
-//   fontUrl          a URL of Inter (or any sans) to load with FontFace for the print and the display
-//                    (relative to the page); without it the family below is used if the page has it,
-//                    else a system sans. `ready` resolves once the textures are redrawn in it
+//   fontUrl          a URL of Inter (or any sans) to load with FontFace for the print (relative to the
+//                    page); without it the family below is used if the page has it, else a system
+//                    sans. `ready` resolves once the print is redrawn in it
 //   fontFamily       'Inter'
 //   color            the plastic's colour (0xf2f0eb, a slightly warm white)
-//   screenBrightness the display's emissive intensity while playing (1.15); paused it dims to
-//   pausedLevel      this fraction of it (0.3)
-//   bars             spectrum bars drawn (24); setState's bars (any length) are resampled to it
-//   screenWidth      the display canvas's width in px (800; 13.5 px per mm)
-//   anisotropy       for the print and display textures (8)
+//   screenTexture    the display: a texture over the glass (uv 0..1 across its 59.1 x 62.9 mm, top
+//                    left at the screen end), or none for a dark glass; screen.setLevel(0..1) lights it
+//   screenEmissive   its emissive intensity at full brightness (1)
+//   anisotropy       for the print (8)
 //   contactShadow    a soft contact shadow on the desk under it (true; one transparent quad)
 //   castShadow / receiveShadow   for the meshes (true / true)
 
@@ -90,7 +87,7 @@ const RED_A = 2.1 // the rec key's red dome (r 21)
 const RED_H = 0.55
 const BTN = { z: Z(350.5), half: 7.5, h: 1.3, r: 1.0, out: 0.75, edge: 0.35 }
 
-// ---- the display (in SVG units within the glass, 591 x 629)
+// ---- the glass, which the display spans (its uv): 591 x 629 SVG units, from (36, 36)
 const SCR_W = 591
 const SCR_H = 629
 
@@ -289,10 +286,8 @@ function* playerSteps(THREE, opts = {}) {
     fontUrl: opts.fontUrl ?? null,
     fontFamily: opts.fontFamily ?? 'Inter',
     color: opts.color ?? 0xf2f0eb,
-    screenBrightness: opts.screenBrightness ?? 1.15,
-    pausedLevel: opts.pausedLevel ?? 0.3,
-    bars: Math.max(4, Math.min(64, opts.bars ?? 24) | 0),
-    screenWidth: opts.screenWidth ?? 800,
+    screenTexture: opts.screenTexture ?? null,
+    screenEmissive: opts.screenEmissive ?? 1,
     anisotropy: opts.anisotropy ?? 8,
     contactShadow: opts.contactShadow ?? true,
     castShadow: opts.castShadow ?? true,
@@ -883,19 +878,8 @@ function* playerSteps(THREE, opts = {}) {
   yield
 
   // =============================================================================================
-  // the display: a canvas for what is text, the shader for what moves
+  // the glass's own: the camera under it
   // =============================================================================================
-  const NB = o.bars
-  const SW = Math.round(o.screenWidth)
-  const SH = Math.round((SW * SCR_H) / SCR_W)
-  const sk = SW / SCR_W
-  const screenCanvas = makeCanvas(SW, SH)
-  const screenTex = new THREE.CanvasTexture(screenCanvas)
-  screenTex.colorSpace = THREE.SRGBColorSpace
-  screenTex.flipY = false
-  screenTex.anisotropy = o.anisotropy
-  textures.push(screenTex)
-
   // the camera under the glass: its ring, the lens, the lens's coating (the glass's colour map, on
   // uv1: 3.2 mm round the camera, clamped to the glass's own near-black elsewhere)
   const lensCanvas = makeCanvas(256, 256)
@@ -937,87 +921,6 @@ function* playerSteps(THREE, opts = {}) {
   lensTex.wrapS = lensTex.wrapT = THREE.ClampToEdgeWrapping
   lensTex.anisotropy = o.anisotropy
   textures.push(lensTex)
-
-  // (the numbers that change every frame live in typed arrays: writing them never allocates)
-  const st = { title: 'Untitled', artist: '', playing: false }
-  const num = new Float64Array(3) // [time, duration, brightness level]
-  const T = 0
-  const D = 1
-  const LV = 2
-  num[LV] = o.pausedLevel
-  const barsIn = new Float32Array(NB) // what setState gave (resampled)
-  const barsU = { value: new Float32Array(NB) } // what is shown (eased)
-  const scrU = { value: new Float32Array(4) } // [progress 0..1, -, -, -]
-  const drawn = { title: null, artist: null, playing: null, t: -1, d: -1 }
-
-  const fmt = (s) => {
-    s = Math.max(0, Math.floor(s))
-    const m = Math.floor(s / 60)
-    const r = s % 60
-    return `${m}:${r < 10 ? '0' : ''}${r}`
-  }
-  function fit(c, str, max) {
-    if (c.measureText(str).width <= max) return str
-    let n = str.length
-    while (n > 1 && c.measureText(`${str.slice(0, n)}…`).width > max) n--
-    return `${str.slice(0, n).trimEnd()}…`
-  }
-  function drawScreen() {
-    const c = screenCanvas.getContext('2d')
-    c.setTransform(1, 0, 0, 1, 0, 0)
-    c.fillStyle = '#000000'
-    c.fillRect(0, 0, SW, SH)
-    c.setTransform(sk, 0, 0, sk, 0, 0)
-    c.textBaseline = 'alphabetic'
-    // the status line, beside the camera
-    drawText(c, st.playing ? 'NOW PLAYING' : 'PAUSED', 104, 76.5, 'start', 600, 15, 2.6, '#9a9b9d')
-    c.fillStyle = '#eceef0'
-    if (st.playing) {
-      c.beginPath()
-      c.moveTo(519, 62.5)
-      c.lineTo(533, 70.5)
-      c.lineTo(519, 78.5)
-      c.closePath()
-      c.fill()
-    } else {
-      rrect(c, 518, 62.5, 5, 16, 1.2)
-      c.fill()
-      rrect(c, 527.5, 62.5, 5, 16, 1.2)
-      c.fill()
-    }
-    c.textAlign = 'left'
-    c.letterSpacing = '0px'
-    c.font = `600 44px ${family}`
-    c.fillStyle = '#f3f5f7'
-    c.fillText(fit(c, st.title, 471), 60, 452)
-    c.font = `400 28px ${family}`
-    c.fillStyle = '#9b9ea2'
-    c.fillText(fit(c, st.artist, 471), 60, 497)
-    c.font = `500 22px ${family}`
-    c.fillStyle = '#a3a6aa'
-    c.fillText(fmt(num[T]), 60, 590)
-    c.textAlign = 'right'
-    c.fillText(fmt(num[D]), 531, 590)
-    c.textAlign = 'left'
-    screenTex.needsUpdate = true
-    drawn.title = st.title
-    drawn.artist = st.artist
-    drawn.playing = st.playing
-    drawn.t = Math.floor(num[T])
-    drawn.d = Math.floor(num[D])
-  }
-  // (redraw only when something the canvas shows has changed)
-  function syncScreen() {
-    if (
-      drawn.title !== st.title ||
-      drawn.artist !== st.artist ||
-      drawn.playing !== st.playing ||
-      drawn.t !== Math.floor(num[T]) ||
-      drawn.d !== Math.floor(num[D])
-    )
-      drawScreen()
-    scrU.value[0] = num[D] > 0 ? Math.min(1, num[T] / num[D]) : 0
-  }
 
   // =============================================================================================
   // materials (one instance each)
@@ -1082,58 +985,10 @@ function* playerSteps(THREE, opts = {}) {
     clearcoatRoughness: 0.05,
     ior: 1.52,
     emissive: 0xffffff,
-    emissiveMap: screenTex,
-    emissiveIntensity: o.screenBrightness * num[LV],
+    emissiveMap: o.screenTexture,
+    emissiveIntensity: 0,
   })
-  glass.onBeforeCompile = (sh2) => {
-    sh2.uniforms.uBars = barsU
-    sh2.uniforms.uScr = scrU
-    sh2.fragmentShader = sh2.fragmentShader
-      .replace(
-        '#include <common>',
-        /* glsl */ `#include <common>
-        uniform float uBars[${NB}];
-        uniform vec4 uScr;
-        float plBox(vec2 p, vec2 c, vec2 h, float r) {
-          vec2 q = abs(p - c) - h + r;
-          return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-        }
-        float plSeg(vec2 p, vec2 a, vec2 b) {
-          vec2 pa = p - a, ba = b - a;
-          return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
-        }`,
-      )
-      .replace(
-        '#include <emissivemap_fragment>',
-        /* glsl */ `#include <emissivemap_fragment>
-        {
-          // (in the design's units across the glass: 591 x 629)
-          vec2 sp = vEmissiveMapUv * vec2(${SCR_W}.0, ${SCR_H}.0);
-          float aa = 0.6 * length(fwidth(sp)) + 1e-3;
-          vec3 ui = vec3(0.0);
-          // the spectrum: rounded bars on a baseline, a faint reflection under it
-          const float NB = ${NB}.0;
-          const float PITCH = 471.0 / NB;
-          float bi = clamp(floor((sp.x - 60.0) / PITCH), 0.0, NB - 1.0);
-          float lv = clamp(uBars[int(bi)], 0.0, 1.0);
-          float bw = 0.58 * PITCH;
-          float bh = bw + lv * 180.0;
-          float bx = 60.0 + (bi + 0.5) * PITCH;
-          float d = plBox(sp, vec2(bx, 372.0 - bh * 0.5), vec2(bw * 0.5, bh * 0.5), bw * 0.5);
-          float g = clamp((372.0 - sp.y) / 190.0, 0.0, 1.0);
-          ui += (1.0 - smoothstep(-aa, aa, d)) * mix(vec3(0.42, 0.43, 0.45), vec3(0.97, 0.98, 1.0), g);
-          float dr = plBox(vec2(sp.x, 750.0 - sp.y), vec2(bx, 372.0 - bh * 0.5), vec2(bw * 0.5, bh * 0.5), bw * 0.5);
-          ui += (1.0 - smoothstep(-aa, aa, dr)) * clamp(1.0 - (sp.y - 378.0) / 34.0, 0.0, 1.0) * step(378.0, sp.y) * smoothstep(0.0, 0.12, lv) * vec3(0.1);
-          // the progress bar: the track, what has played, the knob
-          float px = mix(60.0, 531.0, clamp(uScr.x, 0.0, 1.0));
-          ui = max(ui, vec3(0.15) * (1.0 - smoothstep(-aa, aa, plSeg(sp, vec2(60.0, 545.0), vec2(531.0, 545.0)) - 2.5)));
-          ui = max(ui, vec3(0.86, 0.87, 0.88) * (1.0 - smoothstep(-aa, aa, plSeg(sp, vec2(60.0, 545.0), vec2(px, 545.0)) - 2.5)));
-          ui = max(ui, vec3(1.0) * (1.0 - smoothstep(-aa, aa, length(sp - vec2(px, 545.0)) - 7.0)));
-          totalEmissiveRadiance += emissive * ui;
-        }`,
-      )
-  }
-  glass.customProgramCacheKey = () => `player.screen.${NB}`
+  glass.customProgramCacheKey = () => 'player.screen'
   const red = new THREE.MeshPhysicalMaterial({
     name: 'player.red',
     color: 0xd9271b,
@@ -1249,30 +1104,14 @@ function* playerSteps(THREE, opts = {}) {
   // the API
   // =============================================================================================
   const screen = {
-    /** Any of { title, artist, playing, time (s), duration (s), bars (0..1 levels, any length) }. */
-    setState(s) {
-      if (!s || disposed) return
-      if (s.title !== undefined) st.title = String(s.title ?? '')
-      if (s.artist !== undefined) st.artist = String(s.artist ?? '')
-      if (s.playing !== undefined) st.playing = !!s.playing
-      if (s.duration !== undefined) num[D] = Math.max(0, +s.duration || 0)
-      if (s.time !== undefined) num[T] = Math.max(0, +s.time || 0)
-      if (s.bars) {
-        const n = s.bars.length
-        for (let i = 0; i < NB; i++) {
-          // (each bar the loudest of the levels it covers; fewer levels than bars: the nearest)
-          const a = Math.floor((i * n) / NB)
-          const b = Math.max(a + 1, Math.floor(((i + 1) * n) / NB))
-          let v = 0
-          for (let j = a; j < b && j < n; j++) v = Math.max(v, +s.bars[j] || 0)
-          barsIn[i] = Math.min(1, Math.max(0, v))
-        }
-      }
-      syncScreen()
+    /** The display's brightness: 0 (off, black) .. 1. */
+    setLevel(v) {
+      if (!o.screenTexture || disposed) return
+      glass.emissiveIntensity = o.screenEmissive * Math.min(1, Math.max(0, +v || 0))
     },
   }
 
-  /** Advance the keys' travel, the clock (while playing), the bars and the brightness. Returns true if anything visible changed. */
+  /** Advance the keys' travel. Returns true if anything visible changed. */
   function update(dt) {
     if (disposed) return false
     dt = Math.min(0.1, Math.max(0, +dt || 0))
@@ -1287,29 +1126,6 @@ function* playerSteps(THREE, opts = {}) {
         changed = true
       }
     }
-    if (st.playing) {
-      num[T] += dt
-      if (num[D] > 0 && num[T] > num[D]) num[T] = num[D]
-      changed = true
-    }
-    const lt = st.playing ? 1 : o.pausedLevel
-    if (num[LV] !== lt) {
-      const l2 = num[LV] + (lt - num[LV]) * (1 - Math.exp(-7 * dt))
-      num[LV] = Math.abs(lt - l2) < 0.002 ? lt : l2
-      glass.emissiveIntensity = o.screenBrightness * num[LV]
-      changed = true
-    }
-    const bars = barsU.value
-    for (let i = 0; i < NB; i++) {
-      const t = st.playing ? barsIn[i] : 0
-      const v = bars[i]
-      if (v !== t) {
-        const v2 = v + (t - v) * (1 - Math.exp(-(t > v ? 28 : 7) * dt))
-        bars[i] = Math.abs(t - v2) < 0.002 ? t : v2
-        changed = true
-      }
-    }
-    syncScreen()
     return changed
   }
 
@@ -1322,13 +1138,11 @@ function* playerSteps(THREE, opts = {}) {
     for (const t of textures) t.dispose()
   }
 
-  // the print and the display now (in whatever font there is), again once the font has loaded
+  // the print now (in whatever font there is), again once the font has loaded
   drawAtlas()
-  drawScreen()
   const redraw = () => {
     if (disposed) return
     drawAtlas()
-    drawScreen()
   }
   let ready = Promise.resolve()
   if (typeof document !== 'undefined' && document.fonts) {

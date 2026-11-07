@@ -2,7 +2,8 @@
 // framed for it; Escape or the back button glides it back to the whole desk. The glide keeps the
 // side the camera is looking from (turned a little towards the object's best side) and eases in
 // and out; the orbit controls take over again at either end.
-//   targets: { name: { center(out): Vector3, radius, el?: radians, az?: radians (a preferred view) } }
+//   targets: { name: { center(out): Vector3, radius, el?: radians, az?: radians (a preferred view),
+//              azPull?: how far towards it the view turns, 0..1 (0.6) } }
 import * as THREE from 'three'
 
 export function createFocus({ camera, controls, home, targets, reduceMotion, onChange }) {
@@ -37,7 +38,7 @@ export function createFocus({ camera, controls, home, targets, reduceMotion, onC
       // from where the camera looks now, nudged towards the object's preferred side
       d.subVectors(camera.position, controls.target)
       let az = Math.atan2(d.x, d.z)
-      if (T.az !== undefined) az = az + Math.atan2(Math.sin(T.az - az), Math.cos(T.az - az)) * 0.6
+      if (T.az !== undefined) az = az + Math.atan2(Math.sin(T.az - az), Math.cos(T.az - az)) * (T.azPull ?? 0.6)
       const el = T.el ?? THREE.MathUtils.clamp(Math.asin(d.y / Math.max(d.length(), 1e-6)), 0.25, 1.0)
       const fov = THREE.MathUtils.degToRad(camera.fov)
       const fit = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * camera.aspect))

@@ -14,12 +14,13 @@ const LINES = {
   light: 'lighting up your cig',
   smoke: 'letting the smoke settle',
   music: 'cueing the music',
+  os: 'booting pod os',
   mood: 'setting the mood',
   ready: 'ready.',
 }
 // each stage's share of the bar: its measured share of a load (the fetch's from one on Fast 3G with
 // 4x CPU slowdown; within the fetch, by bytes)
-const WEIGHTS = { fetch: 27, desk: 22, earbuds: 22, player: 1, ashtray: 9, lighter: 1, light: 2, smoke: 16, music: 1, mood: 1 }
+const WEIGHTS = { fetch: 27, desk: 22, earbuds: 22, player: 1, ashtray: 9, lighter: 1, light: 2, smoke: 16, music: 1, os: 1, mood: 1 }
 const TOTAL = Object.values(WEIGHTS).reduce((a, b) => a + b, 0)
 const MIN_LINE = 600 // ms a line stays, to be read
 const MIN_SHOW = 1800 // ms the loader stays, at least

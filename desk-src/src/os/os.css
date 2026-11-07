@@ -1,0 +1,385 @@
+/* Pod OS: a 360 x 383 logical screen (the player's glass, 59.1 x 62.9 mm), two type sizes (11 and
+   13), one accent. Three screens: the projects list (home), a project's page, About & contact.
+   Nothing here uses shadows, gradients or blur. */
+.pos {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 360px;
+  height: 383px;
+  overflow: hidden;
+  border-radius: 43px;
+  transform-origin: 0 0;
+  font: 400 13px/18px Inter, 'Helvetica Neue', Arial, sans-serif;
+  font-feature-settings: 'cv11' 1;
+  color: var(--text);
+  background-color: var(--bg);
+  background-image: var(--wall);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
+  contain: layout paint;
+}
+.pos[hidden] {
+  display: block !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+:where(.pos) *,
+:where(.pos) *::before,
+:where(.pos) *::after {
+  box-sizing: border-box;
+}
+:where(.pos) button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: inherit;
+}
+:where(.pos) a {
+  color: inherit;
+  text-decoration: none;
+}
+:where(.pos) :is(h1, h2, p, ul) {
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  list-style: none;
+}
+:where(.pos) :focus {
+  outline: none;
+}
+.pos :focus-visible,
+.pos.pos-kbd :focus {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+.pos .sm {
+  font-size: 11px;
+  line-height: 15px;
+}
+.pos .mute {
+  color: var(--muted);
+}
+.pos .num {
+  font-variant-numeric: tabular-nums;
+}
+.pos .ic {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+.pos-ic path {
+  vector-effect: non-scaling-stroke;
+}
+
+/* the status bar: right of the camera, in the top-left corner */
+.pos-status {
+  position: absolute;
+  left: 66px;
+  right: 30px;
+  top: 32px;
+  height: 20px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  z-index: 3;
+  pointer-events: none;
+}
+.pos-status .ic {
+  width: 14px;
+  height: 14px;
+}
+
+/* views: one shows at a time */
+.pos-view {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+}
+.pos-view[hidden] {
+  display: none;
+}
+.pos-anim {
+  transition: opacity 220ms cubic-bezier(0.2, 0.7, 0.3, 1), transform 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* a header: the projects list's (its title, the way to About & contact), or a page's (back, title) */
+.pos-head {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 58px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pos-head-home {
+  left: 22px;
+  right: 22px;
+  justify-content: space-between;
+}
+.pos-back {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  margin-left: -6px;
+  color: var(--text);
+  transition: transform 120ms ease-out, background-color 120ms ease-out;
+}
+.pos-back .ic {
+  width: 20px;
+  height: 20px;
+}
+.pos-back:active {
+  transform: scale(0.97);
+  background: var(--press);
+}
+.pos-title {
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pos-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 94px;
+  bottom: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding: 2px 22px 36px;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+.pos-body::-webkit-scrollbar {
+  display: none;
+}
+.pos-sec + .pos-sec {
+  margin-top: 16px;
+}
+.pos-h {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+/* the projects: cards */
+.pos-card {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--tile);
+  transition: transform 120ms ease-out, background-color 120ms ease-out;
+}
+.pos-card + .pos-card {
+  margin-top: 8px;
+}
+.pos-card:active {
+  transform: scale(0.97);
+  background: var(--press);
+}
+.pos-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pos-strong {
+  font-weight: 600;
+}
+.pos-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.pos-tag {
+  font-size: 11px;
+  line-height: 15px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+/* buttons that do something */
+.pos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--tile);
+  transition: transform 120ms ease-out, background-color 120ms ease-out;
+}
+.pos-btn .ic {
+  width: 16px;
+  height: 16px;
+}
+.pos-btn:active {
+  transform: scale(0.97);
+  background: var(--press);
+}
+.pos-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pos-accent {
+  color: var(--accent);
+}
+
+/* a project's page: the screenshot strip, its sections */
+.pos-shots {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  margin: 0 -22px;
+  padding: 0 22px;
+}
+.pos-shots::-webkit-scrollbar {
+  display: none;
+}
+.pos-shot {
+  flex: none;
+  width: 236px;
+  height: 148px;
+  border-radius: 12px;
+  scroll-snap-align: start;
+  background: var(--tile);
+  overflow: hidden;
+  display: block;
+}
+.pos-shot img,
+.pos-shot canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pos-li {
+  position: relative;
+  padding-left: 12px;
+}
+.pos-li-b {
+  position: absolute;
+  left: 1px;
+  top: 8px;
+  width: 5px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--muted);
+}
+.pos-li + .pos-li {
+  margin-top: 4px;
+}
+
+/* About & contact */
+.pos-me {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.pos-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--tile);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--muted);
+  flex: none;
+}
+.pos-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pos-mail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pos-mail {
+  overflow-wrap: anywhere;
+}
+.pos-copied {
+  min-height: 15px;
+  margin-top: 4px;
+}
+
+/* the camera under the glass (logical 42.6, 42.6): the 3D glass shows its own lens there; this
+   stands in for it up close, and is what the texture shows there too */
+.pos-cam {
+  position: absolute;
+  left: 34.7px;
+  top: 34.7px;
+  width: 15.8px;
+  height: 15.8px;
+  border-radius: 50%;
+  background-color: #111113;
+  z-index: 10;
+  pointer-events: none;
+}
+.pos-cam i {
+  position: absolute;
+  left: 2.7px;
+  top: 2.7px;
+  width: 10.4px;
+  height: 10.4px;
+  border-radius: 50%;
+  background-color: #050506;
+}
+
+/* sleep: the screen black */
+.pos-sleep {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 420ms ease;
+  z-index: 9;
+}
+.pos[data-power='asleep'] .pos-sleep {
+  opacity: 1;
+}
+
+/* reduced motion: the view changes fade without scaling (os.js), presses only darken */
+.pos-quiet .pos-anim,
+.pos-quiet .pos-card,
+.pos-quiet .pos-btn,
+.pos-quiet .pos-back {
+  transition-property: opacity, background-color;
+}
+.pos.pos-quiet :active {
+  transform: none !important;
+}
