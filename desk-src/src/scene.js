@@ -254,7 +254,6 @@ export function createScene(container, options = {}) {
     renderer.shadowMap.autoUpdate = false
     // (the earbud tips' translucency samples the scene behind them, blurred: as the standalone
     // earbuds had it, half resolution, indistinguishable from full)
-    renderer.transmissionResolutionScale = 0.5
     const canvas = renderer.domElement
     canvas.className = 'cg-canvas'
     canvas.setAttribute('role', 'img')

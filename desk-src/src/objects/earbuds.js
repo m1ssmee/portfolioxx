@@ -21,8 +21,9 @@
 //
 // Left to the scene, as the original's viewer did them: shadows (the parts cast and receive as they
 // did; with renderer.shadowMap.autoUpdate off, flag an update after applyState), ambient occlusion
-// (it ran GTAO), MSAA (the perforated meshes use alpha to coverage), and the tips' transmission
-// buffer (it set renderer.transmissionResolutionScale = 0.5).
+// (it ran GTAO) and MSAA (the perforated meshes use alpha to coverage). (The tips are opaque: a
+// transmissive material makes three.js draw the whole scene a second time every frame, for it to
+// show through, and on a black tip that cost about half of every frame for nothing anyone saw.)
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import * as G from './earbudsGeom.js'
@@ -279,17 +280,13 @@ function* earbudsSteps({ renderer = null, meshes, colorway = 'black', envIntensi
     mats.plastic = plasticMaterial({ color: C.body })
     // the plug's housing: the same plastic, its parting line through its axis (the plane z = 0)
     mats.plug = plasticMaterial({ color: C.body, groove: [0, 0, 1, 0] })
-    // translucent silicone: what is behind the tip shows through, smoked by the silicone's colour
+    // soft silicone: a satin surface with a soft sheen at its rim (opaque: see the note at the top)
     mats.tip = new THREE.MeshPhysicalMaterial({
-      roughness: 0.5,
+      roughness: 0.55,
       metalness: 0,
       sheen: 0.5,
       sheenRoughness: 0.6,
-      transmission: 0.6,
-      thickness: 1.0,
-      ior: 1.41,
-      attenuationDistance: 1.0,
-      specularIntensity: 0.85,
+      specularIntensity: 0.7,
     })
     mats.accent = new THREE.MeshPhysicalMaterial({ color: C.accent, metalness: 1, roughness: 0.26, anisotropy: 0.7, anisotropyRotation: 0, clearcoat: 0.1, clearcoatRoughness: 0.3 })
     mats.steel = new THREE.MeshPhysicalMaterial({ color: '#c7c9cb', metalness: 1, roughness: 0.12 })
@@ -356,11 +353,10 @@ function* earbudsSteps({ renderer = null, meshes, colorway = 'black', envIntensi
   for (const [k, C] of Object.entries(COLORWAYS))
     CW[k] = { body: new THREE.Color(C.body), tip: new THREE.Color(C.tip), accent: new THREE.Color(C.accent), braid: new THREE.Color(C.braid), rubber: new THREE.Color(C.rubber), bodyRough: C.bodyRough }
   const cTmp = new THREE.Color()
-  /** The tip's colours from its colourway's: a light base, smoked by the volume's colour. */
+  /** The tip's colours from its colourway's: the silicone's own, a lighter sheen at its rim. */
   function tipColors(c) {
     const T = mats.tip
-    T.color.copy(c).lerp(white, 0.14)
-    T.attenuationColor.copy(c).lerp(white, 0.4)
+    T.color.copy(c)
     T.sheenColor.copy(c).lerp(white, 0.2)
   }
   let current = null

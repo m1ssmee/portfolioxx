@@ -46,6 +46,9 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   const dStat = rt(16, 16, { ...HF, depthBuffer: false })
   const dEmb = rt(16, 16, { ...HF, depthBuffer: false })
   const dLive = rt(16, 16, { ...HF, depthBuffer: false })
+  // (while the view moves, the whole frame's blur at half size: a quarter of the work, and its
+  // softness at edges does not show in motion; still, the region's at full size)
+  const dHalf = rt(8, 8, { ...HF, depthBuffer: false })
   // smoke, and its depth (for the soft fade and the depth-aware upsampling)
   const smoke = rt(16, 16, { ...HF, depthBuffer: false })
   const smokeZ = rt(16, 16, { ...HF, format: THREE.RedFormat, depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter })
@@ -151,6 +154,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     SW = Math.max(1, Math.round(w * Q.smokeScale))
     SH = Math.max(1, Math.round(h * Q.smokeScale))
     for (const t of [live, cStat, cEmb, dStat, dEmb, dLive, ldr]) t.setSize(w, h)
+    dHalf.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1))
     smoke.setSize(SW, SH)
     smokeZ.setSize(SW, SH)
     compMat.uniforms.uSmokeSize.value.set(SW, SH)
@@ -413,14 +417,23 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
         setDof(f.focus)
         dofMat.uniforms.tColor.value = live.texture
         dofMat.uniforms.tDepth.value = live.depthTexture
-        if (f.truth || !f.still) px.set(0, 0, W, H)
-        else rect(f.regionBox, W, H, dofMat.uniforms.uMax.value + 2, px)
-        draw(dofMat, dLive, px)
-        compMat.uniforms.uBox.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
+        if (!f.still && !f.truth) {
+          draw(dofMat, dHalf)
+          compMat.uniforms.tDofLive.value = dHalf.texture
+          compMat.uniforms.uBox.value.set(0, 0, 1, 1)
+        } else {
+          if (f.truth) px.set(0, 0, W, H)
+          else rect(f.regionBox, W, H, dofMat.uniforms.uMax.value + 2, px)
+          draw(dofMat, dLive, px)
+          compMat.uniforms.tDofLive.value = dLive.texture
+          compMat.uniforms.uBox.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
+        }
         compMat.uniforms.uI.value = f.emberI
       }
-      renderSmoke(f.still && !f.truth ? f.smokeBox : null)
-      renderBloom(f.still && !f.truth ? f.emberBox : null)
+      // (the smoke and the ember's glow only where they can be, moving or still: over the whole
+      // frame they were the dearest part of a moving one)
+      renderSmoke(f.truth ? null : f.smokeBox)
+      renderBloom(f.truth ? null : f.emberBox)
       // (f.shim: the heat shimmer, {x, y, k, r}; k 0 is none)
       if (f.shim) compMat.uniforms.uShim.value.set(f.shim.x, f.shim.y, f.shim.k, f.shim.r)
       else compMat.uniforms.uShim.value.z = 0
