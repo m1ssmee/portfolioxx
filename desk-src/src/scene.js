@@ -46,11 +46,10 @@ installEmberLight()
 // full-resolution buffers they are indistinguishable; see the report.)
 const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.5, bloomScale: 0.5, shadow: 1536, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
 /** The canvas at full sharpness: CSS size x devicePixelRatio, capped at 2 only on 3x screens. */
-// (the canvas at most 1.5 device pixels per CSS pixel: the picture is soft by design, its text is
-// the page's own (crisp at any ratio), and a 2x canvas is nearly twice the work a frame, which a
-// laptop's GPU feels as dropped frames whenever anything moves)
-// (and lower still if this GPU cannot keep up: the quality governor, in the frame loop)
-let dprCap = 1.5
+// (the canvas at the screen's own pixels, up to 2 a CSS pixel: on a 2x screen a 1.5x canvas is
+// stretched by a third, and the player's thin seams came out broken into dashes; 1.5 only if this
+// GPU cannot keep up: the quality governor, in the frame loop)
+let dprCap = 2
 const pixelRatio = () => Math.min(window.devicePixelRatio || 1, dprCap)
 
 const CSS = `
@@ -2285,37 +2284,45 @@ export function createScene(container, options = {}) {
       key.shadow.needsUpdate = true
     }
     const cigSwapping = (q) => q.state === 'arriving' || q.state === 'leaving'
-    // ---- steady frames: while things move, the frames' own pace is watched; on a GPU that cannot
-    // keep it (slower than about 48 a second, for most of a second), the work a frame is lowered a
-    // step at a time: less multisampling, then fewer pixels. (Not under automation: a test's
-    // software renderer is slow by nature, and its pictures must stay comparable.)
+    // ---- steady frames: while someone turns, zooms or carries something, the frames' own pace is
+    // watched; on a GPU that cannot keep it (slower than about 48 a second, for a second and a half)
+    // the work a frame is lowered, a step at a time and at most twice: half the multisampling, then
+    // (on a 2x screen) a 1.5x canvas. Never further: no multisampling or a 1x canvas leave thin edges
+    // broken. Glides, and the moments a project or the book is open, are not counted: they are
+    // transitions, with the page's own work in them. (Not under automation: a test's software
+    // renderer is slow by nature, and its pictures must stay comparable.)
     const gov = { on: !navigator.webdriver, level: 0, n: 0, ema: 16.7, after: 0, bias: 0 }
     function govern(interval, moving) {
       if (!gov.on || !moving) return void (gov.n = 0)
       // (the first frames of a motion pay for its start, not its pace)
       if (++gov.n < 4) return
-      gov.ema += (Math.min(interval + gov.bias, 100) - gov.ema) * 0.08
-      if (gov.ema < 21 || gov.n < 45 || performance.now() < gov.after || gov.level >= 3) return
+      gov.ema += (Math.min(interval + gov.bias, 100) - gov.ema) * 0.06
+      if (gov.ema < 21 || gov.n < 90 || performance.now() < gov.after || gov.level >= 2) return
       gov.level++
       if (gov.level === 1) frameCache.setSamples(2)
-      else if (gov.level === 2) {
-        dprCap = 1.25
-        resize()
-      } else {
-        dprCap = 1
-        frameCache.setSamples(0)
+      else if ((window.devicePixelRatio || 1) > 1.5) {
+        dprCap = 1.5
         resize()
       }
       gov.n = 0
       gov.ema = 16.7
-      gov.after = performance.now() + 1500
+      gov.after = performance.now() + 2000
     }
     api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio() })
     api.gov = gov // (tests: switched on by hand, a slow frame faked by its bias, ms)
     let shadowTurn = 0
+    let lastDrawn = 0
     function frame(now) {
       raf = 0
       if (!running || destroyed) return
+      // (a project or the visitors' book open: the scene behind is under a blur; it is drawn 20
+      // times a second, not 60, unless the view glides or something is carried. The blur is
+      // worked out again by the browser every time the scene under it changes)
+      if ((projOpen || book.isOpen) && !focus.moving && !podSlide && !grab.held && now - lastDrawn < 48) {
+        raf = requestAnimationFrame(frame)
+        return
+      }
+      lastDrawn = now
       const t0 = performance.now()
       const interval = now - last
       let dt = Math.min(0.05, (now - last) / 1000) // (clamped: nothing jumps after a pause)
@@ -2454,7 +2461,7 @@ export function createScene(container, options = {}) {
       // pinch with small pauses goes on drawing whole frames, it does not bake at every pause)
       stillTime = changing ? 0 : stillTime + Math.max(dt, 1 / 240)
       const moving = changing || stillTime < 0.2
-      govern(interval, moving)
+      govern(interval, moving && !focus.moving && !podSlide && !projOpen && !book.isOpen)
       // shadows: drawn again only when the shadow casters changed (the burn moves slowly: every 2 s)
       shadowClock += dt
       const burnStep = shadowClock > 2

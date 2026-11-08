@@ -13,12 +13,14 @@ the wheel's zoom is a critically damped spring on the distance (each notch eases
 ease with a smootherstep, and a moving frame keeps the still frame's depth of field, so nothing pops
 as the view starts or stops (the shadows are drawn again only when what casts them moves). The
 depth of field is drawn at half size on one fixed spiral (no per-pixel noise to crawl as the view
-moves) and blended in only where the lens blurs; the canvas is at most 1.5 device pixels per CSS
-pixel (the text is the page's own, crisp at any ratio), which keeps a laptop's frames steady. The
+moves) and blended in only where the lens blurs; the canvas is at the screen's own pixels (up to
+2x: a stretched canvas breaks thin seams into dashes). The
 soft shadow is an exact box blur, one sample a texel, its depth range fitted to the still life.
-While things move the frames' own pace is watched: on a GPU that cannot keep about 48 a second, the
-work a frame steps down (less multisampling, then fewer pixels; `api.quality()` under `?debug`), and
-while something is carried the soft shadow is drawn again every other frame.
+While someone turns, zooms or carries something, the frames' own pace is watched: on a GPU that
+cannot keep about 48 a second the work a frame steps down, at most twice (half the multisampling,
+then a 1.5x canvas on a 2x screen; `api.quality()` under `?debug`); while something is carried the
+soft shadow is drawn again every other frame; and while a project or the book is open, the blurred
+scene behind it is drawn 20 times a second.
 
 ```
 npm ci
