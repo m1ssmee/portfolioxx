@@ -2311,18 +2311,32 @@ export function createScene(container, options = {}) {
     api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio() })
     api.gov = gov // (tests: switched on by hand, a slow frame faked by its bias, ms)
     let shadowTurn = 0
+    // ---- the frames' pace: even, never more than the scene can keep
+    //   moving:   at most 60 a second, evenly: on a 120 Hz screen every other refresh. Drawn at every
+    //             refresh, frames this full come unevenly (8 ms, 16, 25 apart), and uneven reads as
+    //             choppy however many there are
+    //   at rest:  only the smoke and the ember moving and nobody touching anything: 30 (slow smoke
+    //             looks the same, and the GPU keeps its headroom for the next touch)
+    //   behind a project or the visitors' book: 20 (the browser works the blur out again each time
+    //             the scene under it changes)
     let lastDrawn = 0
+    let wasStill = false
+    let inputAt = 0
+    const touched = () => (inputAt = performance.now())
+    for (const t of ['pointerdown', 'wheel', 'keydown', 'touchstart']) listen(window, t, touched, { passive: true })
+    listen(window, 'pointermove', (e) => e.buttons && touched(), { passive: true })
     function frame(now) {
       raf = 0
       if (!running || destroyed) return
-      // (a project or the visitors' book open: the scene behind is under a blur; it is drawn 20
-      // times a second, not 60, unless the view glides or something is carried. The blur is
-      // worked out again by the browser every time the scene under it changes)
-      if ((projOpen || book.isOpen) && !focus.moving && !podSlide && !grab.held && now - lastDrawn < 48) {
+      const calm = !focus.moving && !podSlide && !grab.held
+      const gap = (projOpen || book.isOpen) && calm ? 48 : wasStill && calm && now - inputAt > 400 ? 30 : 11
+      // (tests stepping a fixed time a frame: every frame is one)
+      if (now - lastDrawn < gap && !dbgFlags.fixedDt) {
         raf = requestAnimationFrame(frame)
         return
       }
       lastDrawn = now
+      api.paced = (api.paced || 0) + 1 // (debug: frames run, after the pacing)
       const t0 = performance.now()
       const interval = now - last
       let dt = Math.min(0.05, (now - last) / 1000) // (clamped: nothing jumps after a pause)
@@ -2462,6 +2476,7 @@ export function createScene(container, options = {}) {
       stillTime = changing ? 0 : stillTime + Math.max(dt, 1 / 240)
       const moving = changing || stillTime < 0.2
       govern(interval, moving && !focus.moving && !podSlide && !projOpen && !book.isOpen)
+      wasStill = !moving
       // shadows: drawn again only when the shadow casters changed (the burn moves slowly: every 2 s)
       shadowClock += dt
       const burnStep = shadowClock > 2

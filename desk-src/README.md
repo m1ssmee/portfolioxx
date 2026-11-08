@@ -12,15 +12,17 @@ still dither instead of film grain, so a frame changes only where something move
 the wheel's zoom is a critically damped spring on the distance (each notch eases in and out), glides
 ease with a smootherstep, and a moving frame keeps the still frame's depth of field, so nothing pops
 as the view starts or stops (the shadows are drawn again only when what casts them moves). The
-depth of field is drawn at half size on one fixed spiral (no per-pixel noise to crawl as the view
-moves) and blended in only where the lens blurs; the canvas is at the screen's own pixels (up to
+depth of field is drawn on one fixed spiral (no per-pixel noise to crawl as the view moves), each
+sample counted as a lens would (a sharp edge in front never smears over the blur behind it, nor the
+blur behind over it), and blended in only where the lens blurs; the canvas is at the screen's own pixels (up to
 2x: a stretched canvas breaks thin seams into dashes). The
 soft shadow is an exact box blur, one sample a texel, its depth range fitted to the still life.
 While someone turns, zooms or carries something, the frames' own pace is watched: on a GPU that
 cannot keep about 48 a second the work a frame steps down, at most twice (half the multisampling,
 then a 1.5x canvas on a 2x screen; `api.quality()` under `?debug`); while something is carried the
-soft shadow is drawn again every other frame; and while a project or the book is open, the blurred
-scene behind it is drawn 20 times a second.
+soft shadow is drawn again every other frame. The frames' pace is kept even: at most 60 a second
+(every other refresh on a 120 Hz screen), 30 when only the smoke moves and nobody touches anything,
+20 while a project or the book is open.
 
 ```
 npm ci

@@ -46,8 +46,8 @@
         if (uDofK > 0.0) {
           bool inBox = vUv.x >= uBox.x && vUv.y >= uBox.y && vUv.x <= uBox.z && vUv.y <= uBox.w;
           vec3 d = inBox ? texture2D(tDofLive, vUv).rgb : texture2D(tDofStat, vUv).rgb + uI * texture2D(tDofEmb, vUv).rgb;
-          // (the blur is drawn at half size: taken only where the lens blurs, by this pixel's own
-          // circle; in focus, the frame's own sharp pixels)
+          // (taken only where the lens blurs, by this pixel's own circle: in focus, the frame's own
+          // pixels, exactly)
           float dz = linZ(texture2D(tDepth, vUv).r) - uFocus;
           float cc = min(uK * abs(dz) / max(uEq + dz, 1.0), uMaxC);
           c = mix(c, d, uDofK * smoothstep(0.6, 2.2, cc));

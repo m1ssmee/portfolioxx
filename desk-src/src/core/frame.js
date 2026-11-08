@@ -42,7 +42,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   // the cache (single-sampled: copied out of the live target after each bake)
   const cStat = withDepth(rt(16, 16, { ...HF }))
   const cEmb = rt(16, 16, { ...HF, depthBuffer: false })
-  // (the depth of field's blurred frames, at half size: see shaders/dof.frag)
+  // (the depth of field's blurred frames: see shaders/dof.frag)
   const dStat = rt(16, 16, { ...HF, depthBuffer: false })
   const dEmb = rt(16, 16, { ...HF, depthBuffer: false })
   const dLive = rt(16, 16, { ...HF, depthBuffer: false })
@@ -143,8 +143,6 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   // ---- sizes
   let W = 16
   let H = 16
-  let HW = 8
-  let HH = 8
   let SW = 16
   let SH = 16
   function setSize(w, h) {
@@ -152,10 +150,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     H = h
     SW = Math.max(1, Math.round(w * Q.smokeScale))
     SH = Math.max(1, Math.round(h * Q.smokeScale))
-    HW = Math.max(1, w >> 1)
-    HH = Math.max(1, h >> 1)
-    for (const t of [live, cStat, cEmb, ldr]) t.setSize(w, h)
-    for (const t of [dStat, dEmb, dLive]) t.setSize(HW, HH)
+    for (const t of [live, cStat, cEmb, dStat, dEmb, dLive, ldr]) t.setSize(w, h)
     smoke.setSize(SW, SH)
     smokeZ.setSize(SW, SH)
     compMat.uniforms.uSmokeSize.value.set(SW, SH)
@@ -418,10 +413,10 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
         setDof(f.focus)
         dofMat.uniforms.tColor.value = live.texture
         dofMat.uniforms.tDepth.value = live.depthTexture
-        if (f.truth || !f.still) px.set(0, 0, HW, HH)
-        else rect(f.regionBox, HW, HH, dofMat.uniforms.uMax.value / 2 + 2, px)
+        if (f.truth || !f.still) px.set(0, 0, W, H)
+        else rect(f.regionBox, W, H, dofMat.uniforms.uMax.value + 2, px)
         draw(dofMat, dLive, px)
-        compMat.uniforms.uBox.value.set(px.x / HW, px.y / HH, (px.x + px.z) / HW, (px.y + px.w) / HH)
+        compMat.uniforms.uBox.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
         compMat.uniforms.uI.value = f.emberI
       }
       renderSmoke(f.still && !f.truth ? f.smokeBox : null)

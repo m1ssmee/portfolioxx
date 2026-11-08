@@ -37,6 +37,9 @@ const GRAB_MAX_SPEED = 240
 /** After a release, the rope's motion is damped harder, easing off over this long (s): it relaxes
  * slowly into its curves, it does not whip. */
 const RELAX = 2.2
+/** From this long after a release (s), what lies still grips harder as it rests, and a slow creep
+ * may fall asleep (the calming above runs on a little longer: it only damps). */
+const SETTLE = 1.6
 /** Let go, a held thing is set down, not dropped: its anchor lowered this fast (mm/s) until it rests
  * on something, for at most this long (s). */
 const LOWER_SPEED = 80
@@ -588,8 +591,8 @@ export class Rig {
     this.relaxT += STEP
     // once it has had its time to relax, what lies still grips harder and harder (contact ageing,
     // over a second): the stress left in its curves no longer slips it along in small jerks; it rests
-    if (!g && this.relaxT > RELAX) {
-      const a = Math.min(1, (this.relaxT - RELAX) / 1.0)
+    if (!g && this.relaxT > SETTLE) {
+      const a = Math.min(1, (this.relaxT - SETTLE) / 1.0)
       this.grip = Math.max(this.grip, 1 + 3 * a * a * (3 - 2 * a))
     }
     if (g) {
@@ -605,7 +608,7 @@ export class Rig {
         // (asleep: nothing has moved a twentieth of a millimetre in a quarter second, 0.2 mm/s;
         // or, well after a release (its relaxing done, its grip grown), nothing faster than 2 mm/s:
         // what is left is a creep no one would see, and it stops)
-        if (big < 0.05 || (this.relaxT > RELAX + 1.5 && big < 0.5) || (this.awakeTime > 7 && big < 1)) this.asleep = true
+        if (big < 0.05 || (this.relaxT > SETTLE + 1.5 && big < 0.5) || (this.awakeTime > 7 && big < 1)) this.asleep = true
         // static friction grows the longer things lie still (contact ageing): once nothing has
         // moved more than half a millimetre in a quarter second, a little more grip each time, so a
         // tight curl that would otherwise creep straight for ever holds the shape it fell in
