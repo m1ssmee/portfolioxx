@@ -17,12 +17,16 @@ sample counted as a lens would (a sharp edge in front never smears over the blur
 blur behind over it), and blended in only where the lens blurs; the canvas is at the screen's own pixels (up to
 2x: a stretched canvas breaks thin seams into dashes). The
 soft shadow is an exact box blur, one sample a texel, its depth range fitted to the still life.
-While someone turns, zooms or carries something, the frames' own pace is watched: on a GPU that
-cannot keep about 48 a second the work a frame steps down, at most twice (half the multisampling,
-then a 1.5x canvas on a 2x screen; `api.quality()` under `?debug`); while something is carried the
-soft shadow is drawn again every other frame. The frames' pace is kept even: at most 60 a second
-(every other refresh on a 120 Hz screen), 30 when only the smoke moves and nobody touches anything,
-20 while a project or the book is open.
+A still frame redraws only the box that changed (the burning cigarette, the smoke, the glow the
+composite re-mixes linearly from the cache, the glass when its page moved) into a kept frame, and
+copies that out: an idle frame costs its box, not the screen. While the view moves, everything is
+drawn at a reduced size into fixed buffers (three quarters on a dense canvas) and scaled up by
+SMAA's last pass; the full-size still frame returns the moment the view rests. On a GPU that cannot
+keep about 48 moving frames a second, the governor steps the moving frames down, at most twice
+(half their multisampling, then a quarter fewer pixels; `api.quality()` under `?debug`); while
+something is carried the soft shadow is drawn again every other frame. The frames' pace is kept
+even: at most 60 a second (every other refresh on a 120 Hz screen), 30 when only the smoke moves
+and nobody touches anything, 20 while a project or the book is open.
 
 ```
 npm ci

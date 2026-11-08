@@ -46,11 +46,10 @@ installEmberLight()
 // full-resolution buffers they are indistinguishable; see the report.)
 const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.5, bloomScale: 0.5, shadow: 1536, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
 /** The canvas at full sharpness: CSS size x devicePixelRatio, capped at 2 only on 3x screens. */
-// (the canvas at the screen's own pixels, up to 2 a CSS pixel: on a 2x screen a 1.5x canvas is
-// stretched by a third, and the player's thin seams came out broken into dashes; 1.5 only if this
-// GPU cannot keep up: the quality governor, in the frame loop)
-let dprCap = 2
-const pixelRatio = () => Math.min(window.devicePixelRatio || 1, dprCap)
+// (the canvas at the screen's own pixels, up to 2 a CSS pixel: stretched, thin seams break into
+// dashes. What the GPU pays while the view MOVES is handled inside the frame pipeline instead:
+// moving frames are drawn at a reduced size into fixed buffers and scaled up on screen)
+const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 2)
 
 const CSS = `
 .cg-root{--ink:#262c35;--label:#3e4652;--rule:rgba(38,44,53,.4);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
@@ -496,6 +495,7 @@ export function createScene(container, options = {}) {
     let podSlide = false // (the camera sliding between two views of the player: its page stays up, following it)
     let osAlpha = 0 // (the page's opacity: it fades in over the texture, and out)
     let glare = 1 // (the glass's reflections: 1 across the desk, 0 up close on a lit screen)
+    let screenBusy = false // (the glass's pixels change this frame: the page painted, its light easing)
     const osCanvas = document.createElement('canvas')
     osCanvas.width = TEX_W
     osCanvas.height = TEX_H
@@ -1469,8 +1469,15 @@ export function createScene(container, options = {}) {
     }
     const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode })
     // where things are on the screen (UV boxes): the ember region, the ember, the smoke
-    const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0 }
+    const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0, dirty: null, dirtyLive: null }
     const bv = new THREE.Vector3()
+    const dirtyV4 = new THREE.Vector4()
+    const cigDirty = new THREE.Vector4()
+    const lv4 = new THREE.Vector4()
+    const liveV4 = new THREE.Vector4()
+    const gv4 = new THREE.Vector4()
+    /** b unioned into a (uv boxes: x0, y0, x1, y1). */
+    const uniV4 = (a, b) => a.set(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.z, b.z), Math.max(a.w, b.w))
     const box = { x0: 0, y0: 0, x1: 0, y1: 0, behind: false }
     function boxStart() {
       box.x0 = box.y0 = Infinity
@@ -1528,8 +1535,11 @@ export function createScene(container, options = {}) {
       renderer.setPixelRatio(dpr)
       renderer.setSize(w, h, false)
       renderer.getDrawingBufferSize(dbs)
-      frameCache.setSize(dbs.x, dbs.y)
+      // (moving frames at three quarters of a dense canvas's size, and less if the governor had
+      // to step down: motion hides it, and a 2x canvas is four times the pixels)
+      frameCache.setSize(dbs.x, dbs.y, (dpr > 1.25 ? 0.75 : 1) * moveScaleK)
     }
+    let moveScaleK = 1
     const dbs = new THREE.Vector2()
     const ro = new ResizeObserver(resize)
     ro.observe(container)
@@ -2073,12 +2083,13 @@ export function createScene(container, options = {}) {
     }
     function stepOS(dt) {
       if (!os) return
+      screenBusy = false
       if (podSlide && !focus.moving) podSlide = false
       stepProject()
       if (os.power === 'asleep') {
         if (!osOff) os.wake()
       }
-      os.update(dt)
+      if (os.update(dt)) screenBusy = true
       player.screen.setLevel(os.level)
       // (up close on a lit screen, the glass's reflections fade as the glide closes in, as a screen's
       // coating takes them: the page laid over it then shows exactly what it shows; across the desk
@@ -2090,6 +2101,7 @@ export function createScene(container, options = {}) {
         glassMat.clearcoat = Math.max(1e-4, GLARE.clearcoat * glare) // (never 0: that would be another program)
         glassMat.specularIntensity = GLARE.specularIntensity * glare
         glassMat.envMapIntensity = GLARE.envMapIntensity * glare
+        screenBusy = true
       }
       // up close: the page, once the glide is over and the screen fully lit (the texture shows what
       // the page shows), while the camera looks onto the glass and nothing covers it or is carried
@@ -2102,7 +2114,10 @@ export function createScene(container, options = {}) {
       if (want !== osUp) {
         osUp = want
         os.setMode(want ? 'dom' : 'texture')
-        if (!want) osTex.needsUpdate = true
+        if (!want) {
+          osTex.needsUpdate = true
+          screenBusy = true
+        }
       }
       const a = want ? Math.min(1, osAlpha + dt / 0.12) : Math.max(0, osAlpha - dt / 0.12)
       if (a !== osAlpha) os.fade((osAlpha = a))
@@ -2110,6 +2125,7 @@ export function createScene(container, options = {}) {
       if (!osUp && os.dirty) {
         os.paint()
         osTex.needsUpdate = true
+        screenBusy = true
       }
     }
     /** The page over the glass: its four corners, projected (CSS px), and the homography onto them. */
@@ -2284,12 +2300,12 @@ export function createScene(container, options = {}) {
     }
     const cigSwapping = (q) => q.state === 'arriving' || q.state === 'leaving'
     // ---- steady frames: while someone turns, zooms or carries something, the frames' own pace is
-    // watched; on a GPU that cannot keep it (slower than about 48 a second, for a second and a half)
-    // the work a frame is lowered, a step at a time and at most twice: half the multisampling, then
-    // (on a 2x screen) a 1.5x canvas. Never further: no multisampling or a 1x canvas leave thin edges
-    // broken. Glides, and the moments a project or the book is open, are not counted: they are
-    // transitions, with the page's own work in them. (Not under automation: a test's software
-    // renderer is slow by nature, and its pictures must stay comparable.)
+    // watched; on a GPU that cannot keep it (slower than about 48 a second, for a second and a
+    // half), the MOVING frames are made cheaper a step at a time: half their multisampling, then a
+    // quarter fewer pixels. Still frames are untouched: the picture at rest stays the full one.
+    // Glides, and the moments a project or the book is open, are transitions with the page's own
+    // work in them, and are not counted. (Not under automation: a test's software renderer is slow
+    // by nature, and its pictures must stay comparable.)
     const gov = { on: !navigator.webdriver, level: 0, n: 0, ema: 16.7, after: 0, bias: 0 }
     function govern(interval, moving) {
       if (!gov.on || !moving) return void (gov.n = 0)
@@ -2299,15 +2315,16 @@ export function createScene(container, options = {}) {
       if (gov.ema < 21 || gov.n < 90 || performance.now() < gov.after || gov.level >= 2) return
       gov.level++
       if (gov.level === 1) frameCache.setSamples(2)
-      else if ((window.devicePixelRatio || 1) > 1.5) {
-        dprCap = 1.5
+      else {
+        moveScaleK = 0.75
         resize()
       }
       gov.n = 0
       gov.ema = 16.7
       gov.after = performance.now() + 2000
     }
-    api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio() })
+    api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio(), moveScale: frameCache.moveScale })
+    api.stillWhy = () => ({ screenBusy, keyAnim, glare, osUp, level: os?.level, dirty: os?.dirty, power: os?.power })
     api.gov = gov // (tests: switched on by hand, a slow frame faked by its bias, ms)
     let shadowTurn = 0
     // ---- the frames' pace: even, never more than the scene can keep
@@ -2381,7 +2398,6 @@ export function createScene(container, options = {}) {
       const cableBusy = earbudsLive.update(physics.alpha)
       stepOS(dt)
       updateNow()
-      backU.uRes.value.set(frameCache.live.width, frameCache.live.height)
       player.update(dt)
       keyAnim = Math.max(0, keyAnim - dt)
       lighterFrame()
@@ -2500,6 +2516,10 @@ export function createScene(container, options = {}) {
         return
       }
       dbg?.begin()
+      // (the ground shader reads its target's own size: moving frames are drawn smaller; bakes
+      // and still frames, full)
+      const sceneTarget = moving && !dbgFlags.truth ? frameCache.debugTargets.liveLo : frameCache.live
+      backU.uRes.value.set(sceneTarget.width, sceneTarget.height)
       if (moving) {
         frameCache.valid = false
         // (the camera as it is now: if it stays, the next frame bakes for it)
@@ -2533,6 +2553,7 @@ export function createScene(container, options = {}) {
       // (the depth of field eased in, not switched on)
       F.dofK = dofK * dofK * (3 - 2 * dofK)
       cigBox(c, c.b - 4.6, c.b + 0.7 + c.ashLen + 0.8, 4.7, F.regionBox)
+      cigDirty.copy(F.regionBox)
       // (the player's screen is drawn over the cache too: the box takes it in)
       boxStart()
       for (let i = 0; i < 8; i++) boxAdd(bv.set(i & 1 ? screenBounds.max.x : screenBounds.min.x, i & 2 ? screenBounds.max.y : screenBounds.min.y, i & 4 ? screenBounds.max.z : screenBounds.min.z).applyMatrix4(playerScreen.matrixWorld))
@@ -2540,6 +2561,27 @@ export function createScene(container, options = {}) {
       F.regionBox.set(Math.min(F.regionBox.x, sbox.x), Math.min(F.regionBox.y, sbox.y), Math.max(F.regionBox.z, sbox.z), Math.max(F.regionBox.w, sbox.w))
       cigBox(c, c.b - 1.2, c.b + 3.8, 4.7, F.emberBox)
       smokeBoxOf(emberWorld, F.smokeBox)
+      // what a still frame changes (the kept frame holds the rest). In the scene itself: the
+      // burning cigarette, the near glow the ember's flicker falls on (its light fades with the
+      // square of the distance: past ~70 mm the flicker is nothing), the glass when its page or
+      // its light changed, the lighter while the flicker reaches it. In the picture: all that,
+      // plus the smoke and the glow the composite re-mixes from the cache.
+      liveV4.copy(F.emberBox)
+      uniV4(liveV4, cigDirty)
+      if (emberNow > 0) {
+        boxStart()
+        const e = emberWorld
+        for (let i = 0; i < 8; i++) boxAdd(bv.set(e.x + (i & 1 ? 70 : -70), e.y + (i & 2 ? 70 : -4), e.z + (i & 4 ? 70 : -70)))
+        uniV4(liveV4, boxEnd(gv4))
+        boxStart()
+        for (let i = 0; i < 8; i++) boxAdd(bv.set(i & 1 ? lighterBounds.max.x : lighterBounds.min.x, i & 2 ? lighterBounds.max.y : lighterBounds.min.y, i & 4 ? lighterBounds.max.z : lighterBounds.min.z).applyMatrix4(lighter.group.matrixWorld))
+        uniV4(liveV4, boxEnd(lv4))
+      }
+      if (screenBusy || keyAnim > 0) uniV4(liveV4, sbox)
+      dirtyV4.copy(liveV4)
+      uniV4(dirtyV4, F.smokeBox)
+      F.dirty = dirtyV4
+      F.dirtyLive = liveV4
       // the flame on the screen: heat shimmer above it
       F.shim = null
       F.time = simTime

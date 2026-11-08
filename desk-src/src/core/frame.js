@@ -46,13 +46,19 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   const dStat = rt(16, 16, { ...HF, depthBuffer: false })
   const dEmb = rt(16, 16, { ...HF, depthBuffer: false })
   const dLive = rt(16, 16, { ...HF, depthBuffer: false })
-  // (while the view moves, the whole frame's blur at half size: a quarter of the work, and its
-  // softness at edges does not show in motion; still, the region's at full size)
+  // While the view moves, everything is drawn at a reduced size (moveScale) into these fixed
+  // buffers and scaled up on screen by SMAA's last pass: motion hides the softness, a 2x canvas is
+  // four times the pixels, and nothing is reallocated mid-gesture. The moment the view rests, the
+  // full-size still frame returns.
+  const liveLo = withDepth(rt(8, 8, { ...HF, samples: Q.msaa }))
+  const ldrLo = rt(8, 8, { depthBuffer: false })
   const dHalf = rt(8, 8, { ...HF, depthBuffer: false })
   // smoke, and its depth (for the soft fade and the depth-aware upsampling)
   const smoke = rt(16, 16, { ...HF, depthBuffer: false })
   const smokeZ = rt(16, 16, { ...HF, format: THREE.RedFormat, depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter })
-  // the composite before SMAA (only while moving)
+  // the finished still frame, kept between frames: each still frame redraws only the box that
+  // changed (the smoke, the ember's flicker, the screen when its page moved) and copies it out —
+  // an idle frame costs that box, not the screen
   const ldr = rt(16, 16, { depthBuffer: false })
 
   // ---- materials
@@ -71,6 +77,14 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     depthTest: true,
     depthWrite: true,
     depthFunc: THREE.AlwaysDepth,
+  })
+  // the kept frame onto the screen (the canvas must be painted whole every present)
+  const blitMat = new THREE.ShaderMaterial({
+    uniforms: { tColor: { value: null } },
+    vertexShader: VS,
+    fragmentShader: 'uniform sampler2D tColor; varying vec2 vUv; void main() { gl_FragColor = texture2D(tColor, vUv); }',
+    depthTest: false,
+    depthWrite: false,
   })
   // depth of field: a 100 mm lens at f/2.8 framing the same picture (stopped down for close-ups)
   const dofMat = new THREE.ShaderMaterial({
@@ -139,22 +153,31 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   import('three/addons/postprocessing/SMAAPass.js').then(({ SMAAPass }) => {
     if (disposed) return
     smaa = new SMAAPass()
-    smaa.setSize(W, H)
+    smaa.setSize(LW, LH)
     smaaWarm = true
   })
 
   // ---- sizes
   let W = 16
   let H = 16
+  let LW = 16
+  let LH = 16
   let SW = 16
   let SH = 16
-  function setSize(w, h) {
+  let moveScale = 1
+  let ldrValid = false
+  function setSize(w, h, ms = moveScale) {
     W = w
     H = h
+    moveScale = ms
+    LW = Math.max(1, Math.round(w * ms))
+    LH = Math.max(1, Math.round(h * ms))
     SW = Math.max(1, Math.round(w * Q.smokeScale))
     SH = Math.max(1, Math.round(h * Q.smokeScale))
     for (const t of [live, cStat, cEmb, dStat, dEmb, dLive, ldr]) t.setSize(w, h)
-    dHalf.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1))
+    liveLo.setSize(LW, LH)
+    ldrLo.setSize(LW, LH)
+    dHalf.setSize(Math.max(1, LW >> 1), Math.max(1, LH >> 1))
     smoke.setSize(SW, SH)
     smokeZ.setSize(SW, SH)
     compMat.uniforms.uSmokeSize.value.set(SW, SH)
@@ -164,10 +187,11 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     SU.uRes.value.set(SW, SH)
     SU.uPx.value = SH / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
     bloom.setSize(Math.round(w * Q.bloomScale * 2), Math.round(h * Q.bloomScale * 2))
-    smaa?.setSize(w, h)
+    smaa?.setSize(LW, LH)
     bloomBoxWas.fill(-1)
     smokeBoxWas.fill(-1)
     api.valid = false
+    ldrValid = false
   }
 
   // ---- helpers
@@ -182,6 +206,11 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     if (target) target.scissorTest = false
   }
   const px = new THREE.Vector4()
+  const pxD = new THREE.Vector4()
+  const pxL = new THREE.Vector4()
+  const boxI = new THREE.Vector4()
+  /** The intersection of two uv boxes (x0, y0, x1, y1); may come out empty (x1 < x0). */
+  const inter = (a, b, out) => out.set(Math.max(a.x, b.x), Math.max(a.y, b.y), Math.min(a.z, b.z), Math.min(a.w, b.w))
   /** A box in UV (x0, y0, x1, y1) to a scissor rectangle in a target's pixels, grown by `grow` px. */
   function rect(box, tw, th, grow, out) {
     const x0 = Math.max(0, Math.floor(box.x * tw - grow))
@@ -230,7 +259,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     t.scissorTest = true
   }
   const KERNELS = [6, 10, 14, 18, 22]
-  function renderBloom(box) {
+  function renderBloom(box, src) {
     bloomBox = box
     renderer.setClearColor(0x000000, 0)
     if (!sameClip(bloomBoxWas, box)) {
@@ -244,7 +273,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     }
     const clip = bloomClip
     const u = bloom.highPassUniforms
-    u.tDiffuse.value = live.texture
+    u.tDiffuse.value = src
     u.luminosityThreshold.value = bloom.threshold
     quad.material = bloom.materialHighPassFilter
     clip(bloom.renderTargetBright, 2)
@@ -291,7 +320,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   const smokeRect = new THREE.Vector4()
   const smokeBoxWas = new Float64Array(4).fill(-1)
   const smokeTargets = [smoke, smokeZ]
-  function renderSmoke(box) {
+  function renderSmoke(box, depthTex) {
     renderer.setClearColor(0x000000, 0)
     if (!sameClip(smokeBoxWas, box)) {
       for (const t of smokeTargets) {
@@ -302,7 +331,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
       keepClip(smokeBoxWas, box)
     }
     const sc = box ? rect(box, SW, SH, 2, smokeRect) : null
-    zMat.uniforms.tDepth.value = live.depthTexture
+    zMat.uniforms.tDepth.value = depthTex
     draw(zMat, smokeZ, sc)
     SU.uDepthZ.value = smokeZ.texture
     smoke.scissorTest = !!sc
@@ -318,18 +347,22 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   const api = {
     valid: false, // (the cache matches the camera and the scene)
     /** SMAA loaded and its programs compiled (the loader waits for it: nothing compiles after entry). */
-    /** The live frame's multisampling (the quality governor lowers it on a slow GPU). */
+    /** The moving frames' multisampling (the quality governor lowers it on a slow GPU; the
+     * cache's bakes keep theirs). */
     setSamples(n) {
-      if (live.samples === n) return
-      live.dispose()
-      live.samples = n
-      api.valid = false
+      if (liveLo.samples === n) return
+      liveLo.dispose()
+      liveLo.samples = n
+    },
+    /** The moving frames' size, as a share of the canvas's. */
+    get moveScale() {
+      return moveScale
     },
     get smaaReady() {
       return !!smaa && !smaaWarm
     },
     targets,
-    debugTargets: { live, cStat, cEmb, dStat, dEmb, dLive, smoke, smokeZ },
+    debugTargets: { live, liveLo, cStat, cEmb, dStat, dEmb, dLive, ldr, ldrLo, smoke, smokeZ },
     live,
     setSize,
     /**
@@ -380,6 +413,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
         draw(dofMat, dEmb)
       }
       api.valid = true
+      ldrValid = false
     },
     /**
      * One frame. `still`: use the cache (region drawn over it); otherwise draw `scene` whole.
@@ -389,76 +423,133 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
       const scene = f.scene
       renderer.setClearColor(0x000000, 1)
       const keep = camera.layers.mask
-      if (f.still && !f.truth) {
-        restoreMat.uniforms.uI.value = f.emberI
-        draw(restoreMat, live)
-        const ac = renderer.autoClear
-        renderer.autoClear = false
-        camera.layers.set(LAYER.REGION)
-        setMode('region')
-        renderer.setRenderTarget(live)
-        renderer.render(scene, camera)
-        setMode('full')
-        renderer.autoClear = ac
-        camera.layers.mask = keep
-      } else {
+      const u = compMat.uniforms
+      u.uDofK.value = f.dofK
+      if (f.shim) u.uShim.value.set(f.shim.x, f.shim.y, f.shim.k, f.shim.r)
+      else u.uShim.value.z = 0
+      u.uT.value = f.time || 0
+      u.toneMappingExposure.value = renderer.toneMappingExposure
+      // truth (tests): everything drawn whole at full size, straight to the screen
+      if (f.truth) {
         camera.layers.enable(LAYER.STATIC)
         camera.layers.enable(LAYER.REGION)
         renderer.setRenderTarget(live)
         renderer.clear()
         renderer.render(scene, camera)
         camera.layers.mask = keep
-      }
-      // the depth of field: still, only in the region's box (the rest is in the cache); moving, over
-      // the whole frame (the same blur either way: nothing pops as the view stops or starts)
-      const dofK = f.dofK
-      compMat.uniforms.uDofK.value = dofK
-      if (dofK > 0) {
-        setDof(f.focus)
-        dofMat.uniforms.tColor.value = live.texture
-        dofMat.uniforms.tDepth.value = live.depthTexture
-        if (!f.still && !f.truth) {
-          draw(dofMat, dHalf)
-          compMat.uniforms.tDofLive.value = dHalf.texture
-          compMat.uniforms.uBox.value.set(0, 0, 1, 1)
-        } else {
-          if (f.truth) px.set(0, 0, W, H)
-          else rect(f.regionBox, W, H, dofMat.uniforms.uMax.value + 2, px)
+        if (f.dofK > 0) {
+          setDof(f.focus)
+          dofMat.uniforms.tColor.value = live.texture
+          dofMat.uniforms.tDepth.value = live.depthTexture
+          px.set(0, 0, W, H)
           draw(dofMat, dLive, px)
-          compMat.uniforms.tDofLive.value = dLive.texture
-          compMat.uniforms.uBox.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
+          u.tDofLive.value = dLive.texture
+          u.uBox.value.set(0, 0, 1, 1)
+          u.uI.value = f.emberI
         }
-        compMat.uniforms.uI.value = f.emberI
+        renderSmoke(null, live.depthTexture)
+        renderBloom(null, live.texture)
+        u.tScene.value = live.texture
+        u.tDepth.value = live.depthTexture
+        draw(compMat, null)
+        return
       }
-      // (the smoke and the ember's glow only where they can be, moving or still: over the whole
-      // frame they were the dearest part of a moving one)
-      renderSmoke(f.truth ? null : f.smokeBox)
-      renderBloom(f.truth ? null : f.emberBox)
-      // (f.shim: the heat shimmer, {x, y, k, r}; k 0 is none)
-      if (f.shim) compMat.uniforms.uShim.value.set(f.shim.x, f.shim.y, f.shim.k, f.shim.r)
-      else compMat.uniforms.uShim.value.z = 0
-      compMat.uniforms.uT.value = f.time || 0
-      compMat.uniforms.toneMappingExposure.value = renderer.toneMappingExposure
-      if (!f.still && smaa && !smaaWarm) {
-        draw(compMat, ldr)
-        smaa.renderToScreen = true
-        smaa.render(renderer, null, ldr)
-      } else {
-        if (smaaWarm && f.still) {
-          // (every program the moving frames use, compiled now while nothing moves: the moving
-          // path drawn once as it will be, the composite into SMAA's input and SMAA onto the
-          // screen, then this still frame over it)
-          draw(compMat, ldr)
+      if (f.still) {
+        // two boxes bound what a still frame redraws (the kept frame, ldr, holds the rest):
+        //   f.dirtyLive  where the scene itself changed (the coal, the burning paper, the screen
+        //                when its page moved): restored, re-drawn, re-focused
+        //   f.dirty      where the picture changes at all (that, plus the smoke and the flicker's
+        //                glow, which the composite re-mixes linearly from the cache): composited
+        // with no kept frame yet (just baked, just moved, resized), everything
+        const dirty = ldrValid ? f.dirty : null
+        const dirtyLive = ldrValid ? f.dirtyLive || f.dirty : null
+        const dr = dirty ? rect(dirty, W, H, 24, pxD) : null
+        if (dr && (dr.z === 0 || dr.w === 0)) {
+          // (nothing on the screen changes this frame: present the kept frame)
+          blitMat.uniforms.tColor.value = ldr.texture
+          draw(blitMat, null)
+          return
+        }
+        const drL = dirtyLive ? rect(dirtyLive, W, H, 8, pxL) : null
+        const liveWork = !drL || (drL.z > 0 && drL.w > 0)
+        if (liveWork) {
+          restoreMat.uniforms.uI.value = f.emberI
+          draw(restoreMat, live, drL)
+          const ac = renderer.autoClear
+          renderer.autoClear = false
+          camera.layers.set(LAYER.REGION)
+          setMode('region')
+          live.scissorTest = !!drL
+          if (drL) live.scissor.copy(drL)
+          renderer.setRenderTarget(live)
+          renderer.render(scene, camera)
+          live.scissorTest = false
+          setMode('full')
+          renderer.autoClear = ac
+          camera.layers.mask = keep
+        }
+        if (f.dofK > 0) {
+          if (liveWork) {
+            setDof(f.focus)
+            dofMat.uniforms.tColor.value = live.texture
+            dofMat.uniforms.tDepth.value = live.depthTexture
+            rect(dirtyLive ? inter(f.regionBox, dirtyLive, boxI) : f.regionBox, W, H, dofMat.uniforms.uMax.value + 2, px)
+            draw(dofMat, dLive, px)
+            u.tDofLive.value = dLive.texture
+            u.uBox.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
+          }
+          u.uI.value = f.emberI
+        }
+        renderSmoke(f.smokeBox, live.depthTexture)
+        renderBloom(f.emberBox, live.texture)
+        u.tScene.value = live.texture
+        u.tDepth.value = live.depthTexture
+        if (smaaWarm && smaa) {
+          // (every program the moving frames use, compiled now while nothing moves; the still
+          // frame is drawn over it all)
+          draw(compMat, ldrLo)
           smaa.renderToScreen = true
-          smaa.render(renderer, null, ldr)
+          smaa.render(renderer, null, ldrLo)
           smaaWarm = false
         }
-        draw(compMat, null)
+        draw(compMat, ldr, dr)
+        ldrValid = true
+        api.lastStill = { dr, drL } // (debug: what this frame redrew)
+        blitMat.uniforms.tColor.value = ldr.texture
+        draw(blitMat, null)
+      } else {
+        ldrValid = false
+        camera.layers.enable(LAYER.STATIC)
+        camera.layers.enable(LAYER.REGION)
+        renderer.setRenderTarget(liveLo)
+        renderer.clear()
+        renderer.render(scene, camera)
+        camera.layers.mask = keep
+        if (f.dofK > 0) {
+          setDof(f.focus)
+          dofMat.uniforms.tColor.value = liveLo.texture
+          dofMat.uniforms.tDepth.value = liveLo.depthTexture
+          draw(dofMat, dHalf)
+          u.tDofLive.value = dHalf.texture
+          u.uBox.value.set(0, 0, 1, 1)
+          u.uI.value = f.emberI
+        }
+        renderSmoke(f.smokeBox, liveLo.depthTexture)
+        renderBloom(f.emberBox, liveLo.texture)
+        u.tScene.value = liveLo.texture
+        u.tDepth.value = liveLo.depthTexture
+        if (smaa && !smaaWarm) {
+          // (SMAA's last pass writes to the canvas at its own size: the scale-up and the edge
+          // smoothing in one)
+          draw(compMat, ldrLo)
+          smaa.renderToScreen = true
+          smaa.render(renderer, null, ldrLo)
+        } else draw(compMat, null)
       }
     },
     dispose() {
       for (const t of targets) t.dispose()
-      for (const m of [copyMat, restoreMat, dofMat, zMat, compMat]) m.dispose()
+      for (const m of [copyMat, restoreMat, blitMat, dofMat, zMat, compMat]) m.dispose()
       quad.dispose()
       bloom.dispose()
       smaa?.dispose()
