@@ -61,9 +61,8 @@ the physics and the cable's mesh both read it.
 ## The badge and the visitors' book
 
 - `src/objects/badge.js`: the owner's ID card (its face from `src/assets/badge-face.webp`, drawn
-  from the GitHub profile's `assets/id-card.svg`), a nickel clip and ring, a purple lanyard (a
-  ribbon of particles). Double-click to close in; pick it up to hold it up and read it; let go and
-  it is laid down face up, its lanyard laid out beside it.
+  from the GitHub profile's `assets/id-card.svg`), a nickel clip and ring. Double-click to close in;
+  pick it up to hold it up and read it; let go and it is laid down face up.
 - `src/objects/notebook.js` and `src/visitors/`: an A5 spiral notebook, "visitors". A tap closes in
   and opens it: everyone's thumbprints on the left page, yours on the right (pick an ink, add a name
   and a place if you like, press and hold the pad). Each print is drawn from a random number, one of

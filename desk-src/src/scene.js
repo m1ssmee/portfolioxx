@@ -1085,7 +1085,7 @@ export function createScene(container, options = {}) {
     deskBoxes.push(lighterBox)
     stage('lighter', 'done')
 
-    // ---- the badge (objects/badge.js): the owner's ID card and its lanyard, above the player
+    // ---- the badge (objects/badge.js): the owner's ID card, above the player
     const texLoader = new THREE.TextureLoader()
     const [badgeFace, badgeBack] = await Promise.all([texLoader.loadAsync(badgeFaceUrl), texLoader.loadAsync(badgeBackUrl)])
     const badgeTop = new THREE.Vector3().copy(RIGHT).multiplyScalar(Math.cos(LAYOUT.DESK.badgeTurn)).addScaledVector(FWD, Math.sin(LAYOUT.DESK.badgeTurn))
@@ -1095,7 +1095,6 @@ export function createScene(container, options = {}) {
       rest: { x: LAYOUT.DESK.badge[0], z: LAYOUT.DESK.badge[2], theta: Math.atan2(badgeTop.z, badgeTop.x) },
       sdf: deskSdf,
       sdfGrad: deskSdfGrad,
-      ground: ropeGround,
       anisotropy: aniso,
     })
     scene.add(badge.root)
@@ -2158,7 +2157,6 @@ export function createScene(container, options = {}) {
     const physics = createPhysics()
     physics.add(pickup.physics)
     physics.add(lighter.physics)
-    physics.add(badge.physics)
     physics.add({ awake: () => flakesAwake > 0, step: (h) => stepFlakes(h) })
     physics.add(earbudsLive.physics)
     grab.add(earbudsLive.item)

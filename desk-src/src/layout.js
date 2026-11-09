@@ -6,7 +6,7 @@
 //   the earbuds  plugged in, the cable in a few open curves round the player's lower left, the buds
 //                above it, at the left
 //   the ashtray  (with its cigarette) and the lighter below it: off to the right, out of its way
-//   the badge    the owner's ID card, above the player, its lanyard trailing off the top
+//   the badge    the owner's ID card, above the player
 //   the notebook the visitors' book, an A5 spiral notebook, to the right of the ashtray
 export const FWD = [0.836, 0, -0.549]
 export const RIGHT = [-FWD[2], 0, FWD[0]]
