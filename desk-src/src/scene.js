@@ -2342,9 +2342,10 @@ export function createScene(container, options = {}) {
     api.gov = gov // (tests: switched on by hand, a slow frame faked by its bias, ms)
     let shadowTurn = 0
     // ---- the frames' pace: even, never more than the scene can keep
-    //   moving:   at most 60 a second, evenly: on a 120 Hz screen every other refresh. Drawn at every
-    //             refresh, frames this full come unevenly (8 ms, 16, 25 apart), and uneven reads as
-    //             choppy however many there are
+    //   moving:   every refresh, at the screen's own rate (60, 90, 120, 144 Hz), while the frames
+    //             keep up; on a fast screen where they start missing refreshes (uneven frames read
+    //             as choppy however many there are), every other refresh, evenly, trying the full
+    //             rate again three seconds later. (A 60 Hz screen always runs every refresh.)
     //   at rest:  only the smoke and the ember moving and nobody has touched anything for eight
     //             seconds: 30 (they are reading; slow smoke looks the same, and the GPU cools)
     //   behind a project or the visitors' book: 20 (the browser works the blur out again each time
@@ -2352,6 +2353,10 @@ export function createScene(container, options = {}) {
     let lastDrawn = 0
     let wasStill = false
     let veilMoving = false
+    // (the screen's refresh, measured from the callbacks themselves; whether moving frames are drawn
+    // at every refresh, and the misses that decide it)
+    const pace = { tick: 0, refresh: 16.7, full: true, misses: 0, n: 0, retryAt: 0 }
+    api.pace = pace
     let inputAt = 0
     const touched = () => (inputAt = performance.now())
     for (const t of ['pointerdown', 'wheel', 'keydown', 'touchstart']) listen(window, t, touched, { passive: true })
@@ -2359,12 +2364,33 @@ export function createScene(container, options = {}) {
     function frame(now) {
       raf = 0
       if (!running || destroyed) return
+      const tickGap = now - pace.tick
+      pace.tick = now
+      if (tickGap > 2 && tickGap < 40) pace.refresh += (tickGap - pace.refresh) * 0.05
+      if (!pace.full && now > pace.retryAt) {
+        pace.full = true
+        pace.misses = pace.n = 0
+      }
       const calm = !focus.moving && !podSlide && !grab.held
-      const gap = (projOpen || book.isOpen) && calm && !veilMoving ? 48 : wasStill && calm && now - inputAt > 8000 ? 30 : 11
+      const fastScreen = pace.refresh < 12
+      const moveGap = pace.full || !fastScreen ? pace.refresh * 0.5 : pace.refresh * 1.5
+      const gap = (projOpen || book.isOpen) && calm && !veilMoving ? 48 : wasStill && calm && now - inputAt > 8000 ? 30 : moveGap
       // (tests stepping a fixed time a frame: every frame is one)
       if (now - lastDrawn < gap && !dbgFlags.fixedDt) {
         raf = requestAnimationFrame(frame)
         return
+      }
+      // (a moving frame on a fast screen that came a refresh late: a miss; four in thirty, and the
+      // moving frames go to every other refresh for a while)
+      if (fastScreen && pace.full && !wasStill && lastDrawn) {
+        if (now - lastDrawn > pace.refresh * 1.5) pace.misses++
+        if (++pace.n >= 30) {
+          if (pace.misses >= 4) {
+            pace.full = false
+            pace.retryAt = now + 3000
+          }
+          pace.misses = pace.n = 0
+        }
       }
       lastDrawn = now
       api.paced = (api.paced || 0) + 1 // (debug: frames run, after the pacing)
