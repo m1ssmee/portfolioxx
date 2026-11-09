@@ -367,7 +367,8 @@ export function createScene(container, options = {}) {
     const baked = (await bakeJob).tex
     step('textures baked (worker)')
     if (destroyed) return
-    const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy())
+    // (4: the still life is seen from nearly above, where more buys nothing and costs bandwidth)
+    const aniso = Math.min(4, renderer.capabilities.getMaxAnisotropy())
     const disposables = []
     function dataTex(d, arr, srgb, repeat = true) {
       const t = new THREE.DataTexture(arr, d.size, d.size)
@@ -2102,8 +2103,8 @@ export function createScene(container, options = {}) {
       // the glass reflects the room)
       const gw = podView() && (!focus.moving || podSlide) && os.power !== 'asleep' ? 0 : 1
       if (glare !== gw) {
-        const g2 = glare + (gw - glare) * (1 - Math.exp(-dt * (reduceMotion ? 30 : 5)))
-        glare = Math.abs(gw - g2) < 0.004 ? gw : g2
+        const g2 = glare + (gw - glare) * (1 - Math.exp(-dt * (reduceMotion ? 30 : 8)))
+        glare = Math.abs(gw - g2) < 0.01 ? gw : g2
         glassMat.clearcoat = Math.max(1e-4, GLARE.clearcoat * glare) // (never 0: that would be another program)
         glassMat.specularIntensity = GLARE.specularIntensity * glare
         glassMat.envMapIntensity = GLARE.envMapIntensity * glare

@@ -10,12 +10,15 @@
       #include <tonemapping_pars_fragment>
       // the smoke, upsampled: of the four texels around this pixel, those at this pixel's depth
       // (no halo of smoke from behind the cigarette over its edge, nor the other way round)
-      vec4 smokeAt(vec2 uv) {
+      vec4 smokeAt(vec2 uv, float z) {
+        // (no smoke anywhere near this pixel: nothing to weigh. A bilinear sample of a non-negative
+        // texture is zero only when all four texels are, so this is exact, and it is most pixels)
+        vec4 near = texture2D(tSmoke, uv);
+        if (near.a < 0.0005) return near;
         vec2 st = uv * uSmokeSize - 0.5;
         vec2 f = fract(st);
         vec2 b = (floor(st) + 0.5) / uSmokeSize;
         vec2 o = 1.0 / uSmokeSize;
-        float z = linZ(texture2D(tDepth, uv).r);
         vec4 acc = vec4(0.0); float wsum = 0.0;
         float best = 1e9; vec4 nearest = vec4(0.0);
         for (int k = 0; k < 4; k++) {
@@ -43,16 +46,17 @@
           suv += w * m * uShim.z * uShim.w * 0.045 * vec2(1.0 / uAspect, 1.0);
         }
         vec3 c = texture2D(tScene, suv).rgb;
+        float z0 = linZ(texture2D(tDepth, vUv).r);
         if (uDofK > 0.0) {
           bool inBox = vUv.x >= uBox.x && vUv.y >= uBox.y && vUv.x <= uBox.z && vUv.y <= uBox.w;
           vec3 d = inBox ? texture2D(tDofLive, vUv).rgb : texture2D(tDofStat, vUv).rgb + uI * texture2D(tDofEmb, vUv).rgb;
           // (taken only where the lens blurs, by this pixel's own circle: in focus, the frame's own
           // pixels, exactly)
-          float dz = linZ(texture2D(tDepth, vUv).r) - uFocus;
+          float dz = z0 - uFocus;
           float cc = min(uK * abs(dz) / max(uEq + dz, 1.0), uMaxC);
           c = mix(c, d, uDofK * smoothstep(0.6, 2.2, cc));
         }
-        vec4 s = smokeAt(vUv);
+        vec4 s = smokeAt(vUv, z0);
         c = c * (1.0 - s.a) + s.rgb;
         c += texture2D(tBloom, vUv).rgb;
         // (a product shot's tone curve: colours as they are, the light parts compressed, never clipped)
