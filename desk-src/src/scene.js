@@ -82,8 +82,8 @@ const CSS = `
 .cg-keys{position:absolute;right:max(24px,env(safe-area-inset-right));bottom:max(94px,calc(env(safe-area-inset-bottom) + 76px));margin:0;padding:0;list-style:none;display:flex;flex-direction:column;align-items:flex-end;gap:10px;color:var(--label);pointer-events:none}
 .cg-keys{transition:opacity .4s}
 .cg-close .cg-keys{opacity:0}
-.cg-veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(232,236,241,.22) 0%,rgba(235,238,243,.5) 46%,rgba(240,242,246,.78) 100%);-webkit-backdrop-filter:blur(34px) saturate(.45) brightness(1.05) contrast(.86);backdrop-filter:blur(34px) saturate(.45) brightness(1.05) contrast(.86);-webkit-mask-image:linear-gradient(#000 0 0),var(--hole,linear-gradient(transparent 0 0));mask-image:linear-gradient(#000 0 0),var(--hole,linear-gradient(transparent 0 0));-webkit-mask-size:100% 100%,var(--hole-size,0 0);mask-size:100% 100%,var(--hole-size,0 0);-webkit-mask-position:0 0,var(--hole-pos,0 0);mask-position:0 0,var(--hole-pos,0 0);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;visibility:hidden;cursor:pointer;transition:opacity .6s cubic-bezier(.3,0,.2,1),visibility 0s .6s}
-.cg-projecting .cg-veil{opacity:1;visibility:visible;transition:opacity .6s cubic-bezier(.3,0,.2,1)}
+.cg-veil{position:absolute;inset:0;visibility:hidden;cursor:pointer;transition:visibility 0s .6s}
+.cg-projecting .cg-veil{visibility:visible;transition:none}
 .cg-projecting .cg-keys,.cg-projecting .cg-copy{opacity:0;pointer-events:none}
 .cg-keys,.cg-copy{transition:opacity .4s}
 .cg-proj{position:absolute;z-index:3;right:max(5vw,28px);top:50%;box-sizing:border-box;width:min(500px,42vw);max-height:min(80vh,720px);overflow:auto;padding:4px 6px 4px 0;color:var(--ink);font:400 14.5px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:0;opacity:0;visibility:hidden;transform:translate(18px,-50%);transition:opacity .3s ease,transform .3s ease,visibility 0s .3s;scrollbar-width:thin}
@@ -1471,7 +1471,7 @@ export function createScene(container, options = {}) {
     // the bakes use targets of different sizes)
     const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget: (w, h) => backU.uRes.value.set(w, h), onMark: (l) => dbg?.mark(l) })
     // where things are on the screen (UV boxes): the ember region, the ember, the smoke
-    const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0, dirty: null, dirtyLive: null }
+    const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0, dirty: null, dirtyLive: null, veil: null }
     const bv = new THREE.Vector3()
     const dirtyV4 = new THREE.Vector4()
     const cigDirty = new THREE.Vector4()
@@ -2028,18 +2028,27 @@ export function createScene(container, options = {}) {
     }
     const veilP = new THREE.Vector3()
     let veilClip = null
-    let veilHole = ''
+    // the frost over the scene (drawn by the frame's present pass: core/frame.js): its strength
+    // eased over 0.6 s, the hole round the player (none on a narrow screen: the sheet covers it;
+    // none for the book), its tint (denser to the right for a project's text; even for the book)
+    let veilT = 0
+    const VEIL = { k: 0, holeOn: 0, hole: new THREE.Vector4(), r: 0, feather: 30, tintA: new THREE.Vector3() }
+    const TINT_PROJECT = new THREE.Vector3(0.22, 0.5, 0.78)
+    const TINT_BOOK = new THREE.Vector3(0.55, 0.55, 0.55)
+    function stepVeil(dt) {
+      const want = projOpen || book.isOpen ? 1 : 0
+      const was = veilT
+      veilT = want ? Math.min(1, veilT + dt / 0.6) : Math.max(0, veilT - dt / 0.6)
+      VEIL.k = veilT * veilT * (3 - 2 * veilT)
+      if (want) VEIL.tintA.copy(book.isOpen ? TINT_BOOK : TINT_PROJECT)
+      VEIL.holeOn = projOpen && !book.isOpen && !narrowUI() ? 1 : 0
+      VEIL.feather = FEATHER * renderer.getPixelRatio()
+      return veilT !== was
+    }
     // (the veil's hole: a soft-edged rounded rectangle round the player, as a mask image (its
     // feather all outside the player), and the player's own outline as a clip, so the player's
     // keys and page still take clicks through it)
-    const FEATHER = 30
-    function holeImage(w, h, r) {
-      const W = Math.round(w + 2 * FEATHER)
-      const H = Math.round(h + 2 * FEATHER)
-      const g = FEATHER * 0.55 // (the rectangle grown by this much: the feather starts at the player's edge, opaque)
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}'><filter id='f' x='-30%' y='-30%' width='160%' height='160%'><feGaussianBlur stdDeviation='${(FEATHER / 2.8).toFixed(1)}'/></filter><rect x='${(FEATHER - g).toFixed(1)}' y='${(FEATHER - g).toFixed(1)}' width='${(w + 2 * g).toFixed(1)}' height='${(h + 2 * g).toFixed(1)}' rx='${(r + g).toFixed(1)}' fill='#000' filter='url(#f)'/></svg>`
-      return { url: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`, W, H }
-    }
+    const FEATHER = 30 // (px, CSS: the hole's soft edge)
     function stepProject() {
       const v = os.view
       const id = v.startsWith('project:') ? v.slice(8) : null
@@ -2071,20 +2080,10 @@ export function createScene(container, options = {}) {
           y1 = Math.max(y1, sy)
         }
         const r = (x1 - x0) * 0.13
+        VEIL.hole.set(x0 / w, 1 - y1 / h, x1 / w, 1 - y0 / h)
+        VEIL.r = r * renderer.getPixelRatio()
         const f = (n) => n.toFixed(1)
         clip = `path(evenodd, "M0 0H${w}V${h}H0Z M${f(x0 + r)} ${f(y0)}H${f(x1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1)} ${f(y0 + r)}V${f(y1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1 - r)} ${f(y1)}H${f(x0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0)} ${f(y1 - r)}V${f(y0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0 + r)} ${f(y0)}Z")`
-        // (the soft hole: drawn again only when the player's size on the screen changes)
-        const size = `${Math.round(x1 - x0)}x${Math.round(y1 - y0)}`
-        if (size !== veilHole) {
-          veilHole = size
-          const im = holeImage(x1 - x0, y1 - y0, r)
-          veilEl.style.setProperty('--hole', im.url)
-          veilEl.style.setProperty('--hole-size', `${im.W}px ${im.H}px`)
-        }
-        veilEl.style.setProperty('--hole-pos', `${f(x0 - FEATHER)}px ${f(y0 - FEATHER)}px`)
-      } else if (veilHole) {
-        veilHole = ''
-        veilEl.style.removeProperty('--hole')
       }
       if (clip !== veilClip) veilEl.style.clipPath = veilClip = clip
     }
@@ -2345,6 +2344,7 @@ export function createScene(container, options = {}) {
     //             the scene under it changes)
     let lastDrawn = 0
     let wasStill = false
+    let veilMoving = false
     let inputAt = 0
     const touched = () => (inputAt = performance.now())
     for (const t of ['pointerdown', 'wheel', 'keydown', 'touchstart']) listen(window, t, touched, { passive: true })
@@ -2353,7 +2353,7 @@ export function createScene(container, options = {}) {
       raf = 0
       if (!running || destroyed) return
       const calm = !focus.moving && !podSlide && !grab.held
-      const gap = (projOpen || book.isOpen) && calm ? 48 : wasStill && calm && now - inputAt > 8000 ? 30 : 11
+      const gap = (projOpen || book.isOpen) && calm && !veilMoving ? 48 : wasStill && calm && now - inputAt > 8000 ? 30 : 11
       // (tests stepping a fixed time a frame: every frame is one)
       if (now - lastDrawn < gap && !dbgFlags.fixedDt) {
         raf = requestAnimationFrame(frame)
@@ -2400,6 +2400,7 @@ export function createScene(container, options = {}) {
         if (focus.focused === 'notebook') openBook()
         else bookPending = false
       }
+      const veilBusy = stepVeil(dt)
       const badgeBusy = badge.update(dt)
       if (badgeBusy) badgeBox.set(badge.group.matrix)
       // (the cable drawn between its last two steps: physics.alpha)
@@ -2564,6 +2565,8 @@ export function createScene(container, options = {}) {
       // (the depth of field: eased in once, at the start, then kept, moving or still: a zoom or a
       // glide never switches it off and on, so the soft edges of the picture do not pop)
       dofK = Math.min(1, dofK + dt / 0.7)
+      veilMoving = veilBusy
+      F.veil = VEIL.k > 0 ? VEIL : null
       F.still = !moving && !stillPending
       F.truth = !!dbgFlags.truth
       F.emberI = emberNow / EMBER_CD

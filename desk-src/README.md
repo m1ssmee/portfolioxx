@@ -97,7 +97,10 @@ plain data, without imports: the build reads it too. The same file also gives th
 the top left and the copyright line, and becomes the page's hidden semantic HTML, for search
 engines and screen readers (made by `vite.config.js` from `src/content/pages.js`).
 
-Opening a project (a card, or the keys) slides the player to the left, blurs the rest and tells
+Opening a project (a card, or the keys) slides the player to the left, frosts the rest (the frame's
+own present pass blurs an eighth-size copy of the scene and mixes it in with a tint and a soft hole
+round the player: a CSS backdrop-filter over the canvas made the browser blur every pixel itself,
+each frame, and stuttered) and tells
 the project on the right, with a button to its live site (or its code); on a phone it comes up as a
 sheet. Back, Escape, ◀ or a click on the blur closes it.
 

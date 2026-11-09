@@ -90,14 +90,96 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
     depthWrite: true,
     depthFunc: THREE.AlwaysDepth,
   })
-  // the kept frame onto the screen (the canvas must be painted whole every present)
-  const blitMat = new THREE.ShaderMaterial({
-    uniforms: { tColor: { value: null } },
+  // the veil (a project open, the visitors' book): the frame blurred at an eighth of its size,
+  // two separable passes twice over, mixed in by the present pass with a tint, less colour and a
+  // soft hole round the player. (A CSS backdrop-filter over the canvas made the browser blur all
+  // 6.7 M pixels itself, on every frame the scene behind it changed.)
+  const veilA = rt(4, 4, { depthBuffer: false })
+  const veilB = rt(4, 4, { depthBuffer: false })
+  const veilBlurMat = new THREE.ShaderMaterial({
+    uniforms: { tColor: { value: null }, uStep: { value: new THREE.Vector2() } },
     vertexShader: VS,
-    fragmentShader: 'uniform sampler2D tColor; varying vec2 vUv; void main() { gl_FragColor = texture2D(tColor, vUv); }',
+    fragmentShader: /* glsl */ `uniform sampler2D tColor; uniform vec2 uStep; varying vec2 vUv;
+      void main() {
+        vec3 c = texture2D(tColor, vUv).rgb * 0.2270270270;
+        c += (texture2D(tColor, vUv + uStep * 1.3846153846).rgb + texture2D(tColor, vUv - uStep * 1.3846153846).rgb) * 0.3162162162;
+        c += (texture2D(tColor, vUv + uStep * 3.2307692308).rgb + texture2D(tColor, vUv - uStep * 3.2307692308).rgb) * 0.0702702703;
+        gl_FragColor = vec4(c, 1.0);
+      }`,
     depthTest: false,
     depthWrite: false,
   })
+  // the frame onto the screen (the canvas must be painted whole every present), the veil over it
+  const presentMat = new THREE.ShaderMaterial({
+    uniforms: {
+      tColor: { value: null },
+      tBlur: { value: veilB.texture },
+      uVeil: { value: 0 },
+      uHoleOn: { value: 0 },
+      uHole: { value: new THREE.Vector4() }, // (uv: x0, y0, x1, y1)
+      uHoleR: { value: 0 }, // (px)
+      uFeather: { value: 30 }, // (px)
+      uRes: { value: new THREE.Vector2(1, 1) },
+      uTintA: { value: new THREE.Vector3(0.22, 0.5, 0.78) }, // (the tint's alpha at the left, 46% across, the right)
+    },
+    vertexShader: VS,
+    fragmentShader: /* glsl */ `uniform sampler2D tColor; uniform sampler2D tBlur; uniform float uVeil; uniform float uHoleOn; uniform vec4 uHole; uniform float uHoleR; uniform float uFeather; uniform vec2 uRes; uniform vec3 uTintA; varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(tColor, vUv);
+        if (uVeil > 0.0) {
+          // the frosted scene: blurred, most of its colour drained, a touch lighter and flatter
+          vec3 b = texture2D(tBlur, vUv).rgb;
+          float l = dot(b, vec3(0.2126, 0.7152, 0.0722));
+          b = mix(vec3(l), b, 0.45) * 1.05;
+          b = (b - 0.5) * 0.86 + 0.5;
+          // the paper tint, denser towards the right where the text is
+          float t = vUv.x;
+          float a = t < 0.46 ? mix(uTintA.x, uTintA.y, t / 0.46) : mix(uTintA.y, uTintA.z, (t - 0.46) / 0.54);
+          b = mix(b, mix(vec3(0.910, 0.925, 0.945), vec3(0.941, 0.949, 0.965), t), a);
+          // the hole round the player: a rounded rectangle, grown a little, its edge feathered
+          float m = 1.0;
+          if (uHoleOn > 0.5) {
+            vec2 p = vUv * uRes;
+            vec2 c0 = (uHole.xy + uHole.zw) * 0.5 * uRes;
+            vec2 hs = (uHole.zw - uHole.xy) * 0.5 * uRes;
+            float g = uFeather * 0.55;
+            float r = uHoleR + g;
+            vec2 q = abs(p - c0) - (hs + g - r);
+            float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+            m = smoothstep(-uFeather * 0.5, uFeather * 0.5, d);
+          }
+          c.rgb = mix(c.rgb, b, uVeil * m);
+        }
+        gl_FragColor = c;
+      }`,
+    depthTest: false,
+    depthWrite: false,
+  })
+  /** The frame `src` onto the screen, the veil (f.veil: { k, holeOn, hole, r, feather, tintA }) over it. */
+  function present(src, f) {
+    const v = f && f.veil
+    const u = presentMat.uniforms
+    if (v && v.k > 0) {
+      const sx = 2 / veilA.width
+      const sy = 2 / veilA.height
+      for (let pass = 0; pass < 2; pass++) {
+        veilBlurMat.uniforms.tColor.value = pass ? veilB.texture : src.texture
+        veilBlurMat.uniforms.uStep.value.set(sx, 0)
+        draw(veilBlurMat, veilA)
+        veilBlurMat.uniforms.tColor.value = veilA.texture
+        veilBlurMat.uniforms.uStep.value.set(0, sy)
+        draw(veilBlurMat, veilB)
+      }
+      u.uVeil.value = v.k
+      u.uHoleOn.value = v.holeOn ? 1 : 0
+      u.uHole.value.copy(v.hole)
+      u.uHoleR.value = v.r
+      u.uFeather.value = v.feather
+      u.uTintA.value.copy(v.tintA)
+    } else u.uVeil.value = 0
+    u.tColor.value = src.texture
+    draw(presentMat, null)
+  }
   // depth of field: a 100 mm lens at f/2.8 framing the same picture (stopped down for close-ups)
   const dofMat = new THREE.ShaderMaterial({
     uniforms: { tColor: { value: null }, tDepth: { value: null }, uFocus: { value: 200 }, uEq: { value: 600 }, uK: { value: 1 }, uNear: { value: camera.near }, uFar: { value: camera.far }, uTexel: { value: new THREE.Vector2() }, uMax: { value: 8 } },
@@ -191,6 +273,9 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
     liveLo.setSize(LW, LH)
     ldrLo.setSize(LW, LH)
     ldrLo2.setSize(LW, LH)
+    veilA.setSize(Math.max(1, w >> 3), Math.max(1, h >> 3))
+    veilB.setSize(Math.max(1, w >> 3), Math.max(1, h >> 3))
+    presentMat.uniforms.uRes.value.set(w, h)
     dHalf.setSize(Math.max(1, LW >> 1), Math.max(1, LH >> 1))
     smoke.setSize(SW, SH)
     smokeZ.setSize(SW, SH)
@@ -563,8 +648,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         const dr = dirty ? rect(dirty, W, H, 24, pxD) : null
         if (dr && (dr.z === 0 || dr.w === 0)) {
           // (nothing on the screen changes this frame: present the kept frame)
-          blitMat.uniforms.tColor.value = ldr.texture
-          draw(blitMat, null)
+          present(ldr, f)
           return
         }
         const drL = dirtyLive ? rect(dirtyLive, W, H, 8, pxL) : null
@@ -617,8 +701,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         ldrValid = true
         api.lastStill = { dr, drL } // (debug: what this frame redrew)
         mark('present')
-        blitMat.uniforms.tColor.value = ldr.texture
-        draw(blitMat, null)
+        present(ldr, f)
       } else {
         ldrValid = false
         camera.layers.enable(LAYER.STATIC)
@@ -651,14 +734,16 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           mark('present')
           smaa.renderToScreen = false
           smaa.render(renderer, ldrLo2, ldrLo)
-          blitMat.uniforms.tColor.value = ldrLo2.texture
-          draw(blitMat, null)
-        } else draw(compMat, null)
+        } else {
+          mark('present')
+          draw(compMat, ldrLo2)
+        }
+        present(ldrLo2, f)
       }
     },
     dispose() {
       for (const t of targets) t.dispose()
-      for (const m of [copyMat, restoreMat, blitMat, dofMat, zMat, compMat]) m.dispose()
+      for (const m of [copyMat, restoreMat, presentMat, veilBlurMat, dofMat, zMat, compMat]) m.dispose()
       quad.dispose()
       bloom.dispose()
       smaa?.dispose()
