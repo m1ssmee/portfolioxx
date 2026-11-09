@@ -1274,6 +1274,9 @@ export function createScene(container, options = {}) {
     // (the distance followed in its logarithm, by a critically damped spring: each notch of a wheel
     // starts and ends softly, a run of them is one glide, and a zoom feels the same near and far)
     const zoom = { on: false, to: 0, l: new Float64Array(1), v: new Float64Array(1), t: new Float64Array(1) }
+    // (a wheel's notches come a few hundred ms apart: between them the view may sit still, but the
+    // gesture is not over. Until this time nothing is baked and the page stays off the glass)
+    let gestureUntil = 0
     const zoomV = new THREE.Vector3()
     listen(
       canvas,
@@ -1291,6 +1294,7 @@ export function createScene(container, options = {}) {
         zoom.to = THREE.MathUtils.clamp(zoom.to * Math.exp(THREE.MathUtils.clamp(d, -120, 120) * 0.0016), controls.minDistance, controls.maxDistance)
         zoom.t[0] = Math.log(zoom.to)
         zoom.on = true
+        gestureUntil = performance.now() + 350
         orbited = true
         wake()
       },
@@ -2112,7 +2116,9 @@ export function createScene(container, options = {}) {
       }
       // up close: the page, once the glide is over and the screen fully lit (the texture shows what
       // the page shows), while the camera looks onto the glass and nothing covers it or is carried
-      let want = podView() && (!focus.moving || podSlide) && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom
+      // (and not while a zoom runs: the page, scaled every frame, would be rasterized again by the
+      // browser at each new scale; the glass shows its texture meanwhile)
+      let want = podView() && (!focus.moving || podSlide) && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom && !zoom.on && performance.now() >= gestureUntil
       if (want) {
         camera.updateMatrixWorld()
         osCam.copy(camera.position).applyMatrix4(playerInv)
@@ -2499,7 +2505,7 @@ export function createScene(container, options = {}) {
       // (the cache is baked once the view has been still for an eighth of a second: a slow zoom or
       // pinch with small pauses goes on drawing whole frames, it does not bake at every pause)
       stillTime = changing ? 0 : stillTime + Math.max(dt, 1 / 240)
-      const moving = changing || stillTime < 0.12
+      const moving = changing || stillTime < 0.12 || performance.now() < gestureUntil
       govern(interval, moving && !focus.moving && !podSlide && !projOpen && !book.isOpen)
       wasStill = !moving
       // shadows: drawn again only when the shadow casters changed (the burn moves slowly: every 6 s)
