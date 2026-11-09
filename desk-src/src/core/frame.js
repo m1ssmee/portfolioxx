@@ -23,7 +23,12 @@ import compositeFrag from '../shaders/composite.frag'
 
 export const LAYER = { STATIC: 0, REGION: 2 }
 
-export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
+export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget }) {
+  /** The scene is about to be drawn into `t`: whoever reads the target's size (the ground shader) is told. */
+  const sceneInto = (t) => {
+    onTarget?.(t.width, t.height)
+    renderer.setRenderTarget(t)
+  }
   const quad = new FullScreenQuad(null)
   const targets = []
   const rt = (w, h, o) => {
@@ -52,6 +57,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   // full-size still frame returns.
   const liveLo = withDepth(rt(8, 8, { ...HF, samples: Q.msaa }))
   const ldrLo = rt(8, 8, { depthBuffer: false })
+  const ldrLo2 = rt(8, 8, { depthBuffer: false }) // (SMAA's output, at the same size; one copy presents it)
   const dHalf = rt(8, 8, { ...HF, depthBuffer: false })
   // smoke, and its depth (for the soft fade and the depth-aware upsampling)
   const smoke = rt(16, 16, { ...HF, depthBuffer: false })
@@ -166,6 +172,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
   let SH = 16
   let moveScale = 1
   let ldrValid = false
+  let bakeStage = 0
   function setSize(w, h, ms = moveScale) {
     W = w
     H = h
@@ -177,6 +184,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     for (const t of [live, cStat, cEmb, dStat, dEmb, dLive, ldr]) t.setSize(w, h)
     liveLo.setSize(LW, LH)
     ldrLo.setSize(LW, LH)
+    ldrLo2.setSize(LW, LH)
     dHalf.setSize(Math.max(1, LW >> 1), Math.max(1, LH >> 1))
     smoke.setSize(SW, SH)
     smokeZ.setSize(SW, SH)
@@ -358,6 +366,9 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
     get moveScale() {
       return moveScale
     },
+    get moveSamples() {
+      return liveLo.samples
+    },
     get smaaReady() {
       return !!smaa && !smaaWarm
     },
@@ -371,6 +382,81 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
      * lighting and which part of the cigarette's paper is drawn); then both through the depth of
      * field.
      */
+    /**
+     * The same bake a step a frame (the moving frames go on showing meanwhile): one scene pass or
+     * one full-screen blur each, so no frame at the end of a gesture pays for them all at once.
+     * Returns true when the cache is complete. Stopped (the view moving again), it starts over.
+     */
+    bakeStep(scene, focus, shadows) {
+      const keep = camera.layers.mask
+      renderer.setClearColor(0x000000, 1)
+      const st = bakeStage
+      if (st === 0) {
+        if (shadows) {
+          camera.layers.enable(LAYER.STATIC)
+          camera.layers.enable(LAYER.REGION)
+          setMode('full')
+          renderer.shadowMap.needsUpdate = true
+          sceneInto(live)
+          renderer.clear()
+          renderer.render(scene, camera)
+          camera.layers.mask = keep
+        }
+        bakeStage = 1
+        return false
+      }
+      if (st === 1) {
+        camera.layers.set(LAYER.STATIC)
+        setMode('static')
+        sceneInto(live)
+        renderer.clear()
+        renderer.render(scene, camera)
+        copyMat.uniforms.tColor.value = live.texture
+        copyMat.uniforms.tDepth.value = live.depthTexture
+        renderer.setRenderTarget(cStat)
+        renderer.clear()
+        draw(copyMat, cStat)
+        setMode('full')
+        camera.layers.mask = keep
+        bakeStage = 2
+        return false
+      }
+      if (st === 2) {
+        camera.layers.set(LAYER.STATIC)
+        setMode('ember')
+        sceneInto(live)
+        renderer.clear()
+        renderer.render(scene, camera)
+        quad.material = copyMat
+        copyMat.uniforms.tColor.value = live.texture
+        renderer.setRenderTarget(cEmb)
+        quad.render(renderer)
+        setMode('full')
+        camera.layers.mask = keep
+        bakeStage = 3
+        return false
+      }
+      if (st === 3) {
+        setDof(focus)
+        dofMat.uniforms.tDepth.value = cStat.depthTexture
+        dofMat.uniforms.tColor.value = cStat.texture
+        draw(dofMat, dStat)
+        bakeStage = 4
+        return false
+      }
+      setDof(focus)
+      dofMat.uniforms.tDepth.value = cStat.depthTexture
+      dofMat.uniforms.tColor.value = cEmb.texture
+      draw(dofMat, dEmb)
+      bakeStage = 0
+      api.valid = true
+      ldrValid = false
+      return true
+    },
+    /** Stop a bake under way (the view moved): it starts over next time. */
+    bakeReset() {
+      bakeStage = 0
+    },
     bake(scene, focus, shadows) {
       const keep = camera.layers.mask
       renderer.setClearColor(0x000000, 1)
@@ -380,13 +466,13 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
         camera.layers.enable(LAYER.REGION)
         setMode('full')
         renderer.shadowMap.needsUpdate = true
-        renderer.setRenderTarget(live)
+        sceneInto(live)
         renderer.clear()
         renderer.render(scene, camera)
       }
       camera.layers.set(LAYER.STATIC)
       setMode('static')
-      renderer.setRenderTarget(live)
+      sceneInto(live)
       renderer.clear()
       renderer.render(scene, camera)
       copyMat.uniforms.tColor.value = live.texture
@@ -395,7 +481,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
       renderer.clear()
       draw(copyMat, cStat)
       setMode('ember')
-      renderer.setRenderTarget(live)
+      sceneInto(live)
       renderer.clear()
       renderer.render(scene, camera)
       quad.material = copyMat
@@ -433,7 +519,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
       if (f.truth) {
         camera.layers.enable(LAYER.STATIC)
         camera.layers.enable(LAYER.REGION)
-        renderer.setRenderTarget(live)
+        sceneInto(live)
         renderer.clear()
         renderer.render(scene, camera)
         camera.layers.mask = keep
@@ -481,7 +567,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
           setMode('region')
           live.scissorTest = !!drL
           if (drL) live.scissor.copy(drL)
-          renderer.setRenderTarget(live)
+          sceneInto(live)
           renderer.render(scene, camera)
           live.scissorTest = false
           setMode('full')
@@ -508,8 +594,8 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
           // (every program the moving frames use, compiled now while nothing moves; the still
           // frame is drawn over it all)
           draw(compMat, ldrLo)
-          smaa.renderToScreen = true
-          smaa.render(renderer, null, ldrLo)
+          smaa.renderToScreen = false
+          smaa.render(renderer, ldrLo2, ldrLo)
           smaaWarm = false
         }
         draw(compMat, ldr, dr)
@@ -521,7 +607,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
         ldrValid = false
         camera.layers.enable(LAYER.STATIC)
         camera.layers.enable(LAYER.REGION)
-        renderer.setRenderTarget(liveLo)
+        sceneInto(liveLo)
         renderer.clear()
         renderer.render(scene, camera)
         camera.layers.mask = keep
@@ -539,11 +625,13 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode }) {
         u.tScene.value = liveLo.texture
         u.tDepth.value = liveLo.depthTexture
         if (smaa && !smaaWarm) {
-          // (SMAA's last pass writes to the canvas at its own size: the scale-up and the edge
-          // smoothing in one)
+          // (SMAA at the reduced size, then one copy scales it onto the canvas: the canvas's own
+          // pixels are touched once, by a single read)
           draw(compMat, ldrLo)
-          smaa.renderToScreen = true
-          smaa.render(renderer, null, ldrLo)
+          smaa.renderToScreen = false
+          smaa.render(renderer, ldrLo2, ldrLo)
+          blitMat.uniforms.tColor.value = ldrLo2.texture
+          draw(blitMat, null)
         } else draw(compMat, null)
       }
     },

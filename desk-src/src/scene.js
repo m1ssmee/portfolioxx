@@ -1467,7 +1467,9 @@ export function createScene(container, options = {}) {
       scene.environmentIntensity = only ? 0 : LIGHTS.env
       setEmberLight(emberWorld, camera, mode === 'static' ? 0 : only ? 1 : emberNow / EMBER_CD, EMBER_CD)
     }
-    const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode })
+    // (the ground shader reads the size of whatever the scene is drawn into: moving frames and
+    // the bakes use targets of different sizes)
+    const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget: (w, h) => backU.uRes.value.set(w, h) })
     // where things are on the screen (UV boxes): the ember region, the ember, the smoke
     const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0, dirty: null, dirtyLive: null }
     const bv = new THREE.Vector3()
@@ -1535,11 +1537,15 @@ export function createScene(container, options = {}) {
       renderer.setPixelRatio(dpr)
       renderer.setSize(w, h, false)
       renderer.getDrawingBufferSize(dbs)
-      // (moving frames at three quarters of a dense canvas's size, and less if the governor had
-      // to step down: motion hides it, and a 2x canvas is four times the pixels)
-      frameCache.setSize(dbs.x, dbs.y, (dpr > 1.25 ? 0.75 : 1) * moveScaleK)
+      // (moving frames at two thirds of a 2x canvas's size, three quarters of a 1.5x one, and less
+      // if the governor had to step down: motion hides it, and a 2x canvas is four times the pixels)
+      frameCache.setSize(dbs.x, dbs.y, (dpr >= 2 ? 2 / 3 : dpr > 1.25 ? 0.75 : 1) * moveScaleK)
+      // (moving frames: half the multisampling on a dense canvas, SMAA smoothing them after; none
+      // once the governor has had to step down)
+      frameCache.setSamples(moveSamplesOff ? 0 : dpr > 1.25 ? 2 : Q.msaa)
     }
     let moveScaleK = 1
+    let moveSamplesOff = false
     const dbs = new THREE.Vector2()
     const ro = new ResizeObserver(resize)
     ro.observe(container)
@@ -2217,6 +2223,9 @@ export function createScene(container, options = {}) {
     let dofK = 0
     let stillTime = 0
     let shadowsDrawn = false
+    let baking = false // (a bake under way, a step a frame)
+    let bakeShadows = false
+    let stillPending = false // (this frame: the cache not yet complete, a moving frame shown instead)
     const bakedCam = new THREE.Matrix4()
     const bakedProj = new THREE.Matrix4()
     // (OrbitControls rewrites the camera on every update, with round-off even when it stands still)
@@ -2314,16 +2323,14 @@ export function createScene(container, options = {}) {
       gov.ema += (Math.min(interval + gov.bias, 100) - gov.ema) * 0.06
       if (gov.ema < 21 || gov.n < 90 || performance.now() < gov.after || gov.level >= 2) return
       gov.level++
-      if (gov.level === 1) frameCache.setSamples(2)
-      else {
-        moveScaleK = 0.75
-        resize()
-      }
+      if (gov.level === 1) moveSamplesOff = true
+      else moveScaleK = 0.75
+      resize()
       gov.n = 0
       gov.ema = 16.7
       gov.after = performance.now() + 2000
     }
-    api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio(), moveScale: frameCache.moveScale })
+    api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio(), moveScale: frameCache.moveScale, moveSamples: frameCache.moveSamples })
     api.stillWhy = () => ({ screenBusy, keyAnim, glare, osUp, level: os?.level, dirty: os?.dirty, power: os?.power })
     api.gov = gov // (tests: switched on by hand, a slow frame faked by its bias, ms)
     let shadowTurn = 0
@@ -2516,11 +2523,12 @@ export function createScene(container, options = {}) {
         return
       }
       dbg?.begin()
-      // (the ground shader reads its target's own size: moving frames are drawn smaller; bakes
-      // and still frames, full)
-      const sceneTarget = moving && !dbgFlags.truth ? frameCache.debugTargets.liveLo : frameCache.live
-      backU.uRes.value.set(sceneTarget.width, sceneTarget.height)
+      stillPending = false
       if (moving) {
+        if (baking) {
+          baking = false
+          frameCache.bakeReset()
+        }
         frameCache.valid = false
         // (the camera as it is now: if it stays, the next frame bakes for it)
         bakedCam.copy(camera.matrixWorld)
@@ -2534,20 +2542,27 @@ export function createScene(container, options = {}) {
       } else {
         if (!frameCache.valid || shadowDirty || burnStep) {
           // (the shadows drawn again only if what casts them changed: the camera does not change them)
-          const shadows = shadowDirty || burnStep || !shadowsDrawn
-          if (shadows) key.shadow.needsUpdate = true
-          shadowsDrawn = true
-          frameCache.bake(scene, F.focus, shadows)
-          bakedCam.copy(camera.matrixWorld)
-          bakedProj.copy(camera.projectionMatrix)
-          shadowDirty = false
-          if (dbg) dbg.bakes++
+          if (!baking) {
+            bakeShadows = shadowDirty || burnStep || !shadowsDrawn
+            if (bakeShadows) key.shadow.needsUpdate = true
+            shadowsDrawn = true
+            shadowDirty = false
+            bakedCam.copy(camera.matrixWorld)
+            bakedProj.copy(camera.projectionMatrix)
+            baking = true
+          }
+          // (a step a frame; the moving frames go on showing until the cache is complete, so the
+          // end of a gesture never pays for the whole bake in one frame)
+          if (frameCache.bakeStep(scene, F.focus, bakeShadows)) {
+            baking = false
+            if (dbg) dbg.bakes++
+          } else stillPending = true
         }
       }
       // (the depth of field: eased in once, at the start, then kept, moving or still: a zoom or a
       // glide never switches it off and on, so the soft edges of the picture do not pop)
       dofK = Math.min(1, dofK + dt / 0.7)
-      F.still = !moving
+      F.still = !moving && !stillPending
       F.truth = !!dbgFlags.truth
       F.emberI = emberNow / EMBER_CD
       // (the depth of field eased in, not switched on)
