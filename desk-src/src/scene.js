@@ -1469,7 +1469,7 @@ export function createScene(container, options = {}) {
     }
     // (the ground shader reads the size of whatever the scene is drawn into: moving frames and
     // the bakes use targets of different sizes)
-    const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget: (w, h) => backU.uRes.value.set(w, h) })
+    const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget: (w, h) => backU.uRes.value.set(w, h), onMark: (l) => dbg?.mark(l) })
     // where things are on the screen (UV boxes): the ember region, the ember, the smoke
     const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0, dirty: null, dirtyLive: null }
     const bv = new THREE.Vector3()
@@ -2558,6 +2558,7 @@ export function createScene(container, options = {}) {
             baking = false
             if (dbg) dbg.bakes++
           } else stillPending = true
+          dbg?.mark('scene')
         }
       }
       // (the depth of field: eased in once, at the start, then kept, moving or still: a zoom or a

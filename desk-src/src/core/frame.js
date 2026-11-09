@@ -23,7 +23,9 @@ import compositeFrag from '../shaders/composite.frag'
 
 export const LAYER = { STATIC: 0, REGION: 2 }
 
-export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget }) {
+export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget, onMark }) {
+  /** (debug) The stage of the frame that begins now, for the overlay's GPU timings. */
+  const mark = (l) => onMark?.(l)
   /** The scene is about to be drawn into `t`: whoever reads the target's size (the ground shader) is told. */
   const sceneInto = (t) => {
     onTarget?.(t.width, t.height)
@@ -394,6 +396,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
     bakeStep(scene, focus, shadows) {
       const keep = camera.layers.mask
       renderer.setClearColor(0x000000, 1)
+      mark('bake')
       const st = bakeStage
       if (st === 0) {
         if (shadows) {
@@ -527,6 +530,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         renderer.clear()
         renderer.render(scene, camera)
         camera.layers.mask = keep
+        mark('dof')
         if (f.dofK > 0) {
           setDof(f.focus)
           dofMat.uniforms.tColor.value = live.texture
@@ -537,10 +541,13 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           u.uBox.value.set(0, 0, 1, 1)
           u.uI.value = f.emberI
         }
+        mark('smoke')
         renderSmoke(null, live.depthTexture)
+        mark('bloom')
         renderBloom(null, live.texture)
         u.tScene.value = live.texture
         u.tDepth.value = live.depthTexture
+        mark('comp')
         draw(compMat, null)
         return
       }
@@ -578,6 +585,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           renderer.autoClear = ac
           camera.layers.mask = keep
         }
+        mark('dof')
         if (f.dofK > 0) {
           if (liveWork) {
             setDof(f.focus)
@@ -590,8 +598,11 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           }
           u.uI.value = f.emberI
         }
+        mark('smoke')
         renderSmoke(f.smokeBox, liveStill.depthTexture)
+        mark('bloom')
         renderBloom(f.emberBox, liveStill.texture)
+        mark('comp')
         u.tScene.value = liveStill.texture
         u.tDepth.value = liveStill.depthTexture
         if (smaaWarm && smaa) {
@@ -605,6 +616,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         draw(compMat, ldr, dr)
         ldrValid = true
         api.lastStill = { dr, drL } // (debug: what this frame redrew)
+        mark('present')
         blitMat.uniforms.tColor.value = ldr.texture
         draw(blitMat, null)
       } else {
@@ -615,6 +627,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         renderer.clear()
         renderer.render(scene, camera)
         camera.layers.mask = keep
+        mark('dof')
         if (f.dofK > 0) {
           setDof(f.focus)
           dofMat.uniforms.tColor.value = liveLo.texture
@@ -624,14 +637,18 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           u.uBox.value.set(0, 0, 1, 1)
           u.uI.value = f.emberI
         }
+        mark('smoke')
         renderSmoke(f.smokeBox, liveLo.depthTexture)
+        mark('bloom')
         renderBloom(f.emberBox, liveLo.texture)
+        mark('comp')
         u.tScene.value = liveLo.texture
         u.tDepth.value = liveLo.depthTexture
         if (smaa && !smaaWarm) {
           // (SMAA at the reduced size, then one copy scales it onto the canvas: the canvas's own
           // pixels are touched once, by a single read)
           draw(compMat, ldrLo)
+          mark('present')
           smaa.renderToScreen = false
           smaa.render(renderer, ldrLo2, ldrLo)
           blitMat.uniforms.tColor.value = ldrLo2.texture

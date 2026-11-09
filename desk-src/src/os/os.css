@@ -11,6 +11,9 @@
   overflow: hidden;
   border-radius: 43px;
   transform-origin: 0 0;
+  /* (laid over the glass by a matrix that changes every frame of a zoom: without this the browser
+     rasterizes the whole page again at each new scale, a megapixel of text a frame) */
+  will-change: transform;
   font: 400 13px/18px Inter, 'Helvetica Neue', Arial, sans-serif;
   font-feature-settings: 'cv11' 1;
   color: var(--text);
