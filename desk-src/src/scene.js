@@ -44,7 +44,7 @@ installEmberLight()
 // One quality: the reference look, on every device. (Internal effect buffers: the smoke at half
 // resolution, upsampled by depth, and the bloom's mip chain from half resolution: side by side with
 // full-resolution buffers they are indistinguishable; see the report.)
-const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.5, bloomScale: 0.5, shadow: 1536, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
+const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.4, bloomScale: 0.5, shadow: 1536, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
 /** The canvas at full sharpness: CSS size x devicePixelRatio, capped at 2 only on 3x screens. */
 // (the canvas at the screen's own pixels, up to 2 a CSS pixel: stretched, thin seams break into
 // dashes. What the GPU pays while the view MOVES is handled inside the frame pipeline instead:
