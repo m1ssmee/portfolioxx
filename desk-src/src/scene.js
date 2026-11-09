@@ -2339,11 +2339,12 @@ export function createScene(container, options = {}) {
     api.stillWhy = () => ({ screenBusy, keyAnim, glare, osUp, level: os?.level, dirty: os?.dirty, power: os?.power })
     api.gov = gov // (tests: switched on by hand, a slow frame faked by its bias, ms)
     let shadowTurn = 0
-    // ---- the frames' pace: even, never more than the scene can keep
-    //   moving:   every refresh, at the screen's own rate (60, 90, 120, 144 Hz), while the frames
-    //             keep up; on a fast screen where they start missing refreshes (uneven frames read
-    //             as choppy however many there are), every other refresh, evenly, trying the full
-    //             rate again three seconds later. (A 60 Hz screen always runs every refresh.)
+    // ---- the frames' pace
+    //   live:     ABOVE a second more than the screen's own refresh (70 on 60 Hz, 130 on 120 Hz),
+    //             drawn by a timer (the browser's frame callback comes only once a refresh), while
+    //             the frames keep up; where they start coming late, by the refresh instead (every
+    //             refresh; on a fast screen every other one), trying the faster rate again three
+    //             seconds later
     //   at rest:  only the smoke and the ember moving and nobody has touched anything for eight
     //             seconds: 30 (they are reading; slow smoke looks the same, and the GPU cools)
     //   behind a project or the visitors' book: 20 (the browser works the blur out again each time
@@ -2355,6 +2356,31 @@ export function createScene(container, options = {}) {
     // at every refresh, and the misses that decide it)
     const pace = { tick: 0, refresh: 16.7, full: true, misses: 0, n: 0, retryAt: 0 }
     api.pace = pace
+    const ABOVE = 10 // (frames a second over the refresh)
+    let timer = 0
+    let overAt = 0
+    let lastKind = 0
+    cleanups.push(() => clearTimeout(timer))
+    const overGap = () => 1000 / (1000 / pace.refresh + ABOVE)
+    /** The least time between frames now: 0 while live (the pace's own), 30 or 48 when calm. */
+    function calmGap(now) {
+      const calm = !focus.moving && !podSlide && !grab.held
+      if ((projOpen || book.isOpen) && calm && !veilMoving) return 48
+      if (wasStill && calm && now - inputAt > 8000) return 30
+      return 0
+    }
+    /** The timer's frame: drawn, the next one due a period after this one was. */
+    function overTick() {
+      timer = 0
+      if (!running || destroyed) return
+      const now = performance.now()
+      if (!pace.full || calmGap(now) || dbgFlags.fixedDt) return wake()
+      draw(now, true)
+      overAt += overGap()
+      const t = performance.now()
+      if (overAt < t) overAt = t
+      timer = setTimeout(overTick, overAt - t)
+    }
     let inputAt = 0
     const touched = () => (inputAt = performance.now())
     for (const t of ['pointerdown', 'wheel', 'keydown', 'touchstart']) listen(window, t, touched, { passive: true })
@@ -2369,26 +2395,45 @@ export function createScene(container, options = {}) {
         pace.full = true
         pace.misses = pace.n = 0
       }
-      const calm = !focus.moving && !podSlide && !grab.held
+      const calmG = calmGap(now)
+      // (live at the faster pace: the timer draws, this callback only keeps the refresh measured)
+      if (!calmG && pace.full && ABOVE > 0 && !dbgFlags.fixedDt) {
+        if (!timer) {
+          overAt = Math.max(now, lastDrawn + overGap())
+          timer = setTimeout(overTick, overAt - performance.now())
+        }
+        raf = requestAnimationFrame(frame)
+        return
+      }
+      if (timer) {
+        clearTimeout(timer)
+        timer = 0
+      }
       const fastScreen = pace.refresh < 12
-      const moveGap = pace.full || !fastScreen ? pace.refresh * 0.5 : pace.refresh * 1.5
-      const gap = (projOpen || book.isOpen) && calm && !veilMoving ? 48 : wasStill && calm && now - inputAt > 8000 ? 30 : moveGap
+      const gap = calmG || (pace.full || !fastScreen ? pace.refresh * 0.5 : pace.refresh * 1.5)
       // (tests stepping a fixed time a frame: every frame is one)
       if (now - lastDrawn < gap && !dbgFlags.fixedDt) {
         raf = requestAnimationFrame(frame)
         return
       }
-      // (a moving frame on a fast screen that came a refresh late: a miss; four in thirty, and the
-      // moving frames go to every other refresh for a while)
-      if (fastScreen && pace.full && !wasStill && lastDrawn) {
-        if (now - lastDrawn > pace.refresh * 1.5) pace.misses++
-        if (++pace.n >= 30) {
-          if (pace.misses >= 4) {
-            pace.full = false
-            pace.retryAt = now + 3000
-          }
+      draw(now, false)
+    }
+    function draw(now, over) {
+      // (a live frame that came late, half a period or more after the last of its kind: a miss; four
+      // in thirty, and the frames go by the refresh for a while)
+      const due = over ? overGap() : pace.refresh < 12 && pace.full ? pace.refresh : 0
+      const kind = over ? 1 : 2
+      const counts = due && !wasStill && lastKind === kind
+      lastKind = kind
+      // (each spell of motion judged on its own)
+      if (wasStill) pace.misses = pace.n = 0
+      if (counts) {
+        if (now - lastDrawn > due * 1.5) pace.misses++
+        if (pace.misses >= 4) {
+          pace.full = false
+          pace.retryAt = now + 3000
           pace.misses = pace.n = 0
-        }
+        } else if (++pace.n >= 30) pace.misses = pace.n = 0
       }
       lastDrawn = now
       api.paced = (api.paced || 0) + 1 // (debug: frames run, after the pacing)
@@ -2661,6 +2706,8 @@ export function createScene(container, options = {}) {
       } else {
         if (raf) cancelAnimationFrame(raf)
         raf = 0
+        clearTimeout(timer)
+        timer = 0
         audio.setRunning(false)
       }
     }
@@ -2719,7 +2766,7 @@ export function createScene(container, options = {}) {
     step('shaders compiled')
     shadowsNow()
     flameSpot.shadow.needsUpdate = true
-    frame(performance.now())
+    draw(performance.now(), false)
     await yieldNow()
     stage('smoke', 'done')
     // the music: its engine built now (the context waits, suspended, for the visitor's click)
@@ -2757,7 +2804,7 @@ export function createScene(container, options = {}) {
     const syncPx = new Uint8Array(4)
     const gl = renderer.getContext()
     for (let k = 0; k < 40 && !(frameCache.valid && frameCache.smaaReady && dofK > 0); k++) {
-      frame(performance.now())
+      draw(performance.now(), false)
       renderer.setRenderTarget(null)
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncPx)
       stage('mood', Math.min(0.9, (k + 1) / 6)) // (about six frames, as a rule)
@@ -2786,6 +2833,9 @@ export function createScene(container, options = {}) {
       }
       root.classList.add('cg-ready', 'cg-reveal')
       loopReady = true
+      // (the loader's slow frames say nothing about the live pace)
+      Object.assign(pace, { full: true, misses: 0, n: 0, retryAt: 0 })
+      lastKind = 0
       last = performance.now()
       wake()
     }
