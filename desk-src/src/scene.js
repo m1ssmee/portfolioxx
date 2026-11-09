@@ -1537,12 +1537,13 @@ export function createScene(container, options = {}) {
       renderer.setPixelRatio(dpr)
       renderer.setSize(w, h, false)
       renderer.getDrawingBufferSize(dbs)
-      // (moving frames at two thirds of a 2x canvas's size, three quarters of a 1.5x one, and less
-      // if the governor had to step down: motion hides it, and a 2x canvas is four times the pixels)
-      frameCache.setSize(dbs.x, dbs.y, (dpr >= 2 ? 2 / 3 : dpr > 1.25 ? 0.75 : 1) * moveScaleK)
-      // (moving frames: half the multisampling on a dense canvas, SMAA smoothing them after; none
-      // once the governor has had to step down)
-      frameCache.setSamples(moveSamplesOff ? 0 : dpr > 1.25 ? 2 : Q.msaa)
+      // (moving frames at 85% of a 2x canvas's size, 90% of a 1.5x one, and less if the governor
+      // had to step down: motion hides it, and a 2x canvas is four times the pixels)
+      frameCache.setSize(dbs.x, dbs.y, (dpr >= 2 ? 0.85 : dpr > 1.25 ? 0.9 : 1) * moveScaleK)
+      // (moving frames on a dense canvas: no multisampling, SMAA smoothing them after (a WebGL
+      // multisample resolve is a whole extra pass over the frame); on a 1x screen, where the
+      // pixels are few, the usual)
+      frameCache.setSamples(moveSamplesOff || dpr > 1.25 ? 0 : Q.msaa)
     }
     let moveScaleK = 1
     let moveSamplesOff = false
@@ -2309,9 +2310,9 @@ export function createScene(container, options = {}) {
     }
     const cigSwapping = (q) => q.state === 'arriving' || q.state === 'leaving'
     // ---- steady frames: while someone turns, zooms or carries something, the frames' own pace is
-    // watched; on a GPU that cannot keep it (slower than about 48 a second, for a second and a
-    // half), the MOVING frames are made cheaper a step at a time: half their multisampling, then a
-    // quarter fewer pixels. Still frames are untouched: the picture at rest stays the full one.
+    // watched; on a GPU that cannot keep it (slower than about 51 a second, for 0.6 s), the MOVING
+    // frames are made cheaper a step at a time, at most twice: a fifth fewer pixels each step (and
+    // no multisampling). Still frames are untouched: the picture at rest stays the full one.
     // Glides, and the moments a project or the book is open, are transitions with the page's own
     // work in them, and are not counted. (Not under automation: a test's software renderer is slow
     // by nature, and its pictures must stay comparable.)
@@ -2320,15 +2321,15 @@ export function createScene(container, options = {}) {
       if (!gov.on || !moving) return void (gov.n = 0)
       // (the first frames of a motion pay for its start, not its pace)
       if (++gov.n < 4) return
-      gov.ema += (Math.min(interval + gov.bias, 100) - gov.ema) * 0.06
-      if (gov.ema < 21 || gov.n < 90 || performance.now() < gov.after || gov.level >= 2) return
+      gov.ema += (Math.min(interval + gov.bias, 100) - gov.ema) * 0.08
+      if (gov.ema < 19.5 || gov.n < 36 || performance.now() < gov.after || gov.level >= 2) return
       gov.level++
-      if (gov.level === 1) moveSamplesOff = true
-      else moveScaleK = 0.75
+      moveSamplesOff = true
+      moveScaleK *= 0.8
       resize()
       gov.n = 0
       gov.ema = 16.7
-      gov.after = performance.now() + 2000
+      gov.after = performance.now() + 1200
     }
     api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio(), moveScale: frameCache.moveScale, moveSamples: frameCache.moveSamples })
     api.stillWhy = () => ({ screenBusy, keyAnim, glare, osUp, level: os?.level, dirty: os?.dirty, power: os?.power })
@@ -2338,8 +2339,8 @@ export function createScene(container, options = {}) {
     //   moving:   at most 60 a second, evenly: on a 120 Hz screen every other refresh. Drawn at every
     //             refresh, frames this full come unevenly (8 ms, 16, 25 apart), and uneven reads as
     //             choppy however many there are
-    //   at rest:  only the smoke and the ember moving and nobody touching anything: 30 (slow smoke
-    //             looks the same, and the GPU keeps its headroom for the next touch)
+    //   at rest:  only the smoke and the ember moving and nobody has touched anything for eight
+    //             seconds: 30 (they are reading; slow smoke looks the same, and the GPU cools)
     //   behind a project or the visitors' book: 20 (the browser works the blur out again each time
     //             the scene under it changes)
     let lastDrawn = 0
@@ -2352,7 +2353,7 @@ export function createScene(container, options = {}) {
       raf = 0
       if (!running || destroyed) return
       const calm = !focus.moving && !podSlide && !grab.held
-      const gap = (projOpen || book.isOpen) && calm ? 48 : wasStill && calm && now - inputAt > 400 ? 30 : 11
+      const gap = (projOpen || book.isOpen) && calm ? 48 : wasStill && calm && now - inputAt > 8000 ? 30 : 11
       // (tests stepping a fixed time a frame: every frame is one)
       if (now - lastDrawn < gap && !dbgFlags.fixedDt) {
         raf = requestAnimationFrame(frame)
@@ -2493,15 +2494,15 @@ export function createScene(container, options = {}) {
       const changing = carried || lighterBusy || cableBusy || badgeBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
-      // (the cache is baked once the view has been still for a fifth of a second: a slow zoom or
+      // (the cache is baked once the view has been still for an eighth of a second: a slow zoom or
       // pinch with small pauses goes on drawing whole frames, it does not bake at every pause)
       stillTime = changing ? 0 : stillTime + Math.max(dt, 1 / 240)
-      const moving = changing || stillTime < 0.2
+      const moving = changing || stillTime < 0.12
       govern(interval, moving && !focus.moving && !podSlide && !projOpen && !book.isOpen)
       wasStill = !moving
-      // shadows: drawn again only when the shadow casters changed (the burn moves slowly: every 2 s)
+      // shadows: drawn again only when the shadow casters changed (the burn moves slowly: every 6 s)
       shadowClock += dt
-      const burnStep = shadowClock > 2
+      const burnStep = shadowClock > 6
       if (burnStep) shadowClock = 0
       // (the depth of field: on what the view is about; deep over the whole desk, the still life's
       // own aperture in a close-up)

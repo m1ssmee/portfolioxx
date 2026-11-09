@@ -19,17 +19,18 @@ blur behind over it), and blended in only where the lens blurs; the canvas is at
 soft shadow is an exact box blur, one sample a texel, its depth range fitted to the still life.
 A still frame redraws only the box that changed (the burning cigarette, the smoke, the glow the
 composite re-mixes linearly from the cache, the glass when its page moved) into a kept frame, and
-copies that out: an idle frame costs its box, not the screen. While the view moves, everything is
-drawn at a reduced size into fixed buffers (two thirds on a 2x canvas, three quarters on a 1.5x
-one, with 2x multisampling and SMAA at that size) and one copy scales it onto the canvas; the
-full-size still frame returns once the view rests, its cache baked a step a frame (five frames)
-while the moving frames go on showing, so the end of a gesture never pays for the whole bake at
-once. On a GPU that cannot keep about 48 moving frames a second, the governor steps the moving
-frames down, at most twice (no multisampling, then a quarter fewer pixels; `api.quality()` under
-`?debug`); while
+copies that out, in its own single-sampled target (a still frame drawn into the multisampled one
+made the GPU resolve and store all of it every frame): an idle frame costs its box, not the screen.
+While the view moves, everything is drawn at a reduced size into fixed buffers (85% on a 2x canvas,
+90% on a 1.5x one, no multisampling there: SMAA at that size smooths it, and a WebGL multisample
+resolve is a whole extra pass over the frame) and one copy scales it onto the canvas; the full-size
+still frame returns once the view rests, its cache baked a step a frame (five frames) while the
+moving frames go on showing, so the end of a gesture never pays for the whole bake at once. On a
+GPU that cannot keep about 51 moving frames a second, the governor steps the moving frames down
+within 0.6 s, at most twice (a fifth fewer pixels each; `api.quality()` under `?debug`); while
 something is carried the soft shadow is drawn again every other frame. The frames' pace is kept
-even: at most 60 a second (every other refresh on a 120 Hz screen), 30 when only the smoke moves
-and nobody touches anything, 20 while a project or the book is open.
+even: at most 60 a second (every other refresh on a 120 Hz screen), 30 once nobody has touched
+anything for eight seconds and only the smoke moves, 20 while a project or the book is open.
 
 ```
 npm ci

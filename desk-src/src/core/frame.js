@@ -44,6 +44,10 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
   const HF = { type: THREE.HalfFloatType }
   // the live frame (multisampled; resolved into a texture and a depth texture)
   const live = withDepth(rt(16, 16, { ...HF, samples: Q.msaa }))
+  // the still frames' own target, single-sampled: a still frame restores and redraws only a small
+  // box, and doing that in the multisampled target made the GPU resolve and store all 6.7 M pixels
+  // of it, colour and depth, every frame (on Apple's GPUs about as dear as a whole frame)
+  const liveStill = withDepth(rt(16, 16, { ...HF }))
   // the cache (single-sampled: copied out of the live target after each bake)
   const cStat = withDepth(rt(16, 16, { ...HF }))
   const cEmb = rt(16, 16, { ...HF, depthBuffer: false })
@@ -181,7 +185,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
     LH = Math.max(1, Math.round(h * ms))
     SW = Math.max(1, Math.round(w * Q.smokeScale))
     SH = Math.max(1, Math.round(h * Q.smokeScale))
-    for (const t of [live, cStat, cEmb, dStat, dEmb, dLive, ldr]) t.setSize(w, h)
+    for (const t of [live, liveStill, cStat, cEmb, dStat, dEmb, dLive, ldr]) t.setSize(w, h)
     liveLo.setSize(LW, LH)
     ldrLo.setSize(LW, LH)
     ldrLo2.setSize(LW, LH)
@@ -373,7 +377,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
       return !!smaa && !smaaWarm
     },
     targets,
-    debugTargets: { live, liveLo, cStat, cEmb, dStat, dEmb, dLive, ldr, ldrLo, smoke, smokeZ },
+    debugTargets: { live, liveStill, liveLo, cStat, cEmb, dStat, dEmb, dLive, ldr, ldrLo, smoke, smokeZ },
     live,
     setSize,
     /**
@@ -560,16 +564,16 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         const liveWork = !drL || (drL.z > 0 && drL.w > 0)
         if (liveWork) {
           restoreMat.uniforms.uI.value = f.emberI
-          draw(restoreMat, live, drL)
+          draw(restoreMat, liveStill, drL)
           const ac = renderer.autoClear
           renderer.autoClear = false
           camera.layers.set(LAYER.REGION)
           setMode('region')
-          live.scissorTest = !!drL
-          if (drL) live.scissor.copy(drL)
-          sceneInto(live)
+          liveStill.scissorTest = !!drL
+          if (drL) liveStill.scissor.copy(drL)
+          sceneInto(liveStill)
           renderer.render(scene, camera)
-          live.scissorTest = false
+          liveStill.scissorTest = false
           setMode('full')
           renderer.autoClear = ac
           camera.layers.mask = keep
@@ -577,8 +581,8 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         if (f.dofK > 0) {
           if (liveWork) {
             setDof(f.focus)
-            dofMat.uniforms.tColor.value = live.texture
-            dofMat.uniforms.tDepth.value = live.depthTexture
+            dofMat.uniforms.tColor.value = liveStill.texture
+            dofMat.uniforms.tDepth.value = liveStill.depthTexture
             rect(dirtyLive ? inter(f.regionBox, dirtyLive, boxI) : f.regionBox, W, H, dofMat.uniforms.uMax.value + 2, px)
             draw(dofMat, dLive, px)
             u.tDofLive.value = dLive.texture
@@ -586,10 +590,10 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           }
           u.uI.value = f.emberI
         }
-        renderSmoke(f.smokeBox, live.depthTexture)
-        renderBloom(f.emberBox, live.texture)
-        u.tScene.value = live.texture
-        u.tDepth.value = live.depthTexture
+        renderSmoke(f.smokeBox, liveStill.depthTexture)
+        renderBloom(f.emberBox, liveStill.texture)
+        u.tScene.value = liveStill.texture
+        u.tDepth.value = liveStill.depthTexture
         if (smaaWarm && smaa) {
           // (every program the moving frames use, compiled now while nothing moves; the still
           // frame is drawn over it all)
