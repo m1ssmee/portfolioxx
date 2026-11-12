@@ -132,15 +132,15 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
       void main() {
         vec4 c = texture2D(tColor, vUv);
         if (uVeil > 0.0) {
-          // the frosted scene: blurred, most of its colour drained, a touch lighter and flatter
+          // the frosted scene, dark glass: blurred, much of its colour drained, darker and flatter
           vec3 b = texture2D(tBlur, vUv).rgb;
           float l = dot(b, vec3(0.2126, 0.7152, 0.0722));
-          b = mix(vec3(l), b, 0.45) * 1.05;
-          b = (b - 0.5) * 0.86 + 0.5;
-          // the paper tint, denser towards the right where the text is
+          b = mix(vec3(l), b, 0.5) * 0.62;
+          b = (b - 0.5) * 0.8 + 0.5 - 0.1;
+          // the glass's own tint, a warm charcoal, denser towards the right where the text is
           float t = vUv.x;
           float a = t < 0.46 ? mix(uTintA.x, uTintA.y, t / 0.46) : mix(uTintA.y, uTintA.z, (t - 0.46) / 0.54);
-          b = mix(b, mix(vec3(0.910, 0.925, 0.945), vec3(0.941, 0.949, 0.965), t), a);
+          b = mix(b, mix(vec3(0.095, 0.09, 0.085), vec3(0.075, 0.072, 0.068), t), a);
           // the hole round the player: a rounded rectangle, grown a little, its edge feathered
           float m = 1.0;
           if (uHoleOn > 0.5) {

@@ -44,6 +44,23 @@ export function createBody({ spheres, s = 12, mass = [4, 1, 1, 1], sdf, floorY =
       body.awake = true
       body.restFor = 0
     },
+    /**
+     * Set it turning: about the line through `pivot` along `axis` (a unit vector) at `w` rad/s,
+     * plus `lin` (mm/s): each particle given its own velocity of that motion (a push, a knock).
+     */
+    spin(pivot, axis, w, lin = null) {
+      for (let i = 0; i < 4; i++) {
+        const rx = P[i * 3] - pivot[0]
+        const ry = P[i * 3 + 1] - pivot[1]
+        const rz = P[i * 3 + 2] - pivot[2]
+        V[i * 3] = w * (axis[1] * rz - axis[2] * ry) + (lin ? lin[0] : 0)
+        V[i * 3 + 1] = w * (axis[2] * rx - axis[0] * rz) + (lin ? lin[1] : 0)
+        V[i * 3 + 2] = w * (axis[0] * ry - axis[1] * rx) + (lin ? lin[2] : 0)
+      }
+      R0.set(P)
+      body.awake = true
+      body.restFor = 0
+    },
     /** Its centre and axes, now (out: [cx, cy, cz, xx, xy, xz, yx, yy, yz, zx, zy, zz]). */
     frame(out) {
       frame()

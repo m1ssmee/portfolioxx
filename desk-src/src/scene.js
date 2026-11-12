@@ -20,6 +20,12 @@ import { createPickup } from './objects/pickup.js'
 import { createLighter } from './objects/lighter.js'
 import { createBadge } from './objects/badge.js'
 import { createNotebook } from './objects/notebook.js'
+import { createDeskMat, MAT, MAT_COLORS } from './objects/deskMat.js'
+import { createRoom, ROOM } from './objects/room.js'
+import { createLaptop } from './objects/laptop.js'
+import { createCan, CAN } from './objects/can.js'
+import { createLamp } from './objects/lamp.js'
+import caveatUrl from './assets/caveat.woff2?url'
 import { createVisitorsBook } from './visitors/book.js'
 import badgeFaceUrl from './assets/badge-face.webp?url'
 import badgeBackUrl from './assets/badge-back.webp?url'
@@ -44,7 +50,9 @@ installEmberLight()
 // One quality: the reference look, on every device. (Internal effect buffers: the smoke at half
 // resolution, upsampled by depth, and the bloom's mip chain from half resolution: side by side with
 // full-resolution buffers they are indistinguishable; see the report.)
-const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.4, bloomScale: 0.5, shadow: 1536, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
+// the desk mat's colour (objects/deskMat.js: slate, sage, rust or oat)
+const MAT_COLOR = 'sage'
+const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.4, bloomScale: 0.5, shadow: 2048, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
 /** The canvas at full sharpness: CSS size x devicePixelRatio, capped at 2 only on 3x screens. */
 // (the canvas at the screen's own pixels, up to 2 a CSS pixel: stretched, thin seams break into
 // dashes. What the GPU pays while the view MOVES is handled inside the frame pipeline instead:
@@ -52,7 +60,7 @@ const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 
 const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 2)
 
 const CSS = `
-.cg-root{--ink:#262c35;--label:#3e4652;--rule:rgba(38,44,53,.4);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.cg-root{--ink:#f1efe9;--label:#c9c4ba;--rule:rgba(241,239,233,.36);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .cg-poster{position:absolute;left:50%;top:0;height:100%;width:auto;min-width:100%;max-width:none;object-fit:cover;transform:translateX(-50%);pointer-events:none}
 .cg-stage{position:absolute;inset:0;opacity:0;transition:opacity .8s ease}
 .cg-ready .cg-stage{opacity:1}
@@ -69,7 +77,7 @@ const CSS = `
 .cg-id{position:absolute;left:max(24px,env(safe-area-inset-left));top:max(22px,env(safe-area-inset-top));margin:0;display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .cg-id-name{font-weight:600}
 .cg-id-role{color:var(--label)}
-.cg-os{position:absolute;left:max(24px,env(safe-area-inset-left));top:max(64px,env(safe-area-inset-top));z-index:2;padding:7px 11px;border-radius:3px;background:#e9ecf0;border:1px solid var(--rule);transform:translateY(-6px);opacity:0;pointer-events:none;transition:transform .2s,opacity .2s}
+.cg-os{position:absolute;left:max(24px,env(safe-area-inset-left));top:max(64px,env(safe-area-inset-top));z-index:2;padding:7px 11px;border-radius:3px;background:#22211f;border:1px solid var(--rule);transform:translateY(-6px);opacity:0;pointer-events:none;transition:transform .2s,opacity .2s}
 .cg-os:focus-visible{transform:none;opacity:1;pointer-events:auto;outline:1.5px solid var(--ink);outline-offset:3px}
 .cg-tools{position:absolute;right:max(16px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));display:flex;gap:2px}
 .cg-txt{display:inline-flex;align-items:center;gap:7px;padding:8px;background:none;border:0;border-radius:2px;color:var(--label)!important;transition:color .2s}
@@ -95,31 +103,33 @@ const CSS = `
 .cg-proj-line{margin:0 0 22px;font-size:17px;line-height:1.45}
 .cg-proj-acts{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 6px}
 .cg-proj-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:999px;font:500 13px/1 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:.01em;text-decoration:none;transition:background .2s,border-color .2s,color .2s}
-.cg-proj-btn.dark{background:var(--ink);color:#f3f5f8}
-.cg-proj-btn.dark:hover{background:#11151b}
+.cg-proj-btn.dark{background:var(--ink);color:#1b1a18}
+.cg-proj-btn.dark:hover{background:#ffffff}
 .cg-proj-btn.line{border:1px solid var(--rule);color:var(--ink)}
 .cg-proj-btn.line:hover{border-color:var(--ink)}
 .cg-proj-btn:focus-visible{outline:1.5px solid var(--ink);outline-offset:3px}
 .cg-proj-btn[hidden]{display:none}
 .cg-proj h3{margin:24px 0 6px;color:var(--label);font-weight:500}
-.cg-proj p{margin:0;color:#2c333d}
-.cg-proj ul{margin:0;padding-left:18px;color:#2c333d}
+.cg-proj p{margin:0;color:#dcd8d0}
+.cg-proj ul{margin:0;padding-left:18px;color:#dcd8d0}
 .cg-proj li{margin:0 0 6px}
 .cg-proj-tags{display:flex;flex-wrap:wrap;gap:6px}
 .cg-proj-tags span{padding:5px 10px 4px;border:1px solid var(--rule);border-radius:999px;font:500 11px/1 var(--mono);color:var(--ink)}
-@container cg (max-width: 760px){.cg-projecting .cg-now{opacity:0}.cg-now{transition:opacity .4s}.cg-proj{left:0;right:0;top:auto;bottom:0;width:auto;max-height:82%;padding:20px 22px 28px;border-radius:18px 18px 0 0;background:rgba(238,241,245,.94);transform:translateY(28px)}.cg-projecting .cg-proj{transform:none}.cg-proj-name{font-size:28px}}
+@container cg (max-width: 760px){.cg-projecting .cg-now{opacity:0}.cg-now{transition:opacity .4s}.cg-proj{left:0;right:0;top:auto;bottom:0;width:auto;max-height:82%;padding:20px 22px 28px;border-radius:18px 18px 0 0;background:rgba(24,23,22,.93);transform:translateY(28px)}.cg-projecting .cg-proj{transform:none}.cg-proj-name{font-size:28px}}
 @media (max-height:700px){.cg-keys li.cg-fine:nth-child(-n+2){display:none}}
 @media (max-height:500px){.cg-keys{display:none}}
 .cg-keys li{display:flex;align-items:center;gap:9px}
 .cg-keys li.cg-coarse{display:none}
 @media (hover:none) and (pointer:coarse){.cg-keys li.cg-coarse{display:flex}.cg-keys li.cg-fine{display:none}}
 .cg-keys kbd{box-sizing:border-box;min-width:19px;padding:4px 5px 3px;border:1px solid var(--rule);border-radius:3px;font:500 10px/1 var(--mono);letter-spacing:.02em;text-align:center;color:var(--ink);text-transform:none}
+.cg-id,.cg-tools,.cg-keys,.cg-now,.cg-copy{transition:color .4s;text-shadow:0 1px 3px rgba(10,9,8,.55)}
+.cg-id *,.cg-tools *,.cg-keys *,.cg-now *,.cg-copy *{transition:color .4s,border-color .4s}
 .cg-now{position:absolute;left:max(24px,env(safe-area-inset-left));bottom:max(22px,env(safe-area-inset-bottom));margin:0;display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .cg-now-k{color:var(--label)}
 .cg-now-t{font:500 11px/1 var(--mono);letter-spacing:.01em}
 .cg-now-t:empty{display:none}
 .cg-copy{position:absolute;left:50%;bottom:max(22px,env(safe-area-inset-bottom));margin:0;transform:translateX(-50%);white-space:nowrap;color:var(--label);pointer-events:none}
-.cg-flame{position:absolute;left:50%;bottom:max(52px,calc(env(safe-area-inset-bottom) + 40px));width:56px;height:56px;padding:0;border-radius:50%;display:grid;place-items:center;background:#dce0e6;border:1px solid var(--rule);opacity:0;visibility:hidden;transform:translate(-50%,6px);transition:opacity .2s,transform .2s,visibility 0s .2s,background .12s,border-color .12s;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.cg-flame{position:absolute;left:50%;bottom:max(52px,calc(env(safe-area-inset-bottom) + 40px));width:56px;height:56px;padding:0;border-radius:50%;display:grid;place-items:center;background:#2a2826;border:1px solid var(--rule);opacity:0;visibility:hidden;transform:translate(-50%,6px);transition:opacity .2s,transform .2s,visibility 0s .2s,background .12s,border-color .12s;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 .cg-lighter .cg-flame{opacity:1;visibility:visible;transform:translate(-50%,0);transition:opacity .2s,transform .2s,visibility 0s,background .12s,border-color .12s}
 .cg-flame svg{width:22px;height:22px;fill:var(--label);transition:fill .12s}
 .cg-flame[aria-pressed='true']{background:#f1d6bb;border-color:#a8622e}
@@ -262,7 +272,7 @@ export function createScene(container, options = {}) {
     const canvas = renderer.domElement
     canvas.className = 'cg-canvas'
     canvas.setAttribute('role', 'img')
-    canvas.setAttribute('aria-label', 'Seen from above on a pale grey-blue ground: a white music player with wired earbuds plugged in, and to its side a ceramic ashtray with a lit cigarette and a lighter.')
+    canvas.setAttribute('aria-label', 'A desk at dusk under a black arm lamp: a white music player with wired earbuds plugged in on a green felt mat, a ceramic ashtray with a lit cigarette and a lighter, a silver laptop open on a browser, an energy drink, a notebook, and on the wall a cork board with sticky notes, a calendar and an ID badge.')
     stageEl.appendChild(canvas)
 
     // ---- the workers: every mesh and texture built off this thread, side by side (up to three:
@@ -317,9 +327,12 @@ export function createScene(container, options = {}) {
 
     // ---- the studio: bright, soft and neutral, a large soft panel overhead and one long highlight
     // strip (what the glossy parts and the metal catch)
+    // ---- the room as the glossy things see it (their reflections): dim and warm at dusk, the lamp a
+    // small bright warm spot above the desk's back left, the window's cool light to the right, the
+    // wall behind the desk and the white desk under it
     function studioEnv() {
       const env = new THREE.Scene()
-      env.background = new THREE.Color(0.5, 0.52, 0.55)
+      env.background = new THREE.Color(0.075, 0.068, 0.062)
       const geo = new THREE.PlaneGeometry(1, 1)
       const panel = (w, h, pos, k, tint) => {
         const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(...tint).multiplyScalar(k), side: THREE.DoubleSide })
@@ -330,10 +343,14 @@ export function createScene(container, options = {}) {
         env.add(mesh)
         return m
       }
+      const at = (u, v, y) => [LAYOUT.RIGHT[0] * u - LAYOUT.FWD[0] * v, y, LAYOUT.RIGHT[2] * u - LAYOUT.FWD[2] * v]
       const mats = [
-        panel(2400, 2400, [-500, 2200, -300], 1.3, [1, 0.99, 0.97]), // (the key's own soft panel)
-        panel(180, 3400, [-1500, 1500, 400], 5.5, [1, 1, 1]), // (the one long strip)
-        panel(3000, 3000, [0, -1600, 0], 0.55, [0.86, 0.88, 0.92]), // (the ground's bounce)
+        panel(300, 300, at(-700, -380, 1500), 16, [1, 0.84, 0.64]), // (the lamp)
+        panel(1600, 1150, at(2000, 300, 650), 0.62, [0.74, 0.83, 1]), // (the window)
+        panel(3200, 2000, at(0, -2000, 400), 0.17, [1, 0.95, 0.88]), // (the wall behind the desk)
+        panel(3200, 2000, at(0, 2000, 400), 0.08, [0.9, 0.9, 0.95]), // (the room behind)
+        panel(3200, 3200, [0, -1700, 0], 0.3, [1, 0.95, 0.88]), // (the desk under it all)
+        panel(3600, 3600, [0, 2200, 0], 0.2, [0.95, 0.92, 0.88]), // (the ceiling, faintly lit)
       ]
       const pm = new THREE.PMREMGenerator(renderer)
       const t = pm.fromScene(env, 0.02, 10, 6000).texture
@@ -414,10 +431,8 @@ export function createScene(container, options = {}) {
       uFlame: { value: 0 }, // (the lighter's flame, 0 out .. 1, with its flicker)
     }
 
-    // ---- the ground: never seen as a surface, only as the backdrop's colour (a soft, cool
-    // grey-blue, lighter behind the objects) and the soft shadows and pools of shade the objects
-    // leave on it. Its colours are the page's own: the shader undoes the frame's tone mapping
-    // (core/frame.js's composite, PBR Neutral) for them.
+    // (the frame's tone mapping, core/frame.js's composite (PBR Neutral), undone: what must show its
+    // own colours on the screen, the player's page, gives this light)
     const NEUTRAL_INV = /* glsl */ `
       float neutralInv(float w) {
         if (w < 0.04) return sqrt(max(w, 0.0) / 6.25);
@@ -425,85 +440,81 @@ export function createScene(container, options = {}) {
         return 0.0576 / (1.0 - min(w, 0.995)) - 0.24 + 0.76 + 0.04;
       }
       vec3 neutralInv(vec3 c) { return vec3(neutralInv(c.r), neutralInv(c.g), neutralInv(c.b)); }`
-    const lin = (hex) => new THREE.Color(hex)
-    const backU = {
-      uRes: { value: new THREE.Vector2(1, 1) },
-      uTop: { value: lin(0xc3c9d2) },
-      uBottom: { value: lin(0xb6bdc8) },
-      uLight: { value: lin(0xd2d7de) },
-      uAt: { value: new THREE.Vector3(0.45, 0.52, 0.42) }, // (the lightening's centre, uv, and its radius)
-      uOn: { value: 1 },
-    }
-    // (one surface, one pass: the backdrop's colour with the key light's soft shadow, and nothing
-    // else, mixed into it. It was two, a plain backdrop and over it a transparent plane that only
-    // carried the shadow: every pixel of the desk shaded and blended twice, and the two planes'
-    // depths tied on tile-based GPUs. A ShadowMaterial made opaque, its colour the shadow's, its
-    // opacity how dark the shadow gets)
-    const backMat = new THREE.ShadowMaterial({ color: 0x2a3340, opacity: 0.32, transparent: false, depthWrite: true })
-    backMat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, backU)
-      sh.fragmentShader = sh.fragmentShader
-        .replace(
-          '#include <shadowmask_pars_fragment>',
-          /* glsl */ `#include <shadowmask_pars_fragment>
-          uniform vec2 uRes; uniform vec3 uTop; uniform vec3 uBottom; uniform vec3 uLight; uniform vec3 uAt; uniform float uOn;
-          ${NEUTRAL_INV}
-          float keyShadowMask() {
-            float shadow = 1.0;
-            #if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0
-            DirectionalLightShadow directionalLight;
-            #pragma unroll_loop_start
-            for ( int i = 0; i < NUM_DIR_LIGHT_SHADOWS; i ++ ) {
-              directionalLight = directionalLightShadows[ i ];
-              shadow *= receiveShadow ? getShadow( directionalShadowMap[ i ], directionalLight.shadowMapSize, directionalLight.shadowIntensity, directionalLight.shadowBias, directionalLight.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
-            }
-            #pragma unroll_loop_end
-            #endif
-            return shadow;
-          }`,
-        )
-        .replace(
-          'gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );',
-          /* glsl */ `vec2 uv = gl_FragCoord.xy / uRes;
-          vec3 c = mix(uBottom, uTop, smoothstep(0.0, 1.0, uv.y));
-          // (a very gentle lightening behind the objects)
-          vec2 d = (uv - uAt.xy) * vec2(uRes.x / uRes.y, 1.0);
-          c = mix(c, uLight, 0.55 * exp(-dot(d, d) / (uAt.z * uAt.z)));
-          gl_FragColor = vec4( mix( neutralInv(c) * uOn, color, opacity * ( 1.0 - keyShadowMask() ) ), 1.0 );`,
-        )
-    }
-    backMat.customProgramCacheKey = () => 'ground'
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), backMat)
-    ground.receiveShadow = true
-    // (after everything opaque: what lies on the desk hides it, and those pixels are never shaded)
-    ground.renderOrder = 1
-    scene.add(ground)
 
-    // ---- lights: high-key and soft. One large overhead key from the top-left of the picture (its
-    // soft, short shadow the only one cast, and only onto the ground), a gentle fill from all round,
-    // a faint rim from the lower right; and the ember and the flame themselves
-    const key = new THREE.DirectionalLight(0xfffaf2, 2.1)
+    // ---- the room (objects/room.js): a matte white desk against an off-white wall, a cork board
+    // on the wall with the owner's notes, this month's calendar and a pin for the ID badge. Its
+    // print needs its fonts: Inter (the player's) and a handwriting face for the notes
+    const FONT = '"Inter", "Helvetica Neue", Helvetica, Arial, sans-serif'
+    const HAND = '"Caveat", "Segoe Print", "Bradley Hand", cursive'
+    await Promise.race([
+      Promise.all([
+        typeof FontFace !== 'undefined' ? new FontFace('Caveat', `url(${caveatUrl})`, { weight: '600' }).load().then((f) => document.fonts.add(f)) : null,
+        typeof FontFace !== 'undefined' && opts.fontUrl ? new FontFace('Inter', `url(${opts.fontUrl})`, { weight: '100 900' }).load().then((f) => document.fonts.add(f)) : null,
+      ]).catch(() => {}),
+      new Promise((r) => setTimeout(r, 4000)),
+    ])
+    const room = createRoom({
+      fwd: LAYOUT.FWD,
+      right: LAYOUT.RIGHT,
+      font: FONT,
+      handFont: HAND,
+      anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy()),
+      notes: [
+        { color: '#f4e38c', lines: ["hi, I'm Krish", 'I build AI', 'people can', 'actually use'] },
+        { color: '#c6e6d3', lines: ['rule no. 1:', 'cite sources,', 'never guess', 'the numbers'] },
+        { color: '#f6cbb1', lines: ['psst —', 'click things', 'on the desk'] },
+      ],
+    })
+    scene.add(room.group)
+    // (the desk: what used to be the ground; the shadows fall on it, the wall and the board)
+    const ground = room.desk
+    for (const m of [room.desk, room.wall, ...room.boardMeshes]) m.userData.takesShadow = true
+    step('room')
+    await yieldNow()
+
+    // ---- lights: dusk, and a desk lamp. The lamp (objects/lamp.js: a black arm lamp at the back
+    // left) is the key: a warm spotlight from its bulb, its soft shadow the only one cast (onto the
+    // desk, the mat, the wall and the board). Round it the room is dim: a cool dusk sky from all
+    // round, a window's last light from the right, and the ember and the flame themselves
+    const lamp = createLamp({
+      base: new THREE.Vector3(...LAYOUT.DESK.lampBase).setY(ROOM.deskY),
+      head: new THREE.Vector3(...LAYOUT.DESK.lampHead),
+      aim: new THREE.Vector3(...LAYOUT.DESK.lampAim),
+    })
+    scene.add(lamp.group)
+    // (candela: its light falls off with the square of the distance; the middle of its pool, half a
+    // metre away, as bright as the old overhead key)
+    const LAMP_CD = 7.2e5
+    const key = new THREE.SpotLight(0xffe2c4, LAMP_CD, 0, 1.08, 0.85, 2)
+    key.position.copy(lamp.bulb)
+    key.target.position.set(...LAYOUT.DESK.lampAim)
+    key.target.updateMatrixWorld()
     key.castShadow = true
     key.shadow.mapSize.set(Q.shadow, Q.shadow)
-    Object.assign(key.shadow.camera, { left: -470, right: 470, top: 470, bottom: -470 })
-    key.shadow.camera.updateProjectionMatrix()
-    // (the soft shadow: an exact box blur, one sample a texel, 21 texels (13 mm) across: three.js
-    // spreads blurSamples evenly over 2 x radius, and a nearest-sampled depth map read at uneven
-    // steps counts some texels twice and skips others, so a thin cable's shadow came out banded and
-    // flickered as it moved. Its depth range is fitted to the still life below: the moments are
-    // stored in half floats, whose steps are a fraction of that range)
-    key.shadow.bias = -0.0004
-    key.shadow.normalBias = 0.5
-    key.shadow.radius = 10
-    key.shadow.blurSamples = 21
+    key.shadow.camera.near = 40
+    key.shadow.camera.far = 1400
+    // (soft: a lamp's head is small, but its light spreads off the inside of the shade)
+    key.shadow.bias = -0.0005
+    key.shadow.normalBias = 0.6
+    key.shadow.radius = 7
+    key.shadow.blurSamples = 15
     scene.add(key, key.target)
-    const rim = new THREE.DirectionalLight(0xe9f0ff, 0.4)
+    // the window's last light, from the right, cool
+    const rim = new THREE.DirectionalLight(0x9fb6e8, 0.32)
     scene.add(rim, rim.target)
-    const fill = new THREE.HemisphereLight(0xf3f6fb, 0xc2c8d1, 1.15)
+    // the dusk sky in the room, and the warm bounce off the desk under it
+    const fill = new THREE.HemisphereLight(0xb4c0dc, 0x9a8470, 1.0)
     scene.add(fill)
+    // (the room behind the viewer, lit by the lamp too, gives back a little warm light: the wall and
+    // the board face it. A far, soft light from behind and above the chair, without a shadow)
+    const bounce = new THREE.DirectionalLight(0xffe9d4, 0.6)
+    bounce.position.set(...LAYOUT.deskAt(-200, 1600, 900))
+    bounce.target.position.set(...LAYOUT.deskAt(-40, -300, 300))
+    scene.add(bounce, bounce.target)
+    bounce.target.updateMatrixWorld()
     // (three.js lights only what the camera's layers include: these light every layer, the frame
     // cache's region layer too)
-    for (const l of [key, rim, fill]) l.layers.enableAll()
+    for (const l of [key, rim, fill, bounce]) l.layers.enableAll()
     // (the ember's own light is a term in the lit materials: core/emberlight.js; so is the lighter's
     // flame, except below it, where a spotlight pointing down carries it with a shadow: dark, never
     // drawn, until the flame is lit)
@@ -1124,20 +1135,113 @@ export function createScene(container, options = {}) {
     })
     scene.add(badge.root)
     disposables.push({ dispose: () => badge.dispose() })
-    // (the cable lies on the card, wherever it is)
-    const badgeBox = boxOf(null, badge.box.half, badge.box.r, badge.box.y0, 55)
-    badgeBox.set(badge.group.matrix)
-    deskBoxes.push(badgeBox)
+    // (hung on the board: its ring over a pin, a few millimetres off the cork, a little crooked)
+    {
+      const n = room.boardOut
+      const down = new THREE.Vector3(0, -1, 0)
+      const tilt = 0.06
+      const across = new THREE.Vector3().crossVectors(n, down).applyAxisAngle(n, tilt)
+      down.applyAxisAngle(n, tilt)
+      const ring = room.badgePin.clone().addScaledVector(n, 5)
+      // (the ring's centre in the card's frame: (0, 1.3, -45.7), the card's top towards -z: the
+      // card's middle hangs 45.7 mm below the ring)
+      const o = ring.clone().addScaledVector(n, -1.3).addScaledVector(down, 45.7)
+      badge.group.matrix.makeBasis(across, n, down).setPosition(o)
+      badge.group.matrixWorldNeedsUpdate = true
+    }
     step('badge')
 
     // ---- the visitors' book (objects/notebook.js, visitors/book.js): an A5 notebook to the right of
     // the ashtray; a tap closes in on it and opens it
-    const notebook = createNotebook({ at: LAYOUT.DESK.notebook, turn: LAYOUT.PLAYER.yaw + LAYOUT.DESK.notebookTurn, anisotropy: aniso })
+    const notebook = createNotebook({ at: LAYOUT.DESK.notebook, y: -MAT.t, turn: LAYOUT.PLAYER.yaw + LAYOUT.DESK.notebookTurn, anisotropy: aniso })
     scene.add(notebook.group)
+
+    // ---- the desk mat (objects/deskMat.js): wool felt under the still life, the notebook beside it
+    const deskMat = createDeskMat({ fwd: LAYOUT.FWD, right: LAYOUT.RIGHT, colors: MAT_COLORS[MAT_COLOR], anisotropy: aniso })
+    scene.add(deskMat.group)
+    for (const m of deskMat.materials) withEmber(m)
+    for (const m of deskMat.meshes) m.userData.takesShadow = true
+    disposables.push({ dispose: () => deskMat.dispose() })
     disposables.push({ dispose: () => notebook.dispose() })
     const notebookBox = boxOf(null, [74, 3.5, 105], 1.5, 3.5, 135)
     notebookBox.set(notebook.group.matrixWorld)
     deskBoxes.push(notebookBox)
+
+    // ---- the laptop (objects/laptop.js): at the back, its display a browser with the projects
+    const laptop = createLaptop({ at: [LAYOUT.DESK.laptop[0], ROOM.deskY, LAYOUT.DESK.laptop[2]], yaw: LAYOUT.PLAYER.yaw + LAYOUT.DESK.laptopTurn, projects: portfolio.projects, font: FONT, anisotropy: aniso })
+    scene.add(laptop.group)
+    disposables.push(laptop)
+    const laptopBox = boxOf(null, [152, 3.2, 107.5], 4, 3.2, 200)
+    laptopBox.set(laptop.group.matrixWorld)
+    deskBoxes.push(laptopBox)
+
+    // ---- what the energy drink (and anything else falling there) meets: boxes in their own
+    // frames, the wall, the mat's edge (a 3 mm step), the lamp's foot, the ashtray
+    const obstacles = []
+    const obsP = new THREE.Vector3()
+    /** A box (half extents, its middle) in the frame of the matrix `m` (world from local). */
+    function addObstacle(m, half, mid, r = 1) {
+      obstacles.push({ inv: new THREE.Matrix4().copy(m).invert(), half, mid, r })
+    }
+    const rbox = (x, y, z, h, r) => {
+      const qx = Math.abs(x) - h[0] + r
+      const qy = Math.abs(y) - h[1] + r
+      const qz = Math.abs(z) - h[2] + r
+      return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - r
+    }
+    // (the laptop: its base, and the space its open lid fills, as one box)
+    addObstacle(laptop.group.matrixWorld, [154, 104, (215 + laptop.footprint.back + 4) / 2], [0, 104, (107.5 + 2 - 107.5 - laptop.footprint.back - 2) / 2])
+    addObstacle(notebook.group.matrixWorld, [76, 4, 107], [0, 3.5, 0])
+    addObstacle(deskMat.group.matrix, [(MAT.u1 - MAT.u0) / 2, 1.5, (MAT.v1 - MAT.v0) / 2], [(MAT.u0 + MAT.u1) / 2, -1.5, (MAT.v0 + MAT.v1) / 2], 0.8)
+    const lampFoot = new THREE.Vector3(...LAYOUT.DESK.lampBase)
+    const FWDv = new THREE.Vector3(...LAYOUT.FWD)
+    function obstacleSdf(x, y, z) {
+      // the wall
+      let d = -(x * FWDv.x + z * FWDv.z) - ROOM.wallV
+      // the lamp's foot
+      d = Math.min(d, Math.max(Math.hypot(x - lampFoot.x, z - lampFoot.z) - 73, y - (ROOM.deskY + 34)))
+      d = Math.min(d, ashtraySDF(x, y, z))
+      for (const o of obstacles) {
+        obsP.set(x, y, z).applyMatrix4(o.inv)
+        d = Math.min(d, rbox(obsP.x - o.mid[0], obsP.y - o.mid[1], obsP.z - o.mid[2], o.half, o.r))
+      }
+      return d
+    }
+    function obstacleSdfGrad(x, y, z, g) {
+      const d = obstacleSdf(x, y, z)
+      const e = 0.3
+      g[0] = obstacleSdf(x + e, y, z) - d
+      g[1] = obstacleSdf(x, y + e, z) - d
+      g[2] = obstacleSdf(x, y, z + e) - d
+      const l = Math.hypot(g[0], g[1], g[2]) || 1
+      g[0] /= l
+      g[1] /= l
+      g[2] /= l
+      return d
+    }
+    // ---- the energy drink (objects/can.js): on the bare desk to the laptop's right; knocked over, it
+    // spills. (Its brand faces the room, turned a little)
+    const canHome = new THREE.Vector3(LAYOUT.DESK.can[0], ROOM.deskY, LAYOUT.DESK.can[2])
+    const can = createCan({
+      home: canHome,
+      yaw: Math.atan2(LAYOUT.FWD[2], -LAYOUT.FWD[0]) + 0.35,
+      sdf: (x, y, z, g) => obstacleSdfGrad(x, y, z, g),
+      floorY: ROOM.deskY,
+      // (where it may lie: clear of all that, and of the mat, and of the player and the lighter)
+      clear: (x, z) => {
+        let d = obstacleSdf(x, ROOM.deskY + 26, z)
+        const u = x * LAYOUT.RIGHT[0] + z * LAYOUT.RIGHT[2]
+        const v = -(x * LAYOUT.FWD[0] + z * LAYOUT.FWD[2])
+        if (deskMat.contains(u, v)) d = Math.min(d, -1)
+        else d = Math.min(d, Math.hypot(Math.max(MAT.u0 - u, 0, u - MAT.u1), Math.max(MAT.v0 - v, 0, v - MAT.v1)))
+        return d
+      },
+      font: FONT,
+      anisotropy: aniso,
+      onLand: () => audio.click(),
+    })
+    scene.add(can.group, can.puddle, can.drops)
+    disposables.push(can)
     let bookPending = false
     const book = createVisitorsBook({ host: root, onClose: () => wake() })
     cleanups.push(() => book.dispose())
@@ -1194,67 +1298,132 @@ export function createScene(container, options = {}) {
     history.fill([emberWorld.x, emberWorld.y, emberWorld.z], 1)
 
     // ---- the camera: through a long lens (about 90 mm on a full frame: the picture's shorter side
-    // sees 15.2 degrees), so the scene reads flat, graphic and calm. Two views:
-    //   home   the player in focus: upright (its screen at the top), from nearly straight above,
-    //          as large as fits with a margin round it, the rest of the still life at the edges;
-    //          Pod OS is live there
-    //   all    the whole still life (step back): the player in the middle, the earbuds to its
-    //          left, the ashtray and lighter to its right; a tall screen turns it a quarter
+    // sees 15.2 degrees), so the room reads calm and graphic. Its views:
+    //   home    seated at the desk: the whole desk at a slant, the lamp, the laptop and the board on
+    //           the wall behind it
+    //   player  close on the player from nearly straight above, its screen at the top: Pod OS is
+    //           live there (a tap on the player or its screen)
+    //   board   in front of the board, square to it, as if leaning in from the chair
+    //   laptop  square to its display
+    //   (every other close-up looks straight down onto its object, the wall at the top: focusTargets)
     const LENS = THREE.MathUtils.degToRad(15.2)
-    const HOME_EL = THREE.MathUtils.degToRad(84)
-    const OVER_EL = THREE.MathUtils.degToRad(78)
-    const HOME = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0 }
-    const OVER = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0 }
+    const SEAT_EL = THREE.MathUtils.degToRad(36)
+    const PLAYER_EL = THREE.MathUtils.degToRad(84)
+    const BOARD_EL = THREE.MathUtils.degToRad(7)
+    const DOWN_EL = THREE.MathUtils.degToRad(80)
+    const HOME = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: SEAT_EL }
+    const PLAYERV = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: PLAYER_EL }
+    const BOARDV = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: BOARD_EL }
+    const LAPTOPV = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: 0.35 }
+    root.querySelector('[data-act="all"]').hidden = true
     // (a project open: the player moved to the left third, the project told on the right; on a narrow
     // screen it stays where it is, under the sheet)
     const PROJ = { target: new THREE.Vector3(), pos: new THREE.Vector3() }
     const narrowUI = () => canvas.clientWidth <= 760
-    const upGround = new THREE.Vector3()
     const viewFrom = (V, up, el) => {
       V.pos.copy(up).multiplyScalar(-Math.cos(el) * V.dist).add(V.target)
       V.pos.y += Math.sin(el) * V.dist
       V.az = Math.atan2(V.pos.x - V.target.x, V.pos.z - V.target.z)
     }
-    /** Both views for the screen's shape (the field of view: resize()). */
+    // (seated: what must be in the picture, in the view's own axes [u, v, height]: the front of
+    // the desk's things, the lamp, the board's top; a tall screen keeps to the middle of it)
+    const SEAT_WIDE = [
+      [-375, 145, 0],
+      [295, 178, 0],
+      [-490, -390, 0],
+      [-235, -470, 700],
+      [440, -470, 700],
+    ]
+    const SEAT_TALL = [
+      [-215, 140, 0],
+      [250, 170, 0],
+      [-150, -470, 700],
+      [300, -470, 700],
+    ]
+    // (fitted through the camera itself: the desk's front is much nearer than the wall, and a
+    // perspective picture makes the near things larger; a few rounds of aim, look, adjust)
+    const fitCam = new THREE.PerspectiveCamera()
+    const fitP = new THREE.Vector3()
+    const fitR = new THREE.Vector3()
+    const fitU = new THREE.Vector3()
+    function fitSeated(V, pts, tanV, tanH) {
+      const world = pts.map(([u, v, y]) => new THREE.Vector3(...LAYOUT.deskAt(u, v, y)))
+      // (aim first at the middle of it all)
+      V.target.set(0, 0, 0)
+      for (const p of world) V.target.add(p)
+      V.target.divideScalar(world.length)
+      V.dist = 3000
+      fitCam.fov = camera.fov
+      fitCam.aspect = camera.aspect
+      fitCam.near = camera.near
+      fitCam.far = camera.far
+      fitCam.updateProjectionMatrix()
+      for (let k = 0; k < 8; k++) {
+        viewFrom(V, FWD, SEAT_EL)
+        fitCam.position.copy(V.pos)
+        fitCam.lookAt(V.target)
+        fitCam.updateMatrixWorld()
+        let x0 = Infinity
+        let x1 = -Infinity
+        let y0 = Infinity
+        let y1 = -Infinity
+        for (const p of world) {
+          fitP.copy(p).project(fitCam)
+          x0 = Math.min(x0, fitP.x)
+          x1 = Math.max(x1, fitP.x)
+          y0 = Math.min(y0, fitP.y)
+          y1 = Math.max(y1, fitP.y)
+        }
+        // (the picture's middle onto the middle of what must be seen; then the distance so it
+        // fills 92% of the tighter way)
+        const half = V.dist * tanV
+        fitR.setFromMatrixColumn(fitCam.matrixWorld, 0)
+        fitU.setFromMatrixColumn(fitCam.matrixWorld, 1)
+        V.target.addScaledVector(fitR, ((x0 + x1) / 2) * half * camera.aspect).addScaledVector(fitU, ((y0 + y1) / 2) * half)
+        const fill = Math.max((x1 - x0) / 2, (y1 - y0) / 2)
+        V.dist *= fill / 0.92
+      }
+      viewFrom(V, FWD, SEAT_EL)
+    }
+    const lapC = new THREE.Vector3()
+    const lapN = new THREE.Vector3()
+    /** Every view for the screen's shape (the field of view: resize()). */
     function fitHome() {
       const tanV = camera.aspect >= 1 ? Math.tan(LENS / 2) : Math.tan(LENS / 2) / camera.aspect
       const tanH = tanV * camera.aspect
-      // home: the player, 76% of the picture's height at most, 80% of its width
+      fitSeated(HOME, camera.aspect < 0.9 ? SEAT_TALL : SEAT_WIDE, tanV, tanH)
+      // the player: 76% of the picture's height at most, 80% of its width
       const PH = LAYOUT.PLAYER.half
-      HOME.target.set(LAYOUT.PLAYER.x, 5, LAYOUT.PLAYER.z)
-      HOME.dist = Math.max(((2 * PH[2]) / 0.76 / 2) * Math.sin(HOME_EL) / tanV, (2 * PH[0]) / 0.8 / 2 / tanH)
-      viewFrom(HOME, FWD, HOME_EL)
-      // all: the span (up the picture, on the ground: wide, FWD; tall, a quarter turn)
-      const tall = camera.aspect < 0.9
-      const V = tall ? LAYOUT.VIEW.tall : LAYOUT.VIEW.wide
-      OVER.target.set(V.at[0], 0, V.at[2])
-      upGround.copy(tall ? RIGHT : FWD)
-      if (tall) upGround.negate()
-      OVER.dist = Math.max(V.span[0] / 2 / tanH, (V.span[1] / 2) * Math.sin(OVER_EL) / tanV)
-      viewFrom(OVER, upGround, OVER_EL)
-      // the project view: home, slid so the player's middle is at 27% of the picture's width
-      const shift = narrowUI() ? 0 : (0.5 - 0.27) * 2 * HOME.dist * tanH
-      PROJ.target.copy(HOME.target).addScaledVector(RIGHT, shift)
-      PROJ.pos.copy(HOME.pos).addScaledVector(RIGHT, shift)
+      PLAYERV.target.set(LAYOUT.PLAYER.x, 5, LAYOUT.PLAYER.z)
+      PLAYERV.dist = Math.max(((2 * PH[2]) / 0.76 / 2) * Math.sin(PLAYER_EL) / tanV, (2 * PH[0]) / 0.8 / 2 / tanH)
+      viewFrom(PLAYERV, FWD, PLAYER_EL)
+      // the board, with a margin round it
+      BOARDV.target.copy(room.boardCenter)
+      // (a tall screen crops the frame a little either side: what is pinned stays in)
+      BOARDV.dist = Math.max((room.boardSize[1] + 70) / 2 / tanV, (camera.aspect < 0.9 ? 575 : room.boardSize[0] + 70) / 2 / tanH)
+      viewFrom(BOARDV, FWD, BOARD_EL)
+      // the laptop: along its display's own normal
+      laptop.screenCenter(lapC)
+      laptop.screenNormal(lapN)
+      LAPTOPV.target.copy(lapC)
+      LAPTOPV.dist = Math.max((212 + 60) / 2 / tanV, (304 + 70) / 2 / tanH)
+      LAPTOPV.pos.copy(lapC).addScaledVector(lapN, LAPTOPV.dist)
+      LAPTOPV.az = Math.atan2(LAPTOPV.pos.x - lapC.x, LAPTOPV.pos.z - lapC.z)
+      LAPTOPV.el = Math.asin(THREE.MathUtils.clamp(lapN.y, -1, 1))
+      // the project view: the player's, slid so its middle is at 27% of the picture's width
+      const shift = narrowUI() ? 0 : (0.5 - 0.27) * 2 * PLAYERV.dist * tanH
+      PROJ.target.copy(PLAYERV.target).addScaledVector(RIGHT, shift)
+      PROJ.pos.copy(PLAYERV.pos).addScaledVector(RIGHT, shift)
     }
     fitHome()
     {
-      // the key: overhead, from the top left of the (wide) picture; the rim: low, from its lower right
-      const c = new THREE.Vector3(LAYOUT.VIEW.wide.at[0], 0, LAYOUT.VIEW.wide.at[2])
-      key.position.copy(c).addScaledVector(RIGHT, -520).addScaledVector(FWD, 420).add(new THREE.Vector3(0, 1150, 0))
-      key.target.position.copy(c)
-      // (the shadow's depth range: from above anything that can be held high to below the far edge
-      // of the ground it covers, the ground being tilted 30 degrees to the light)
-      const D = key.position.distanceTo(c)
-      key.shadow.camera.near = D - 650
-      key.shadow.camera.far = D + 450
-      key.shadow.camera.updateProjectionMatrix()
-      rim.position.copy(c).addScaledVector(RIGHT, 700).addScaledVector(FWD, -560).add(new THREE.Vector3(0, 420, 0))
+      // the window's light: from the room's right, a little in front of the desk, low
+      const c = new THREE.Vector3(...LAYOUT.deskAt(-40, -120))
+      rim.position.copy(c).addScaledVector(RIGHT, 1400).addScaledVector(FWD, -300).add(new THREE.Vector3(0, 620, 0))
       rim.target.position.copy(c)
-      key.target.updateMatrixWorld()
       rim.target.updateMatrixWorld()
     }
-    // (the smoke's light: the key's direction, from far off)
+    // (the smoke's light: the lamp's direction, from far off)
     SU.uKeyPos.value.subVectors(key.position, key.target.position).setLength(4000).add(key.target.position)
 
     const controls = new OrbitControls(camera, canvas)
@@ -1263,26 +1432,33 @@ export function createScene(container, options = {}) {
     controls.enablePan = false
     controls.rotateSpeed = 0.35
     controls.zoomSpeed = 0.6
-    /** At home the orbit keeps to a gentle range round the flat-lay, so the composition holds; up close it opens. */
-    function limitOrbit(home) {
-      const polar = Math.PI / 2 - HOME_EL
-      if (home) {
-        controls.minPolarAngle = Math.max(0.02, polar - THREE.MathUtils.degToRad(6))
-        controls.maxPolarAngle = polar + THREE.MathUtils.degToRad(14)
-        controls.minAzimuthAngle = HOME.az - 0.3
-        controls.maxAzimuthAngle = HOME.az + 0.3
-        controls.minDistance = HOME.dist * 0.7
-        controls.maxDistance = OVER.dist * 1.15 // (zoomed out, the whole still life)
+    const deg = THREE.MathUtils.degToRad
+    /**
+     * The orbit's range for a view (the focus's name; none: home). Each of the named views keeps to
+     * a gentle range round itself, so its composition holds; a close-up opens up. Never round
+     * behind the wall, nor under the desk.
+     */
+    function limitOrbit(name) {
+      const V = !name || name === 'all' ? HOME : name === 'player' || name === 'project' ? PLAYERV : name === 'board' ? BOARDV : name === 'laptop' ? LAPTOPV : null
+      if (V) {
+        const polar = Math.PI / 2 - V.el
+        const home = V === HOME
+        controls.minPolarAngle = Math.max(0.02, polar - deg(home ? 12 : 6))
+        controls.maxPolarAngle = Math.min(deg(86), polar + deg(home ? 10 : 12))
+        controls.minAzimuthAngle = V.az - (home ? 0.4 : 0.3)
+        controls.maxAzimuthAngle = V.az + (home ? 0.4 : 0.3)
+        controls.minDistance = V.dist * (home ? 0.3 : 0.7)
+        controls.maxDistance = HOME.dist * 1.15
       } else {
-        controls.minPolarAngle = THREE.MathUtils.degToRad(4)
-        controls.maxPolarAngle = THREE.MathUtils.degToRad(62) // (never so low that the ground ends)
-        controls.minAzimuthAngle = -Infinity
-        controls.maxAzimuthAngle = Infinity
+        controls.minPolarAngle = deg(2)
+        controls.maxPolarAngle = deg(62)
+        controls.minAzimuthAngle = HOME.az - 1.25
+        controls.maxAzimuthAngle = HOME.az + 1.25
         controls.minDistance = 60
-        controls.maxDistance = OVER.dist * 1.15
+        controls.maxDistance = HOME.dist * 1.15
       }
     }
-    limitOrbit(true)
+    limitOrbit(null)
     // (the view turned or zoomed by hand: the resize keeps it where it is, rather than taking it home)
     let orbited = false
     let dragFrom = null
@@ -1342,40 +1518,45 @@ export function createScene(container, options = {}) {
     controls.target.copy(HOME.target)
     controls.update()
 
-    // ---- focus (core/focus.js): a double-click or double-tap on an object closes in on it; Escape
-    // or the back button returns to the whole desk
-    const HERO_AZ = Math.atan2(-0.834, 0.549) // (the still life's own view of the ashtray)
+    // ---- focus (core/focus.js): a tap (from home) or a double-click on an object closes in on it;
+    // Escape or the back button returns home. On the desk, a close-up looks straight down, the wall
+    // at the top of the picture; the board and the laptop are seen square on
+    const down = (center, radius) => ({
+      center,
+      radius,
+      el: DOWN_EL,
+      // (the picture's top towards the wall, as at home)
+      get az() {
+        return HOME.az
+      },
+      azPull: 1,
+    })
+    const playerDof = (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld)
     const focusTargets = {
-      ashtray: { center: (o) => o.set(4, 22, 2), radius: 58, el: THREE.MathUtils.degToRad(44), az: HERO_AZ },
-      lighter: { center: (o) => o.setFromMatrixPosition(lighter.group.matrix), radius: 42, el: THREE.MathUtils.degToRad(46) },
-      // (the player from above its keys' end, steep enough to read its screen)
-      // (its depth of field on the glass's centre, and deep enough for the whole glass to be sharp: Pod
-      // OS's page, laid over it up close, is. On a phone the close-up is tighter and steeper, along the
-      // player's own length, so the screen is big enough to use: upright the whole player still fits,
-      // keys and all; on its side, the screen fills the height)
-      // (the player: home itself, its depth of field on the glass)
-      player: {
-        view: () => HOME,
-        dof: (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld),
-        deep: 2.4,
-      },
-      // (the whole still life)
-      all: { view: () => OVER, deep: 2.2 },
+      ashtray: down((o) => o.set(4, 22, 2), 72),
+      lighter: down((o) => o.setFromMatrixPosition(lighter.group.matrix), 48),
+      // (the player from above, steep enough to read its screen: Pod OS is live there; its depth
+      // of field on the glass, deep enough for the whole glass to be sharp)
+      player: { view: () => PLAYERV, dof: playerDof, deep: 2.4 },
+      // (home: the whole desk, seated)
+      all: { view: () => HOME, deep: 3.4 },
       // (a project open: the player to the left, still in focus)
-      project: {
-        view: () => PROJ,
-        dof: (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld),
-        deep: 2.4,
-      },
-      earbuds: { center: (o) => earbudsLive.focusCenter(o), radius: 52, el: THREE.MathUtils.degToRad(50) },
-      badge: { center: (o) => badge.center(o), radius: 50, el: THREE.MathUtils.degToRad(62) },
-      notebook: { center: (o) => notebook.center(o), radius: 120, el: THREE.MathUtils.degToRad(66) },
+      project: { view: () => PROJ, dof: playerDof, deep: 2.4 },
+      earbuds: down((o) => earbudsLive.focusCenter(o), 64),
+      notebook: down((o) => notebook.center(o), 120),
+      // (the can: room round it for its fall and the puddle)
+      can: down((o) => o.copy(canHome).setY(ROOM.deskY + 20).addScaledVector(RIGHT, 30), 175),
+      board: { view: () => BOARDV, dof: (o) => o.copy(room.boardCenter), deep: 1.5 },
+      laptop: { view: () => LAPTOPV, dof: (o) => laptop.screenCenter(o), deep: 1.6 },
     }
     const focusMeshes = { ashtray: [trayMesh, ...cigs.flatMap((c) => [c.body, c.ash, c.ember])], lighter: lighter.meshes, player: [] }
     player.group.traverse((o) => o.isMesh && focusMeshes.player.push(o))
     focusMeshes.earbuds = earbudsLive.item.meshes
-    focusMeshes.badge = badge.meshes
     focusMeshes.notebook = notebook.meshes
+    focusMeshes.can = can.meshes
+    focusMeshes.laptop = laptop.meshes
+    // (the badge hangs on the board: a tap on it is a tap on the board)
+    focusMeshes.board = [...room.boardMeshes, ...badge.meshes]
     const focus = createFocus({
       camera,
       controls,
@@ -1383,14 +1564,15 @@ export function createScene(container, options = {}) {
       targets: focusTargets,
       reduceMotion,
       onChange: (name) => {
-        backBtn.hidden = !name || name === 'player' || name === 'project'
-        allBtn.hidden = !!name && name !== 'player'
+        backBtn.hidden = !name || name === 'all' || name === 'project'
+        // (home is the whole desk: nothing further to step back to)
+        allBtn.hidden = true
         // (a project open: the composition holds, the camera does not orbit)
         controls.enabled = name !== 'project'
         // (up close on something else, the view is the object's: the key hints step aside)
         root.classList.toggle('cg-close', !!name && name !== 'player' && name !== 'all')
         frameCache.valid = false
-        limitOrbit(!name)
+        limitOrbit(name)
         if (!name) orbited = false
         // (closer on the player: its screen wakes, even if it was switched off)
         if (name === 'player' && os) {
@@ -1447,8 +1629,9 @@ export function createScene(container, options = {}) {
         focusAt(e.clientX, e.clientY)
       } else lastTap = { ...lastTap, t: e.timeStamp, x: e.clientX, y: e.clientY }
     }, { passive: true })
-    // (Escape: an object held goes home first, core/grab.js; with nothing held, Pod OS goes back a
-    // level; from its home, a close-up or the whole still life goes back to the player)
+    // (Escape: an object held goes home first, core/grab.js; with nothing held, the open book or
+    // project closes, then Pod OS goes back a level; from its home, any close-up goes back to the
+    // seated view)
     listen(window, 'keydown', (e) => {
       // (up close, the arrows reach Pod OS wherever the page's focus is)
       if (osUp && (e.key || '').startsWith('Arrow') && !os.el.contains(e.target) && os.onKeyDown(e)) {
@@ -1475,30 +1658,31 @@ export function createScene(container, options = {}) {
     }, { capture: true })
     const backBtn = root.querySelector('[data-act="back"]')
     const allBtn = root.querySelector('[data-act="all"]')
-    /** Is the view on the player (home, or gliding to it): Pod OS is live there. */
-    const podView = () => !focus.focused || focus.focused === 'player' || focus.focused === 'project'
+    /** Is the view on the player (close on it, or a project open): Pod OS is live there. */
+    const podView = () => focus.focused === 'player' || focus.focused === 'project'
 
     // ---- the frame, cached (core/frame.js): what does not move is drawn once and re-used; each
     // frame draws the smoke, the ember's few millimetres and one composite pass
     const EMBER_CD = 180 // (the ember's light at full glow, candela)
-    const LIGHTS = { key: key.intensity, rim: rim.intensity, fill: fill.intensity, env: scene.environmentIntensity }
+    const LIGHTS = { key: key.intensity, rim: rim.intensity, fill: fill.intensity, bounce: bounce.intensity, env: scene.environmentIntensity }
     let emberNow = 0 // (the ember's light this frame)
     function setMode(mode) {
       // the burning cigarette's paper: all of it, all but its last 4 mm (cache), or only those
       const part = mode === 'static' || mode === 'ember' ? 1 : mode === 'region' ? 2 : 0
       for (const q of cigs) q.mats.u.uPart.value = q === cigs[cur] ? part : 0
       const only = mode === 'ember'
-      // (the ember's own light falls on the objects; the backdrop and its shadows are not lit)
-      ground.visible = !only
+      // (the ember's frame holds its light alone: what glows of itself, the lamp's bulb and the
+      // laptop's display, is dark in it, or it would be counted twice)
+      lamp.glow(!only)
+      laptop.glow(!only)
       key.intensity = only ? 0 : LIGHTS.key
       rim.intensity = only ? 0 : LIGHTS.rim
       fill.intensity = only ? 0 : LIGHTS.fill
+      bounce.intensity = only ? 0 : LIGHTS.bounce
       scene.environmentIntensity = only ? 0 : LIGHTS.env
       setEmberLight(emberWorld, camera, mode === 'static' ? 0 : only ? 1 : emberNow / EMBER_CD, EMBER_CD)
     }
-    // (the ground shader reads the size of whatever the scene is drawn into: moving frames and
-    // the bakes use targets of different sizes)
-    const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget: (w, h) => backU.uRes.value.set(w, h), onMark: (l) => dbg?.mark(l) })
+    const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onMark: (l) => dbg?.mark(l) })
     // where things are on the screen (UV boxes): the ember region, the ember, the smoke
     const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0, dirty: null, dirtyLive: null, liveA: null, liveB: null, veil: null }
     const bv = new THREE.Vector3()
@@ -1560,17 +1744,16 @@ export function createScene(container, options = {}) {
       camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tanV))
       camera.updateProjectionMatrix()
       // (the home view follows the screen's shape; the camera with it, if it is there)
-      const wasHome = (!focus.focused || focus.focused === 'player') && !orbited
-      const wasAll = focus.focused === 'all'
-      const wasProj = focus.focused === 'project'
+      const f = focus.focused
+      const framed = !f || f === 'all' || f === 'player' || f === 'project' || f === 'board' || f === 'laptop'
       fitHome()
-      if ((wasHome || wasAll || wasProj) && !focus.moving) {
-        const V = wasAll ? OVER : wasProj ? PROJ : HOME
+      if (framed && !orbited && !focus.moving) {
+        const V = f === 'player' ? PLAYERV : f === 'project' ? PROJ : f === 'board' ? BOARDV : f === 'laptop' ? LAPTOPV : HOME
         controls.target.copy(V.target)
         camera.position.copy(V.pos)
         controls.update()
       }
-      if (!focus.focused) limitOrbit(true)
+      limitOrbit(f)
       renderer.setPixelRatio(dpr)
       renderer.setSize(w, h, false)
       renderer.getDrawingBufferSize(dbs)
@@ -1729,7 +1912,7 @@ export function createScene(container, options = {}) {
           bookPending = true
           return true
         }
-        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === badgeItem ? 'badge' : cigItems.includes(hit.item) ? 'ashtray' : null
+        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
         if (projOpen) leaveProject()
         focus.focusOn(name)
@@ -1785,22 +1968,66 @@ export function createScene(container, options = {}) {
       onTap: () => {},
     }
     grab.add(lighterItem)
-    // the badge: held up to be read, then laid down
-    const badgeItem = {
-      meshes: badge.meshes,
-      canGrab: () => badge.st.mode !== 'glide' && badge.st.mode !== 'down',
-      pick: () => {
-        badge.pick(camera)
-        api.lastPick = performance.now()
+    // the board (and the badge hung on it): only tapped (the camera comes to it); a drag turns the camera
+    const boardItem = { meshes: [...room.boardMeshes, ...badge.meshes], fixed: true, canGrab: () => true, onTap: () => {} }
+    grab.add(boardItem)
+    // the laptop: tapped from afar, the camera comes to it; tapped there, its browser goes to the
+    // next project's tab
+    const laptopItem = {
+      meshes: laptop.meshes,
+      fixed: true,
+      canGrab: () => true,
+      onTap: () => {
+        laptop.nextTab()
+        frameCache.valid = false
+        wake()
       },
-      aim: (ray) => badge.aim(ray),
-      twist: (r) => badge.twist(r),
-      release: () => badge.release(),
-      home: () => badge.home(),
-      cancel: () => badge.cancel(),
-      onTap: () => {},
     }
-    grab.add(badgeItem)
+    grab.add(laptopItem)
+    // the energy drink: flicked (a drag from it), it goes over the way it was pushed; tapped up close,
+    // over the way the tap pushed it; tapped where it lies, it is stood up again, full
+    const canPress = new THREE.Vector3()
+    const canPlane = new THREE.Plane()
+    const canHit = new THREE.Vector3()
+    let canArmed = false
+    const canItem = {
+      meshes: can.meshes,
+      canGrab: () => can.st.mode === 'standing' || can.st.mode === 'lying',
+      pick: (hit) => {
+        canPress.copy(hit.point)
+        canPlane.set(new THREE.Vector3(0, 1, 0), -hit.point.y)
+        canArmed = can.standing
+      },
+      aim: (ray) => {
+        if (!canArmed || !ray.intersectPlane(canPlane, canHit)) return
+        const dx = canHit.x - canPress.x
+        const dz = canHit.z - canPress.z
+        if (Math.hypot(dx, dz) < 5) return
+        canArmed = false
+        if (can.knock(dx, dz, Math.hypot(dx, dz) / 40)) shadowDirty = true
+        wake()
+      },
+      twist: () => {},
+      release: () => (canArmed = false),
+      home: () => can.reset(),
+      cancel: () => (canArmed = false),
+      onTap: (hit) => {
+        if (can.standing) {
+          // (pushed away from where it was touched: from straight above, away from the viewer)
+          can.center(canHit)
+          let dx = canHit.x - hit.point.x
+          let dz = canHit.z - hit.point.z
+          if (Math.hypot(dx, dz) < 8) {
+            dx = FWD.x
+            dz = FWD.z
+          }
+          can.knock(dx, dz, 0.6)
+        } else can.standUp()
+        shadowDirty = true
+        wake()
+      },
+    }
+    grab.add(canItem)
     // the notebook: only tapped (it opens); a drag on it turns the camera
     const notebookItem = { meshes: notebook.meshes, fixed: true, canGrab: () => !book.isOpen, onTap: () => openBook() }
     grab.add(notebookItem)
@@ -1917,8 +2144,8 @@ export function createScene(container, options = {}) {
       if (!d || d.id !== e.pointerId || grab.held || e.timeStamp - d.t > 350 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return
       const key = keyAt(e.clientX, e.clientY)
       if (key) return pressKey(key)
-      // (a tap on the player from afar: home, the player in focus)
-      if (!podView() && !focus.moving && focusableAt(e.clientX, e.clientY) === 'player') focus.back()
+      // (a tap on the player from afar: close on it, Pod OS live)
+      if (!podView() && !focus.moving && focusableAt(e.clientX, e.clientY) === 'player') focus.focusOn('player')
     }, { passive: true })
     listen(canvas, 'pointercancel', endHold, { passive: true })
     function pressKey(key, held = false) {
@@ -2045,6 +2272,7 @@ export function createScene(container, options = {}) {
       }
       wake()
     }
+    api.openProject = (id) => openProject(id) // (debug: tests)
     function closeProject() {
       if (!projOpen) return
       projOpen = null
@@ -2054,7 +2282,7 @@ export function createScene(container, options = {}) {
       }, 450)
       if (focus.focused === 'project') {
         podSlide = true
-        focus.back()
+        focus.focusOn('player')
       }
       wake()
     }
@@ -2192,6 +2420,7 @@ export function createScene(container, options = {}) {
     physics.add(lighter.physics)
     physics.add({ awake: () => flakesAwake > 0, step: (h) => stepFlakes(h) })
     physics.add(earbudsLive.physics)
+    physics.add(can.physics)
     grab.add(earbudsLive.item)
 
     // ---- sound: one AudioContext (core/audio.js), made on the first unmute: the paper's crackle,
@@ -2220,7 +2449,9 @@ export function createScene(container, options = {}) {
       if (grab.held) grab.drop('home')
       if (pickup.st.mode === 'lying' || pickup.st.mode === 'fall') pickup.glideTo(cigs[cur].notch)
       lighter.home()
-      badge.home()
+      can.reset()
+      laptop.setTab(0)
+      frameCache.valid = false
       if (!earbudsLive.plugged) earbudsLive.plug()
       // (home: from a close-up, or from wherever the view was turned to)
       if (focus.focused) focus.back()
@@ -2232,8 +2463,8 @@ export function createScene(container, options = {}) {
         if (b.dataset.act === 'reset') resetView()
         else if (b.dataset.act === 'back') focus.back()
         else if (b.dataset.act === 'os') {
-          // (into Pod OS: home if the view is elsewhere; there, the first project takes the focus)
-          if (!podView()) focus.back()
+          // (into Pod OS: close on the player if the view is elsewhere; there, the first project takes the focus)
+          if (!podView()) focus.focusOn('player')
           else if (osUp) os.focusFirst()
         } else if (b.dataset.act === 'all') focus.focusOn('all')
         else if (b.dataset.act === 'proj-close') leaveProject()
@@ -2511,7 +2742,8 @@ export function createScene(container, options = {}) {
       }
       const veilBusy = stepVeil(dt)
       const badgeBusy = badge.update(dt)
-      if (badgeBusy) badgeBox.set(badge.group.matrix)
+      const canBusy = can.update(dt)
+      if (canBusy) shadowDirty = true
       // (the cable drawn between its last two steps: physics.alpha)
       const cableBusy = earbudsLive.update(physics.alpha)
       stepOS(dt)
@@ -2599,9 +2831,9 @@ export function createScene(container, options = {}) {
       camMoved = false
       // (the cigarette or the lighter carried, gliding or falling, or the flame burning: drawn whole,
       // the shadows drawn again every frame)
-      const dragging = carried || lighterBusy || cableBusy || badgeBusy
+      const dragging = carried || lighterBusy || cableBusy || badgeBusy || canBusy
       if (dragging) shadowDirty = true
-      const changing = carried || lighterBusy || cableBusy || badgeBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
+      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
       // (the cache is baked once the view has been still for an eighth of a second: a slow zoom or
@@ -2620,7 +2852,7 @@ export function createScene(container, options = {}) {
       if (ft && (ft.dof || ft.center)) (ft.dof || ft.center)(focusPt)
       else focusPt.copy(controls.target)
       F.focus.s = camera.position.distanceTo(focusPt)
-      F.focus.home = F.focus.s * (ft ? ft.deep || 1 : 2.2)
+      F.focus.home = F.focus.s * (ft ? ft.deep || 1 : 3.4)
       // (the frame's own work before drawing: input, simulations, poses; for the debug tools)
       api.simMs = performance.now() - t0
       api.moving = moving
@@ -2773,9 +3005,11 @@ export function createScene(container, options = {}) {
       setRunning(visible && !document.hidden)
     })
 
-    // (only the ground takes the key's shadow: soft shadows on the objects themselves would bleed)
+    // (only the room's surfaces take the lamp's shadow, the desk, the mat, the wall and the board,
+    // and the spilt drink: soft shadows on the objects themselves would bleed)
+    can.puddle.userData.takesShadow = true
     scene.traverse((o) => {
-      if (o.isMesh && o !== ground) o.receiveShadow = false
+      if (o.isMesh) o.receiveShadow = !!o.userData.takesShadow
     })
     // ---- first frame: every program compiled first, a frame drawn out of sight, then the fade in
     for (const c of cigs) applyCig(c)
@@ -2887,7 +3121,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, smokeScene, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, backU, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, badgeItem, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },

@@ -8,6 +8,8 @@
 //   the ashtray  (with its cigarette) and the lighter below it: off to the right, out of its way
 //   the badge    the owner's ID card, above the player
 //   the notebook the visitors' book, an A5 spiral notebook, to the right of the ashtray
+//   the laptop   at the back, behind the player and the ashtray; the lamp at the back left; the
+//                energy drink to the laptop's right
 export const FWD = [0.836, 0, -0.549]
 export const RIGHT = [-FWD[2], 0, FWD[0]]
 /** A point on the ground from view coordinates. */
@@ -34,10 +36,19 @@ export const DESK = {
   // (turn: its top's heading on the ground, from RIGHT towards up the picture)
   badge: deskAt(-128, -92),
   badgeTurn: 0.17,
-  // the notebook, to the right of the ashtray, turned a little, high enough to stay clear of the
-  // keys' hints at the picture's lower right
-  notebook: deskAt(186, -40),
+  // the notebook, to the right of the mat, on the bare desk, turned a little
+  notebook: deskAt(205, 55),
   notebookTurn: -0.08,
+  // the laptop, at the back, behind the player and the ashtray (the middle of its base), turned a
+  // hair from square
+  laptop: deskAt(-40, -270),
+  laptopTurn: -0.035,
+  // the energy drink, on the bare desk to the right of the laptop
+  can: deskAt(195, -262),
+  // the lamp: its foot at the back left; its head's pivot (330 mm up); the point of the desk it lights
+  lampBase: deskAt(-410, -360),
+  lampHead: deskAt(-255, -140, 345),
+  lampAim: deskAt(-150, 60),
 }
 /**
  * What the camera looks at, and how much must fit: the player in the middle; on a wide screen the

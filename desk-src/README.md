@@ -1,13 +1,19 @@
 # A still life (source)
 
-One three.js scene, light and quiet, like a product page: a white music player, wired earbuds
-plugged into it, a cigarette burning in a stoneware ashtray, and a lighter, seen from nearly above
-through a long lens on a soft grey-blue ground. The player's screen runs Pod OS, a small portfolio
-OS. A minimal loader fetches and builds everything before entry. The production build is `../desk`.
+One three.js scene: a desk at dusk, seen from the chair. On a matte white desk, a sage felt mat
+holds a white music player, wired earbuds plugged into it, a cigarette burning in a stoneware
+ashtray and a lighter; beside them, a silver laptop open on the projects' sites, a can of "late."
+and the visitors' book. A black architect's lamp is the light. On the off-white wall, a cork board
+holds three sticky notes, this month's calendar and the ID badge. The player's screen runs Pod OS,
+a small portfolio OS. A minimal loader fetches and builds everything before entry. The production
+build is `../desk`.
 
-Views: home is the player in focus, upright and large, Pod OS live on its screen (the rest of the
-still life at the edges); "step back" (or zooming out) shows the whole still life; a double-click
-closes in on anything; Escape or back returns to the player. The view holds still: no parallax, a
+Views: home is seated, the whole desk and the board in view (fitted to any screen, wide or tall).
+A tap on the player looks straight down onto Pod OS; on anything else on the desk (the ashtray,
+the lighter, the earbuds, the book, the can), straight down onto it, the wall at the top of the
+picture; on the board or the badge, square to the board, still seated; on the laptop, face-on to
+its display (a tap there switches the browser's tab). A double-click closes in on anything;
+Escape or back returns home. The view holds still: no parallax, a
 still dither instead of film grain, so a frame changes only where something moves. It moves softly:
 the wheel's zoom is a critically damped spring on the distance (each notch eases in and out), glides
 ease with a smootherstep, and a moving frame keeps the still frame's depth of field, so nothing pops
@@ -71,7 +77,8 @@ npm run build    # writes ../desk
 - `src/layout.js`: where everything lies and what the camera frames (wide and tall screens)
 - `src/core`: the shared parts (renderer frame cache, grab, physics scheduler, rope, rigid body,
   the critically damped follower, audio, focus, worker, debug overlay, SDF mesher, noise, bakes)
-- `src/objects`: the player, the earbuds, the ashtray and cigarette, the lighter, the smoke
+- `src/objects`: the player, the earbuds, the ashtray and cigarette, the lighter, the smoke, and
+  the room (`room.js`, `deskMat.js`, `laptop.js`, `can.js`, `lamp.js`)
 - `src/shaders`: GLSL
 - `tools/settle.mjs`: regenerates `src/objects/earbudsPose.js`, the earbuds' settled opening pose
   (`node tools/settle.mjs`; run it after changing the layout or the rope)
@@ -80,16 +87,37 @@ npm run build    # writes ../desk
   for the pointer straight to the rig, as before)
 
 Keys: `P` the player's screen off and on, `Esc` back (Pod OS a level up, then the view back to the
-player; an object held goes home), `Space` the lighter's flame while it is held.
+seated home view; an object held goes home), `Space` the lighter's flame while it is held.
 
 The cable's chains and their lengths are set in one place, `CHAINS` in `src/objects/earbudsGeom.js`:
 the physics and the cable's mesh both read it.
 
+## The room
+
+- `src/objects/room.js`: the matte white desk, the off-white wall and the cork board in its thin
+  white frame. The sticky notes are written in `scene.js` (`notes`, in Caveat); the calendar is
+  drawn for the visitor's own month with today ringed. Pins are one instanced mesh.
+- `src/objects/deskMat.js`: the felt mat under the player (`MAT_COLOR` in `scene.js`: slate, sage,
+  rust, oat or heather).
+- `src/objects/laptop.js`: a silver aluminium laptop with no logo. Its display is a canvas drawn
+  from `portfolio.ts`: a browser with a tab for each project, each page in that project's own look,
+  with its stack and what was hard ("under the hood"). A tap brings the view face-on; a tap there
+  switches the tab; reset goes back to the first.
+- `src/objects/can.js`: a white can of a made-up drink, "late.". A tap closes in; a tap (or a
+  push) knocks it over and it rolls onto its side (`core/body.js`, a rigid body); while it lies
+  tilted it pours, and the puddle spreads (soft blobs merged in a shader, with a meniscus). A tap
+  where it lies stands it up again and the puddle dries; reset does the same.
+- `src/objects/lamp.js`: the black architect's lamp, built from its foot, head and aim (the elbow
+  found by two-bone IK). Its bulb is the scene's key light: a warm spotlight with a soft shadow,
+  under a dusk sky (a cool hemisphere fill, a blue rim from the window, a faint bounce from behind
+  the chair). The interface is dark to match: light text over the scene, and a dark frost behind
+  an open project.
+
 ## The badge and the visitors' book
 
 - `src/objects/badge.js`: the owner's ID card (its face from `src/assets/badge-face.webp`, drawn
-  from the GitHub profile's `assets/id-card.svg`), a nickel clip and ring. Double-click to close in;
-  pick it up to hold it up and read it; let go and it is laid down face up.
+  from the GitHub profile's `assets/id-card.svg`), pinned to the cork board by its clip. A tap on it
+  brings the view square to the board, close enough to read it.
 - `src/objects/notebook.js` and `src/visitors/`: an A5 spiral notebook, "visitors". A tap closes in
   and opens it: everyone's thumbprints on the left page, yours on the right (pick an ink, add a name
   and a place if you like, press and hold the pad). Each print is drawn from a random number, one of
@@ -146,4 +174,5 @@ sheet. Back, Escape, ◀ or a click on the blur closes it.
 - The player's keys: ◀ back (on Pod OS) or the previous track, ▶ the next item or the next track,
   the red one select on Pod OS (hold it to play or pause) or play and pause for the music. The keyboard: Tab to "use the
   player's screen", then arrows, Enter, Escape or Backspace
-- Font: Inter, under the SIL Open Font License (`public/fonts/`)
+- Fonts: Inter, and Caveat for the handwriting on the board, both under the SIL Open Font License
+  (`public/fonts/`)

@@ -61,7 +61,7 @@ function edgeTexture() {
   return t
 }
 
-export function createNotebook({ at, turn, fontFamily = 'Inter, Helvetica, Arial, sans-serif', anisotropy = 8 }) {
+export function createNotebook({ at, y = 0, turn, fontFamily = 'Inter, Helvetica, Arial, sans-serif', anisotropy = 8 }) {
   const group = new THREE.Group()
   const geometries = []
   const materials = []
@@ -125,7 +125,7 @@ export function createNotebook({ at, turn, fontFamily = 'Inter, Helvetica, Arial
   group.add(back, paper, front, holes, coils)
   const meshes = [front, back, paper]
   for (const m of [back, paper, front, coils]) m.castShadow = true
-  group.position.set(at[0], 0, at[2])
+  group.position.set(at[0], y, at[2])
   group.rotation.y = turn
   group.updateMatrix()
   group.updateMatrixWorld(true)
