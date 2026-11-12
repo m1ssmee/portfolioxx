@@ -41,9 +41,10 @@ uniform vec3 uFlameDownV;
   THREE.ShaderChunk.lights_fragment_end +=
     `
 #if defined( RE_Direct )
-	if ( uEmberI > 0.0 ) {
-		vec3 emberV = uEmberPosV - geometryPosition;
-		float emberD = length( emberV );
+	vec3 emberV = uEmberPosV - geometryPosition;
+	float emberD = length( emberV );
+	// (beyond its reach the ember lights nothing: nothing is worked out there)
+	if ( uEmberI > 0.0 && emberD < uEmberCut ) {
 		directLight.direction = emberV / max( emberD, 1e-4 );
 		directLight.color = uEmberCol * getDistanceAttenuation( emberD, uEmberCut, 2.0 );
 		directLight.visible = true;
@@ -66,9 +67,9 @@ uniform vec3 uFlameDownV;
 			sheenSpecularDirect = emberSh + sheenSpecularDirect * uEmberI;
 		#endif
 	}
-	if ( uFlameI > 0.0 ) {
-		vec3 flameV = uFlamePosV - geometryPosition;
-		float flameD = length( flameV );
+	vec3 flameV = uFlamePosV - geometryPosition;
+	float flameD = length( flameV );
+	if ( uFlameI > 0.0 && flameD < uFlameCut ) {
 		directLight.direction = flameV / max( flameD, 1e-4 );
 		directLight.color = uFlameCol * uFlameI * getDistanceAttenuation( flameD, uFlameCut, 2.0 );
 		// (what the shadowed spot below the flame lights, it lights; this term the rest, by the same

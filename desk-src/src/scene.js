@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { createFrame, LAYER } from './core/frame.js'
-import { withEmber, setEmberLight, setFlameLight, installEmberLight, FLAME_COLOR } from './core/emberlight.js'
+import { withEmber, setEmberLight, setFlameLight, installEmberLight, FLAME_COLOR, EMBER_LIGHT } from './core/emberlight.js'
 import { createGrab } from './core/grab.js'
 import { createAudio } from './core/audio.js'
 import { createFocus } from './core/focus.js'
@@ -238,7 +238,13 @@ export function createScene(container, options = {}) {
 
     let renderer
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' })
+      // (the canvas only ever receives finished frames, copied whole: opaque, so the browser does
+      // not blend it with the page behind it, and without a depth buffer of its own, which nothing
+      // would use. The context is made here: three.js always asks for one with alpha)
+      const cv = document.createElement('canvas')
+      const gl = cv.getContext('webgl2', { alpha: false, depth: false, stencil: false, antialias: false, premultipliedAlpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' })
+      if (!gl) throw new Error('no WebGL 2')
+      renderer = new THREE.WebGLRenderer({ canvas: cv, context: gl, depth: false, stencil: false })
     } catch {
       handle.failed = true
       root.classList.add('cg-fallback')
@@ -259,39 +265,50 @@ export function createScene(container, options = {}) {
     canvas.setAttribute('aria-label', 'Seen from above on a pale grey-blue ground: a white music player with wired earbuds plugged in, and to its side a ceramic ashtray with a lit cigarette and a lighter.')
     stageEl.appendChild(canvas)
 
-    // ---- the worker: the ashtray's mesh and every texture, off this thread
-    const worker = (() => {
+    // ---- the workers: every mesh and texture built off this thread, side by side (up to three:
+    // one worker took them one after another, and the loader waited for the sum; a spare core
+    // is left to this thread)
+    const workers = []
+    for (let k = Math.max(2, Math.min(3, (navigator.hardwareConcurrency || 4) - 1)); k > 0; k--) {
       try {
-        return new Worker(new URL('./core/worker.js', import.meta.url), { type: 'module' })
+        workers.push({ w: new Worker(new URL('./core/worker.js', import.meta.url), { type: 'module' }), load: 0 })
       } catch {
-        return null
+        break
       }
-    })()
-    if (worker) cleanups.push(() => worker.terminate())
+    }
+    const endWorkers = () => {
+      for (const x of workers.splice(0)) x.w.terminate()
+    }
+    cleanups.push(endWorkers)
     let jid = 0
     const pending = new Map()
-    if (worker)
-      worker.onmessage = (e) => {
+    for (const x of workers)
+      x.w.onmessage = (e) => {
         pending.get(e.data.id)?.(e.data)
         pending.delete(e.data.id)
+        // (nothing is asked of them after the build: they go, with their memory)
+        if (!pending.size) endWorkers()
       }
-    const job = (msg) =>
-      worker
-        ? new Promise((res) => {
-            const id = ++jid
-            pending.set(id, res)
-            worker.postMessage({ ...msg, id })
-          })
-        : Promise.reject(new Error('no worker'))
-    // (in the order the build below needs them: the worker takes them one after another)
-    const bakeJob = job({ type: 'bake' })
-    const budJob = job({ type: 'earbud', name: 'bud' })
-    const remoteJob = job({ type: 'earbud', name: 'remote' })
-    const earTexJob = job({ type: 'earbudsTex' })
-    const collisionJob = job({ type: 'collision' })
-    const trayJob = job({ type: 'tray', h: Q.trayH })
-    const lighterJob = job({ type: 'lighter', h: Q.lighterH })
-    const curlJob = job({ type: 'curl' })
+    /** A job for the least loaded worker (`cost`: about how long it takes, relative to the others). */
+    const job = (msg, cost) => {
+      if (!workers.length) return Promise.reject(new Error('no worker'))
+      const x = workers.reduce((a, b) => (b.load < a.load ? b : a))
+      x.load += cost
+      return new Promise((res) => {
+        const id = ++jid
+        pending.set(id, res)
+        x.w.postMessage({ ...msg, id })
+      })
+    }
+    // (in the order the build below needs them: each worker takes its own one after another)
+    const bakeJob = job({ type: 'bake' }, 2)
+    const budJob = job({ type: 'earbud', name: 'bud' }, 12)
+    const remoteJob = job({ type: 'earbud', name: 'remote' }, 8)
+    const earTexJob = job({ type: 'earbudsTex' }, 0.5)
+    const collisionJob = job({ type: 'collision' }, 7)
+    const trayJob = job({ type: 'tray', h: Q.trayH }, 17)
+    const lighterJob = job({ type: 'lighter', h: Q.lighterH }, 3)
+    const curlJob = job({ type: 'curl' }, 1)
 
     const scene = new THREE.Scene()
     // (no scene.background: a colour background makes three.js clear before every render, even
@@ -417,40 +434,20 @@ export function createScene(container, options = {}) {
       uAt: { value: new THREE.Vector3(0.45, 0.52, 0.42) }, // (the lightening's centre, uv, and its radius)
       uOn: { value: 1 },
     }
-    const backMat = new THREE.ShaderMaterial({
-      uniforms: backU,
-      vertexShader: /* glsl */ `
-        void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: /* glsl */ `
-        uniform vec2 uRes; uniform vec3 uTop; uniform vec3 uBottom; uniform vec3 uLight; uniform vec3 uAt; uniform float uOn;
-        ${NEUTRAL_INV}
-        void main() {
-          vec2 uv = gl_FragCoord.xy / uRes;
-          vec3 c = mix(uBottom, uTop, smoothstep(0.0, 1.0, uv.y));
-          // (a very gentle lightening behind the objects)
-          vec2 d = (uv - uAt.xy) * vec2(uRes.x / uRes.y, 1.0);
-          c = mix(c, uLight, 0.55 * exp(-dot(d, d) / (uAt.z * uAt.z)));
-          gl_FragColor = vec4(neutralInv(c) * uOn, 1.0);
-        }`,
-      depthWrite: true,
-    })
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), backMat)
-    ground.renderOrder = -2
-    // (the key light's soft shadow, and nothing else, darkens it. Its plane lies on the desk's, and
-    // a few hundredths of a millimetre a metre away is less than a step of the depth buffer: left to
-    // the depth test, the two tie, and a tile-based GPU (Apple's, every phone's) breaks the tie
-    // differently tile by tile, so the shadow came and went in 32-pixel bands that shifted with every
-    // zoom. A polygon offset puts it in front of the desk by whole depth steps, at any distance, as a
-    // decal is drawn; nothing else is near enough for those few steps to matter)
-    const shadowCatcher = new THREE.Mesh(
-      new THREE.PlaneGeometry(1600, 1600).rotateX(-Math.PI / 2),
-      new THREE.ShadowMaterial({ color: 0x2a3340, opacity: 0.32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }),
-    )
-    shadowCatcher.material.onBeforeCompile = (sh) => {
+    // (one surface, one pass: the backdrop's colour with the key light's soft shadow, and nothing
+    // else, mixed into it. It was two, a plain backdrop and over it a transparent plane that only
+    // carried the shadow: every pixel of the desk shaded and blended twice, and the two planes'
+    // depths tied on tile-based GPUs. A ShadowMaterial made opaque, its colour the shadow's, its
+    // opacity how dark the shadow gets)
+    const backMat = new THREE.ShadowMaterial({ color: 0x2a3340, opacity: 0.32, transparent: false, depthWrite: true })
+    backMat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, backU)
       sh.fragmentShader = sh.fragmentShader
         .replace(
           '#include <shadowmask_pars_fragment>',
           /* glsl */ `#include <shadowmask_pars_fragment>
+          uniform vec2 uRes; uniform vec3 uTop; uniform vec3 uBottom; uniform vec3 uLight; uniform vec3 uAt; uniform float uOn;
+          ${NEUTRAL_INV}
           float keyShadowMask() {
             float shadow = 1.0;
             #if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0
@@ -465,13 +462,80 @@ export function createScene(container, options = {}) {
             return shadow;
           }`,
         )
-        .replace('getShadowMask()', 'keyShadowMask()')
+        .replace(
+          'gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );',
+          /* glsl */ `vec2 uv = gl_FragCoord.xy / uRes;
+          vec3 c = mix(uBottom, uTop, smoothstep(0.0, 1.0, uv.y));
+          // (a very gentle lightening behind the objects)
+          vec2 d = (uv - uAt.xy) * vec2(uRes.x / uRes.y, 1.0);
+          c = mix(c, uLight, 0.55 * exp(-dot(d, d) / (uAt.z * uAt.z)));
+          gl_FragColor = vec4( mix( neutralInv(c) * uOn, color, opacity * ( 1.0 - keyShadowMask() ) ), 1.0 );`,
+        )
     }
-    shadowCatcher.material.customProgramCacheKey = () => 'ground.shadow'
-    shadowCatcher.position.y = 0.02
-    shadowCatcher.receiveShadow = true
-    shadowCatcher.renderOrder = -1
-    scene.add(ground, shadowCatcher)
+    backMat.customProgramCacheKey = () => 'ground'
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), backMat)
+    ground.receiveShadow = true
+    // (after everything opaque: what lies on the desk hides it, and those pixels are never shaded)
+    ground.renderOrder = 1
+    scene.add(ground)
+
+    // ---- lights: high-key and soft. One large overhead key from the top-left of the picture (its
+    // soft, short shadow the only one cast, and only onto the ground), a gentle fill from all round,
+    // a faint rim from the lower right; and the ember and the flame themselves
+    const key = new THREE.DirectionalLight(0xfffaf2, 2.1)
+    key.castShadow = true
+    key.shadow.mapSize.set(Q.shadow, Q.shadow)
+    Object.assign(key.shadow.camera, { left: -470, right: 470, top: 470, bottom: -470 })
+    key.shadow.camera.updateProjectionMatrix()
+    // (the soft shadow: an exact box blur, one sample a texel, 21 texels (13 mm) across: three.js
+    // spreads blurSamples evenly over 2 x radius, and a nearest-sampled depth map read at uneven
+    // steps counts some texels twice and skips others, so a thin cable's shadow came out banded and
+    // flickered as it moved. Its depth range is fitted to the still life below: the moments are
+    // stored in half floats, whose steps are a fraction of that range)
+    key.shadow.bias = -0.0004
+    key.shadow.normalBias = 0.5
+    key.shadow.radius = 10
+    key.shadow.blurSamples = 21
+    scene.add(key, key.target)
+    const rim = new THREE.DirectionalLight(0xe9f0ff, 0.4)
+    scene.add(rim, rim.target)
+    const fill = new THREE.HemisphereLight(0xf3f6fb, 0xc2c8d1, 1.15)
+    scene.add(fill)
+    // (three.js lights only what the camera's layers include: these light every layer, the frame
+    // cache's region layer too)
+    for (const l of [key, rim, fill]) l.layers.enableAll()
+    // (the ember's own light is a term in the lit materials: core/emberlight.js; so is the lighter's
+    // flame, except below it, where a spotlight pointing down carries it with a shadow: dark, never
+    // drawn, until the flame is lit)
+    // (each light's shadow is drawn only when asked for: the flame's only while it burns)
+    key.shadow.autoUpdate = false
+    const flameSpot = new THREE.SpotLight(FLAME_COLOR, 0, 420, 1.3, 0.6, 2)
+    flameSpot.castShadow = true
+    flameSpot.shadow.mapSize.set(1024, 1024)
+    flameSpot.shadow.camera.near = 3
+    flameSpot.shadow.camera.far = 420
+    flameSpot.shadow.bias = -0.0006
+    flameSpot.shadow.normalBias = 0.5
+    flameSpot.shadow.radius = 4
+    flameSpot.shadow.autoUpdate = false
+    flameSpot.layers.enableAll()
+    flameSpot.position.set(0, 200, 0)
+    scene.add(flameSpot, flameSpot.target)
+
+    // ---- shaders, as soon as there is something to compile them for: three.js compiles a
+    // material's program for the lights, the environment and the kind of target it will be drawn
+    // with, all of which are known from here on; the driver compiles in the background (where it
+    // can) while the workers are still meshing, and the loader no longer waits for the one after
+    // the other. (A small target of the frame's own kind: a program is keyed by its output.)
+    const warmTarget = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: Q.msaa })
+    let warmOn = true
+    const warm = () => {
+      if (!warmOn || destroyed) return
+      renderer.setRenderTarget(warmTarget)
+      renderer.compile(scene, camera)
+      renderer.setRenderTarget(null)
+    }
+    warm()
     stage('desk', 'done')
     // ---- the earbuds (objects/earbuds.js): their meshes, textures and collision shapes from the worker
     stage('earbuds', 'start')
@@ -483,6 +547,7 @@ export function createScene(container, options = {}) {
     scene.add(earbuds.group)
     for (const m of earbuds.materials) if (m.isMeshStandardMaterial) withEmber(m)
     step('earbuds built')
+    warm()
     stage('earbuds', 'done')
     await yieldNow()
 
@@ -612,6 +677,7 @@ export function createScene(container, options = {}) {
     })
     step('earbuds plugged in, settled')
     await yieldNow()
+    warm()
     stage('player', 'done')
     stage('ashtray', 'start')
 
@@ -678,48 +744,6 @@ export function createScene(container, options = {}) {
     }
     trayMat.customProgramCacheKey = () => 'tray'
 
-    // ---- lights: high-key and soft. One large overhead key from the top-left of the picture (its
-    // soft, short shadow the only one cast, and only onto the ground), a gentle fill from all round,
-    // a faint rim from the lower right; and the ember and the flame themselves
-    const key = new THREE.DirectionalLight(0xfffaf2, 2.1)
-    key.castShadow = true
-    key.shadow.mapSize.set(Q.shadow, Q.shadow)
-    Object.assign(key.shadow.camera, { left: -470, right: 470, top: 470, bottom: -470 })
-    key.shadow.camera.updateProjectionMatrix()
-    // (the soft shadow: an exact box blur, one sample a texel, 21 texels (13 mm) across: three.js
-    // spreads blurSamples evenly over 2 x radius, and a nearest-sampled depth map read at uneven
-    // steps counts some texels twice and skips others, so a thin cable's shadow came out banded and
-    // flickered as it moved. Its depth range is fitted to the still life below: the moments are
-    // stored in half floats, whose steps are a fraction of that range)
-    key.shadow.bias = -0.0004
-    key.shadow.normalBias = 0.5
-    key.shadow.radius = 10
-    key.shadow.blurSamples = 21
-    scene.add(key, key.target)
-    const rim = new THREE.DirectionalLight(0xe9f0ff, 0.4)
-    scene.add(rim, rim.target)
-    const fill = new THREE.HemisphereLight(0xf3f6fb, 0xc2c8d1, 1.15)
-    scene.add(fill)
-    // (three.js lights only what the camera's layers include: these light every layer, the frame
-    // cache's region layer too)
-    for (const l of [key, rim, fill]) l.layers.enableAll()
-    // (the ember's own light is a term in the lit materials: core/emberlight.js; so is the lighter's
-    // flame, except below it, where a spotlight pointing down carries it with a shadow: dark, never
-    // drawn, until the flame is lit)
-    // (each light's shadow is drawn only when asked for: the flame's only while it burns)
-    key.shadow.autoUpdate = false
-    const flameSpot = new THREE.SpotLight(FLAME_COLOR, 0, 420, 1.3, 0.6, 2)
-    flameSpot.castShadow = true
-    flameSpot.shadow.mapSize.set(1024, 1024)
-    flameSpot.shadow.camera.near = 3
-    flameSpot.shadow.camera.far = 420
-    flameSpot.shadow.bias = -0.0006
-    flameSpot.shadow.normalBias = 0.5
-    flameSpot.shadow.radius = 4
-    flameSpot.shadow.autoUpdate = false
-    flameSpot.layers.enableAll()
-    flameSpot.position.set(0, 200, 0)
-    scene.add(flameSpot, flameSpot.target)
 
     // ---- the parts
     await yieldNow()
@@ -997,6 +1021,7 @@ export function createScene(container, options = {}) {
 
     // ---- the lighter (objects/lighter.js): meshed in the worker, lying in the pool of light
     step('flakes')
+    warm()
     stage('ashtray', 'done')
     stage('lighter', 'start')
     const lmesh = (await lighterJob).mesh
@@ -1464,7 +1489,7 @@ export function createScene(container, options = {}) {
       for (const q of cigs) q.mats.u.uPart.value = q === cigs[cur] ? part : 0
       const only = mode === 'ember'
       // (the ember's own light falls on the objects; the backdrop and its shadows are not lit)
-      ground.visible = shadowCatcher.visible = !only
+      ground.visible = !only
       key.intensity = only ? 0 : LIGHTS.key
       rim.intensity = only ? 0 : LIGHTS.rim
       fill.intensity = only ? 0 : LIGHTS.fill
@@ -1475,12 +1500,13 @@ export function createScene(container, options = {}) {
     // the bakes use targets of different sizes)
     const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTarget: (w, h) => backU.uRes.value.set(w, h), onMark: (l) => dbg?.mark(l) })
     // where things are on the screen (UV boxes): the ember region, the ember, the smoke
-    const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0, dirty: null, dirtyLive: null, veil: null }
+    const F = { still: false, scene, emberI: 0, dofK: 0, regionBox: new THREE.Vector4(), emberBox: new THREE.Vector4(), smokeBox: new THREE.Vector4(), focus: { s: 300, home: 300 }, truth: false, shim: null, time: 0, dirty: null, dirtyLive: null, liveA: null, liveB: null, veil: null }
     const bv = new THREE.Vector3()
     const dirtyV4 = new THREE.Vector4()
     const cigDirty = new THREE.Vector4()
     const lv4 = new THREE.Vector4()
     const liveV4 = new THREE.Vector4()
+    const cigLive = new THREE.Vector4()
     const gv4 = new THREE.Vector4()
     /** b unioned into a (uv boxes: x0, y0, x1, y1). */
     const uniV4 = (a, b) => a.set(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.z, b.z), Math.max(a.w, b.w))
@@ -1510,6 +1536,13 @@ export function createScene(container, options = {}) {
       for (let i = 0; i < 8; i++) boxAdd(bv.set(i & 1 ? x1 : x0, i & 2 ? r : -r - 1.6, i & 4 ? r : -r).applyMatrix4(c.group.matrix))
       return boxEnd(out)
     }
+    /** A sphere's box on the screen (the ember's light's reach). */
+    function reachBoxOf(e, r, out) {
+      boxStart()
+      for (let i = 0; i < 8; i++) boxAdd(bv.set(e.x + (i & 1 ? r : -r), e.y + (i & 2 ? r : -r), e.z + (i & 4 ? r : -r)))
+      return boxEnd(out)
+    }
+    const emberLitV4 = new THREE.Vector4()
     function smokeBoxOf(e, out) {
       boxStart()
       for (let i = 0; i < 8; i++) boxAdd(bv.set(e.x + (i & 1 ? 120 : -120), e.y + (i & 2 ? 260 : -6), e.z + (i & 4 ? 120 : -120)))
@@ -2631,7 +2664,7 @@ export function createScene(container, options = {}) {
           }
           // (a step a frame; the moving frames go on showing until the cache is complete, so the
           // end of a gesture never pays for the whole bake in one frame)
-          if (frameCache.bakeStep(scene, F.focus, bakeShadows)) {
+          if (frameCache.bakeStep(scene, F.focus, bakeShadows, reachBoxOf(emberWorld, EMBER_LIGHT.uEmberCut.value, emberLitV4))) {
             baking = false
             if (dbg) dbg.bakes++
           } else stillPending = true
@@ -2657,27 +2690,32 @@ export function createScene(container, options = {}) {
       F.regionBox.set(Math.min(F.regionBox.x, sbox.x), Math.min(F.regionBox.y, sbox.y), Math.max(F.regionBox.z, sbox.z), Math.max(F.regionBox.w, sbox.w))
       cigBox(c, c.b - 1.2, c.b + 3.8, 4.7, F.emberBox)
       smokeBoxOf(emberWorld, F.smokeBox)
-      // what a still frame changes (the kept frame holds the rest). In the scene itself: the
-      // burning cigarette, the near glow the ember's flicker falls on (its light fades with the
-      // square of the distance: past ~70 mm the flicker is nothing), the glass when its page or
-      // its light changed, the lighter while the flicker reaches it. In the picture: all that,
-      // plus the smoke and the glow the composite re-mixes from the cache.
+      // what a still frame changes (the kept frame holds the rest).
+      // In the scene itself (restored from the cache and redrawn): the burning cigarette, and the
+      // glass when its page or its light changed. In the picture (composited again): that, the
+      // near glow the ember's flicker falls on (the composite mixes it from the cache's two
+      // frames; its light fades with the square of the distance: past ~70 mm the flicker is
+      // nothing), the lighter while the flicker reaches it, and the smoke.
       liveV4.copy(F.emberBox)
       uniV4(liveV4, cigDirty)
+      cigLive.copy(liveV4)
+      if (screenBusy || keyAnim > 0) uniV4(liveV4, sbox)
+      dirtyV4.copy(liveV4)
       if (emberNow > 0) {
         boxStart()
         const e = emberWorld
         for (let i = 0; i < 8; i++) boxAdd(bv.set(e.x + (i & 1 ? 70 : -70), e.y + (i & 2 ? 70 : -4), e.z + (i & 4 ? 70 : -70)))
-        uniV4(liveV4, boxEnd(gv4))
+        uniV4(dirtyV4, boxEnd(gv4))
         boxStart()
         for (let i = 0; i < 8; i++) boxAdd(bv.set(i & 1 ? lighterBounds.max.x : lighterBounds.min.x, i & 2 ? lighterBounds.max.y : lighterBounds.min.y, i & 4 ? lighterBounds.max.z : lighterBounds.min.z).applyMatrix4(lighter.group.matrixWorld))
-        uniV4(liveV4, boxEnd(lv4))
+        uniV4(dirtyV4, boxEnd(lv4))
       }
-      if (screenBusy || keyAnim > 0) uniV4(liveV4, sbox)
-      dirtyV4.copy(liveV4)
       uniV4(dirtyV4, F.smokeBox)
       F.dirty = dirtyV4
       F.dirtyLive = liveV4
+      // (where the live frame is the scene's own: the cigarette's region, and the glass)
+      F.liveA = cigLive
+      F.liveB = sbox
       // the flame on the screen: heat shimmer above it
       F.shim = null
       F.time = simTime
@@ -2737,7 +2775,7 @@ export function createScene(container, options = {}) {
 
     // (only the ground takes the key's shadow: soft shadows on the objects themselves would bleed)
     scene.traverse((o) => {
-      if (o.isMesh && o !== shadowCatcher) o.receiveShadow = false
+      if (o.isMesh && o !== ground) o.receiveShadow = false
     })
     // ---- first frame: every program compiled first, a frame drawn out of sight, then the fade in
     for (const c of cigs) applyCig(c)
@@ -2751,6 +2789,8 @@ export function createScene(container, options = {}) {
     // (for the target the scene is really drawn into: a program is keyed by its output, so one
     // compiled for the screen would be compiled again the first time it is drawn into the frame;
     // the flame and its spark, drawn first at the first ignition, would stall it)
+    warmOn = false
+    warmTarget.dispose()
     renderer.setRenderTarget(frameCache.live)
     await renderer.compileAsync(scene, camera)
     camera.layers.set(0)
@@ -2847,7 +2887,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, backU, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, badgeItem, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, smokeScene, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, backU, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, badgeItem, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },

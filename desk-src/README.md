@@ -17,20 +17,36 @@ sample counted as a lens would (a sharp edge in front never smears over the blur
 blur behind over it), and blended in only where the lens blurs; the canvas is at the screen's own pixels (up to
 2x: a stretched canvas breaks thin seams into dashes). The
 soft shadow is an exact box blur, one sample a texel, its depth range fitted to the still life.
-A still frame redraws only the box that changed (the burning cigarette, the smoke, the glow the
-composite re-mixes linearly from the cache, the glass when its page moved) into a kept frame, and
-copies that out, in its own single-sampled target (a still frame drawn into the multisampled one
-made the GPU resolve and store all of it every frame): an idle frame costs its box, not the screen.
+A still frame redraws only the box that changed into a kept frame, and copies that out: the
+burning cigarette's end and the glass when its page moved are restored from the cache and drawn
+again (in their own single-sampled target: a still frame drawn into the multisampled one made the
+GPU resolve and store all of it every frame); the smoke and the glow of the ember's flicker the
+composite mixes itself, from the cache's two frames (the scene without the ember's light, and lit
+by it alone), reading the bloom only round the ember and the blurred frames only where the lens
+blurs: an idle frame costs its box, not the screen.
 While the view moves, everything is drawn at a reduced size into fixed buffers (85% on a 2x canvas,
 90% on a 1.5x one, no multisampling there: SMAA at that size smooths it, and a WebGL multisample
-resolve is a whole extra pass over the frame) and one copy scales it onto the canvas; the full-size
-still frame returns once the view rests, its cache baked a step a frame (five frames) while the
-moving frames go on showing, so the end of a gesture never pays for the whole bake at once. On a
+resolve is a whole extra pass over the frame) and SMAA's own last pass scales it onto the canvas
+(a separate copy only under the veil); the full-size still frame returns once the view rests, its
+cache baked a step a frame (five frames) while the moving frames go on showing, so the end of a
+gesture never pays for the whole bake at once (the shadow map alone is redrawn through a one-pixel
+target, and the ember's own frame only as far as its light reaches). On a
 GPU that cannot keep about 51 moving frames a second, the governor steps the moving frames down
 within 0.6 s, at most twice (a fifth fewer pixels each; `api.quality()` under `?debug`); while
-something is carried the soft shadow is drawn again every other frame. The frames' pace is kept
-even: at most 60 a second (every other refresh on a 120 Hz screen), 30 once nobody has touched
-anything for eight seconds and only the smoke moves, 20 while a project or the book is open.
+something is carried the soft shadow is drawn again every other frame. The frames' pace: ten a
+second over the screen's refresh while live (a timer draws them; by the refresh instead for three
+seconds whenever they start coming late), 30 once nobody has touched anything for eight seconds
+and only the smoke moves, 20 while a project or the book is open. The canvas is opaque and has no
+depth buffer of its own (it only receives finished frames); the desk and the key light's shadow
+on it are one surface, drawn in one pass, after everything that hides it.
+
+The moulded parts (the ashtray, the lighter, the earbud, its remote) are meshed from distance
+fields in workers, up to three side by side, then made lighter (`src/core/decimate.js`): every
+vertex goes whose removal moves the surface by less than three thousandths of a millimetre and
+leaves the normal, the occlusion and the glaze the remaining triangles interpolate at its place
+within a hair of its own, so a flat side keeps a handful of triangles and a seam all of them:
+about a third of the mesher's triangles, drawn the same. The materials' shaders start compiling
+as each part is built, while the workers are still meshing.
 
 ```
 npm ci

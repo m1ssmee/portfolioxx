@@ -1,4 +1,5 @@
-# Caching, for hosts that read this file (Netlify, Cloudflare Pages; GitHub Pages ignores it).
+# Caching, for hosts that read this file (Netlify, Cloudflare Pages; GitHub Pages ignores it;
+# Vercel reads vercel.json, which says the same).
 # The desk's assets are content-hashed (a new build gives them new names): cached for a year.
 # Its page is checked every time, so a new build is seen at once.
 /desk/assets/*

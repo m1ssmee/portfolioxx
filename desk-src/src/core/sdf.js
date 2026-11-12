@@ -197,10 +197,13 @@ export function meshSDF(sdf, bounds, h, opts = {}) {
     let x = positions[q * 3]
     let y = positions[q * 3 + 1]
     let z = positions[q * 3 + 2]
-    for (let it = 0; it < 3; it++) {
+    // (down the gradient onto the surface. The gradient is worked out once: a fraction of a cell
+    // away it has not turned, and it is four samples of the field each time; again only if two
+    // steps along it have not arrived)
+    for (let it = 0; it < 4; it++) {
       const dd = sdf(x, y, z)
       if (Math.abs(dd) < 1e-5) break
-      grad(x, y, z)
+      if (it === 0 || it === 3) grad(x, y, z)
       const s = clamp(dd, -h, h)
       x -= g[0] * s
       y -= g[1] * s

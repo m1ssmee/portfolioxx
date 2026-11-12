@@ -21,7 +21,8 @@ uniform sampler2D tColor; uniform sampler2D tDepth; uniform float uFocus; unifor
           float ci = cocAt(zi);
           float cover = zi < z0 ? ci : min(ci, c0);
           float w = smoothstep(r - 1.0, r + 1.0, cover);
-          acc += texture2D(tColor, uv).rgb * w; wsum += w;
+          // (a sample that does not count is not read: in focus, that is most of them)
+          if (w > 0.0) { acc += textureLod(tColor, uv, 0.0).rgb * w; wsum += w; }
         }
         gl_FragColor = vec4(acc / wsum, 1.0);
       }

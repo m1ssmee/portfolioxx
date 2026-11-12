@@ -550,7 +550,9 @@ function* earbudsSteps({ renderer = null, meshes, colorway = 'black', envIntensi
       [1.97, f - 0.32], // the hole
       [1.95, f - 0.14],
     )
-    const prof = smoothProfile(ctrl, 260, true)
+    // (the smooth curve, then only the points it needs: along the bell's long sides one every
+    // few tenths of a millimetre draws the same line, round the lips every one stays)
+    const prof = thinned(smoothProfile(ctrl, 260, true), 0.003)
     return lathe(
       prof.map(([r, y]) => [r, y, true]),
       96,
@@ -1085,6 +1087,53 @@ function filleted(pts, r, n) {
   const e = pts[pts.length - 1]
   out.push([e[0], e[1], true])
   return out
+}
+
+/**
+ * A closed curve with the points it does not need left out (Ramer, Douglas and Peucker): none of
+ * those dropped lies more than eps from the line that stays.
+ */
+function thinned(pts, eps) {
+  const n = pts.length
+  const keep = new Uint8Array(n + 1)
+  const at = (i) => pts[i % n]
+  keep[0] = keep[n] = 1
+  // (a closed curve has no ends: its farthest point from the first is kept as the other end)
+  let far = 0
+  let farD = -1
+  for (let i = 1; i < n; i++) {
+    const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1])
+    if (d > farD) {
+      farD = d
+      far = i
+    }
+  }
+  keep[far] = 1
+  const stack = [0, far, far, n]
+  while (stack.length) {
+    const b = stack.pop()
+    const a = stack.pop()
+    const [ax, ay] = at(a)
+    const [bx, by] = at(b)
+    const dx = bx - ax
+    const dy = by - ay
+    const l = Math.hypot(dx, dy) || 1
+    let worst = -1
+    let wd = eps
+    for (let i = a + 1; i < b; i++) {
+      const p = at(i)
+      const d = Math.abs((p[0] - ax) * dy - (p[1] - ay) * dx) / l
+      if (d > wd) {
+        wd = d
+        worst = i
+      }
+    }
+    if (worst >= 0) {
+      keep[worst] = 1
+      stack.push(a, worst, worst, b)
+    }
+  }
+  return pts.filter((_, i) => keep[i])
 }
 
 /** A vector's length. (Not Math.hypot: V8's allocates an array of its arguments on every call.) */

@@ -2,6 +2,7 @@
 // textures and the curl-noise volume, the SDF meshes (the ashtray, the lighter's body, the earbud
 // and its remote) and the earbuds' collision shapes for their physics.
 import { meshSDF } from './sdf.js'
+import { decimate } from './decimate.js'
 import { ashtrayMesh } from '../objects/ashtray.js'
 import { lighterMesh } from '../objects/lighterGeo.js'
 import { earbudsMeshJobs } from '../objects/earbudsGeom.js'
@@ -9,21 +10,27 @@ import { earbudsTextures, earbudsTextureTransfer } from '../objects/earbudsTex.j
 import { collisionData } from '../objects/earbudsRig.js'
 import { bakeAll, curlVolume } from './bake.js'
 
+// (each mesh made lighter, core/decimate.js: only where that moves its surface by less than three
+// thousandths of a millimetre, under a tenth of a pixel in the closest view, and leaves every
+// normal it interpolates within a sixth of a degree of the true one: a highlight cannot tell)
+const lighten = (r) => decimate(r, { tol: 0.003, maxAngle: 0.2, aoTol: 0.03, fit: { angle: 0.003 } })
 const meshTransfer = (r) => [r.positions.buffer, r.normals.buffer, r.ao.buffer, r.indices.buffer, ...(r.zone ? [r.zone.buffer] : [])]
 
 self.onmessage = (e) => {
   const m = e.data
   if (m.type === 'tray') {
-    const r = ashtrayMesh(meshSDF, m.h)
+    const r = lighten(ashtrayMesh(meshSDF, m.h))
     self.postMessage({ id: m.id, mesh: r }, meshTransfer(r))
   } else if (m.type === 'lighter') {
-    const r = lighterMesh(meshSDF, m.h)
+    const r = lighten(lighterMesh(meshSDF, m.h))
     self.postMessage({ id: m.id, mesh: r }, meshTransfer(r))
   } else if (m.type === 'earbud') {
     // (one of the earbuds' moulded parts: 'bud' or 'remote')
-    const r = earbudsMeshJobs()
-      .find((j) => j.name === m.name)
-      .run(meshSDF)
+    const r = lighten(
+      earbudsMeshJobs()
+        .find((j) => j.name === m.name)
+        .run(meshSDF),
+    )
     self.postMessage({ id: m.id, mesh: r }, meshTransfer(r))
   } else if (m.type === 'earbudsTex') {
     const t = earbudsTextures()

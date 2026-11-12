@@ -2,7 +2,8 @@
       uniform sampler2D tDofStat; uniform sampler2D tDofEmb; uniform sampler2D tDofLive; uniform float uDofK; uniform vec4 uBox; uniform float uI;
       uniform float uFocus; uniform float uEq; uniform float uK; uniform float uMaxC;
       uniform sampler2D tSmoke; uniform sampler2D tSmokeZ; uniform vec2 uSmokeSize;
-      uniform sampler2D tBloom; uniform float uAspect;
+      uniform sampler2D tBloom; uniform vec4 uBloomBox; uniform float uAspect;
+      uniform sampler2D tStat; uniform sampler2D tEmb; uniform vec4 uLiveA; uniform vec4 uLiveB;
       uniform vec4 uShim; uniform float uT;
       varying vec2 vUv;
 #include <linearDepth>
@@ -35,6 +36,7 @@
         // (all four agree: plain bilinear; across an edge: the nearest in depth)
         return best < 0.02 * z ? acc / max(wsum, 1e-5) : nearest;
       }
+      bool inBox(vec2 p, vec4 b) { return p.x >= b.x && p.y >= b.y && p.x <= b.z && p.y <= b.w; }
       void main() {
         vec2 suv = vUv;
         if (uShim.z > 0.0) {
@@ -45,20 +47,28 @@
           vec2 w = vec2(sin(q.y * 11.0 - uT * 13.0 + sin(q.x * 7.0 + uT * 3.0) * 1.5), cos(q.y * 8.0 - uT * 10.0 + q.x * 4.0));
           suv += w * m * uShim.z * uShim.w * 0.045 * vec2(1.0 / uAspect, 1.0);
         }
-        vec3 c = texture2D(tScene, suv).rgb;
+        // (the scene: the live frame where it is this frame's own; elsewhere in a still frame, the
+        // cache's two frames mixed by the ember's glow)
+        vec3 c;
+        if (inBox(suv, uLiveA) || inBox(suv, uLiveB)) c = textureLod(tScene, suv, 0.0).rgb;
+        else c = textureLod(tStat, suv, 0.0).rgb + uI * textureLod(tEmb, suv, 0.0).rgb;
         float z0 = linZ(texture2D(tDepth, vUv).r);
         if (uDofK > 0.0) {
-          bool inBox = vUv.x >= uBox.x && vUv.y >= uBox.y && vUv.x <= uBox.z && vUv.y <= uBox.w;
-          vec3 d = inBox ? texture2D(tDofLive, vUv).rgb : texture2D(tDofStat, vUv).rgb + uI * texture2D(tDofEmb, vUv).rgb;
           // (taken only where the lens blurs, by this pixel's own circle: in focus, the frame's own
-          // pixels, exactly)
+          // pixels, exactly, and the blurred frames are not read at all)
           float dz = z0 - uFocus;
           float cc = min(uK * abs(dz) / max(uEq + dz, 1.0), uMaxC);
-          c = mix(c, d, uDofK * smoothstep(0.6, 2.2, cc));
+          float k = uDofK * smoothstep(0.6, 2.2, cc);
+          if (k > 0.0) {
+            vec3 d;
+            if (inBox(vUv, uBox)) d = textureLod(tDofLive, vUv, 0.0).rgb;
+            else d = textureLod(tDofStat, vUv, 0.0).rgb + uI * textureLod(tDofEmb, vUv, 0.0).rgb;
+            c = mix(c, d, k);
+          }
         }
         vec4 s = smokeAt(vUv, z0);
         c = c * (1.0 - s.a) + s.rgb;
-        c += texture2D(tBloom, vUv).rgb;
+        if (inBox(vUv, uBloomBox)) c += textureLod(tBloom, vUv, 0.0).rgb;
         // (a product shot's tone curve: colours as they are, the light parts compressed, never clipped)
         c = NeutralToneMapping(c);
         vec4 o = sRGBTransferOETF(vec4(c, 1.0));

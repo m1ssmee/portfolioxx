@@ -4,11 +4,13 @@
 //   ember     the same scene lit only by the ember's light, at intensity 1 (light adds linearly in
 //             HDR, so each frame is static + intensity(t) x ember: the flicker stays exact)
 //   dof       both of those through the depth of field (it is linear in colour too)
-// Each frame then restores static + I x ember (colour and depth) into the multisampled target,
-// draws the ember region (coal, ash, tobacco, the last millimetres of paper) over it, refocuses
-// only the region's box, draws the smoke at a reduced resolution, blooms only around the ember,
-// and finishes in one composite pass (smoke, glow, tone mapping, grain).
-// While the camera moves everything is drawn normally (no depth of field; SMAA after).
+// Each still frame then restores static + I x ember (colour and depth) into the live target, only
+// where the scene itself changes (the cigarette's burning end, the glass), draws the ember region
+// (coal, ash, tobacco, the last millimetres of paper) over it, refocuses only the region's box,
+// draws the smoke at a reduced resolution, blooms only around the ember, and finishes in one
+// composite pass over the box that changed (the scene, mixed there from the cache's two frames
+// wherever the live target was not redrawn; smoke, glow, tone mapping, a still dither).
+// While the camera moves everything is drawn whole, at a reduced size, SMAA after.
 import * as THREE from 'three'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
@@ -72,6 +74,9 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
   // changed (the smoke, the ember's flicker, the screen when its page moved) and copies it out —
   // an idle frame costs that box, not the screen
   const ldr = rt(16, 16, { depthBuffer: false })
+  // (a pixel: three.js draws its shadow maps inside a render of the scene, whatever that render
+  // is drawn into; when only the shadows are wanted, it is drawn into this)
+  const pixel = rt(1, 1, {})
 
   // ---- materials
   const copyMat = new THREE.ShaderMaterial({
@@ -226,6 +231,12 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
       tSmokeZ: { value: smokeZ.texture },
       uSmokeSize: { value: new THREE.Vector2(1, 1) },
       tBloom: { value: bloom.renderTargetsHorizontal[0].texture },
+      uBloomBox: { value: new THREE.Vector4(0, 0, 1, 1) }, // (uv: where the bloom's frame is not black)
+      // (a still frame: outside these two boxes, the scene is the cache's two frames, mixed here)
+      tStat: { value: cStat.texture },
+      tEmb: { value: cEmb.texture },
+      uLiveA: { value: new THREE.Vector4(0, 0, 1, 1) },
+      uLiveB: { value: new THREE.Vector4(2, 2, -1, -1) },
       uShim: { value: new THREE.Vector4(0, 0, 0, 0.1) },
       uT: { value: 0 },
       uAspect: { value: 1 },
@@ -348,6 +359,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
   const bloomBoxWas = new Float64Array(4).fill(-1)
   const bloomTargets = [bloom.renderTargetBright, ...bloom.renderTargetsHorizontal, ...bloom.renderTargetsVertical]
   let bloomBox = null
+  const bloomUv = compMat.uniforms.uBloomBox.value
   function bloomClip(t, grow) {
     if (!bloomBox) {
       t.scissorTest = false
@@ -409,6 +421,9 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
     quad.material = cm
     const out = bloom.renderTargetsHorizontal[0]
     clip(out, reach * (out.width / W) + 2)
+    // (the composite reads the bloom only where there is any: the clip, in the frame's own uv)
+    if (box) bloomUv.set((bloomRect.x - 1) / out.width, (bloomRect.y - 1) / out.height, (bloomRect.x + bloomRect.z + 1) / out.width, (bloomRect.y + bloomRect.w + 1) / out.height)
+    else bloomUv.set(0, 0, 1, 1)
     renderer.setRenderTarget(out)
     renderer.clear(true, false, false)
     quad.render(renderer)
@@ -471,14 +486,13 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
      * Bake the cache: `scene` drawn with only LAYER.STATIC, once with the ember's light off and
      * once with nothing but it (setMode: 'static' | 'ember' | 'region' | 'full' switches the
      * lighting and which part of the cigarette's paper is drawn); then both through the depth of
-     * field.
+     * field. A step a frame (the moving frames go on showing meanwhile): one scene pass or one
+     * blur each, so no frame at the end of a gesture pays for them all at once. `shadows`: the
+     * shadow maps drawn again first; `emberLit`: how far the ember's light reaches on the screen
+     * (a uv box). Returns true when the cache is complete. Stopped (the view moving again), it
+     * starts over.
      */
-    /**
-     * The same bake a step a frame (the moving frames go on showing meanwhile): one scene pass or
-     * one full-screen blur each, so no frame at the end of a gesture pays for them all at once.
-     * Returns true when the cache is complete. Stopped (the view moving again), it starts over.
-     */
-    bakeStep(scene, focus, shadows) {
+    bakeStep(scene, focus, shadows, emberLit) {
       const keep = camera.layers.mask
       renderer.setClearColor(0x000000, 1)
       mark('bake')
@@ -489,7 +503,8 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           camera.layers.enable(LAYER.REGION)
           setMode('full')
           renderer.shadowMap.needsUpdate = true
-          sceneInto(live)
+          // (the shadow maps are drawn on the way; the scene itself into a single pixel)
+          sceneInto(pixel)
           renderer.clear()
           renderer.render(scene, camera)
           camera.layers.mask = keep
@@ -514,15 +529,24 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         return false
       }
       if (st === 2) {
+        // (the ember's light reaches only so far: `emberLit`, that reach on the screen (a uv box,
+        // or nothing for the whole frame), is all that is drawn; the rest of its frame is black)
+        const sc = emberLit ? rect(emberLit, W, H, 2, pxL) : null
         camera.layers.set(LAYER.STATIC)
         setMode('ember')
+        live.scissorTest = !!sc
+        if (sc) live.scissor.copy(sc)
         sceneInto(live)
         renderer.clear()
         renderer.render(scene, camera)
-        quad.material = copyMat
+        live.scissorTest = false
         copyMat.uniforms.tColor.value = live.texture
-        renderer.setRenderTarget(cEmb)
-        quad.render(renderer)
+        if (sc) {
+          renderer.setRenderTarget(cEmb)
+          renderer.clear()
+        }
+        // (cEmb has no depth: the copy's depth write goes nowhere)
+        draw(copyMat, cEmb, sc)
         setMode('full')
         camera.layers.mask = keep
         bakeStage = 3
@@ -539,7 +563,15 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
       setDof(focus)
       dofMat.uniforms.tDepth.value = cStat.depthTexture
       dofMat.uniforms.tColor.value = cEmb.texture
-      draw(dofMat, dEmb)
+      {
+        // (the blur spreads the ember's light by its largest circle at most)
+        const sc = emberLit ? rect(emberLit, W, H, dofMat.uniforms.uMax.value + 4, pxL) : null
+        if (sc) {
+          renderer.setRenderTarget(dEmb)
+          renderer.clear()
+        }
+        draw(dofMat, dEmb, sc)
+      }
       bakeStage = 0
       api.valid = true
       ldrValid = false
@@ -548,50 +580,6 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
     /** Stop a bake under way (the view moved): it starts over next time. */
     bakeReset() {
       bakeStage = 0
-    },
-    bake(scene, focus, shadows) {
-      const keep = camera.layers.mask
-      renderer.setClearColor(0x000000, 1)
-      if (shadows) {
-        // (the shadow map is drawn inside a render, for the objects the camera sees: all of them)
-        camera.layers.enable(LAYER.STATIC)
-        camera.layers.enable(LAYER.REGION)
-        setMode('full')
-        renderer.shadowMap.needsUpdate = true
-        sceneInto(live)
-        renderer.clear()
-        renderer.render(scene, camera)
-      }
-      camera.layers.set(LAYER.STATIC)
-      setMode('static')
-      sceneInto(live)
-      renderer.clear()
-      renderer.render(scene, camera)
-      copyMat.uniforms.tColor.value = live.texture
-      copyMat.uniforms.tDepth.value = live.depthTexture
-      renderer.setRenderTarget(cStat)
-      renderer.clear()
-      draw(copyMat, cStat)
-      setMode('ember')
-      sceneInto(live)
-      renderer.clear()
-      renderer.render(scene, camera)
-      quad.material = copyMat
-      copyMat.uniforms.tColor.value = live.texture
-      renderer.setRenderTarget(cEmb)
-      quad.render(renderer)
-      setMode('full')
-      camera.layers.mask = keep
-      {
-        setDof(focus)
-        dofMat.uniforms.tDepth.value = cStat.depthTexture
-        dofMat.uniforms.tColor.value = cStat.texture
-        draw(dofMat, dStat)
-        dofMat.uniforms.tColor.value = cEmb.texture
-        draw(dofMat, dEmb)
-      }
-      api.valid = true
-      ldrValid = false
     },
     /**
      * One frame. `still`: use the cache (region drawn over it); otherwise draw `scene` whole.
@@ -626,6 +614,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           u.uBox.value.set(0, 0, 1, 1)
           u.uI.value = f.emberI
         }
+        u.uLiveA.value.set(0, 0, 1, 1)
         mark('smoke')
         renderSmoke(null, live.depthTexture)
         mark('bloom')
@@ -651,7 +640,9 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           present(ldr, f)
           return
         }
-        const drL = dirtyLive ? rect(dirtyLive, W, H, 8, pxL) : null
+        // (restored a little wider than it is redrawn: the depth of field round the region reads
+        // that far, and what it reads must be this frame's)
+        const drL = dirtyLive ? rect(dirtyLive, W, H, 2 * Math.ceil(dofMat.uniforms.uMax.value) + 8, pxL) : null
         const liveWork = !drL || (drL.z > 0 && drL.w > 0)
         if (liveWork) {
           restoreMat.uniforms.uI.value = f.emberI
@@ -680,7 +671,20 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
             u.tDofLive.value = dLive.texture
             u.uBox.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
           }
-          u.uI.value = f.emberI
+        }
+        // (the live target holds this frame's scene only where it was restored and redrawn: the
+        // cigarette's burning end, and the glass. Everywhere else the composite mixes the cache's
+        // two frames by the ember's glow itself, as the restore would have: nothing is copied
+        // into the live target, each frame, just to be read back once)
+        u.uI.value = f.emberI
+        if (f.liveA) {
+          rect(f.liveA, W, H, 4, px)
+          u.uLiveA.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
+          rect(f.liveB, W, H, 2, px)
+          u.uLiveB.value.set(px.x / W, px.y / H, (px.x + px.z) / W, (px.y + px.w) / H)
+        } else {
+          u.uLiveA.value.set(0, 0, 1, 1)
+          u.uLiveB.value.set(2, 2, -1, -1)
         }
         mark('smoke')
         renderSmoke(f.smokeBox, liveStill.depthTexture)
@@ -720,6 +724,7 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
           u.uBox.value.set(0, 0, 1, 1)
           u.uI.value = f.emberI
         }
+        u.uLiveA.value.set(0, 0, 1, 1)
         mark('smoke')
         renderSmoke(f.smokeBox, liveLo.depthTexture)
         mark('bloom')
@@ -727,18 +732,22 @@ export function createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onTa
         mark('comp')
         u.tScene.value = liveLo.texture
         u.tDepth.value = liveLo.depthTexture
+        const veiled = f.veil && f.veil.k > 0
         if (smaa && !smaaWarm) {
-          // (SMAA at the reduced size, then one copy scales it onto the canvas: the canvas's own
-          // pixels are touched once, by a single read)
+          // (SMAA at the reduced size, its last pass drawn straight onto the canvas: it reads the
+          // frame and its blend weights wherever a canvas pixel falls, so it scales the frame up
+          // as it smooths it, and the canvas's own pixels are written once. Only under the veil,
+          // which the present pass mixes in, does it go by way of a buffer and a copy)
           draw(compMat, ldrLo)
           mark('present')
-          smaa.renderToScreen = false
+          smaa.renderToScreen = !veiled
           smaa.render(renderer, ldrLo2, ldrLo)
+          if (veiled) present(ldrLo2, f)
         } else {
           mark('present')
           draw(compMat, ldrLo2)
+          present(ldrLo2, f)
         }
-        present(ldrLo2, f)
       }
     },
     dispose() {
