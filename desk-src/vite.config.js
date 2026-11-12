@@ -97,7 +97,7 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     target: ['es2020', 'safari15'],
-    outDir: '../desk',
+    outDir: process.env.VERCEL ? 'dist' : '../desk',
     emptyOutDir: true,
     assetsInlineLimit: 0,
     reportCompressedSize: true,

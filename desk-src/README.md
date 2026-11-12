@@ -54,6 +54,17 @@ npm run dev      # http://localhost:5173 (add ?debug for the overlay: fps, CPU a
 npm run build    # writes ../desk
 ```
 
+## Deploying
+
+- **Vercel, Root Directory `desk-src`** (the Vite preset, nothing else to set): Vercel installs and
+  builds this project; on Vercel the build goes to `dist` (`vite.config.js`: `process.env.VERCEL`),
+  the desk is the site's front page, and `api/visitors.js` here is its function. `vercel.json`
+  here caches the hashed assets for good.
+- **Vercel, Root Directory left at the repository** (no framework, no build): the committed
+  `../desk` is served at `/desk/`, the repository's `api/visitors.js` hands over to the one here.
+- **Anywhere else** (GitHub Pages, Netlify): the committed `../desk`, as it is. `npm run build`
+  off Vercel writes it.
+
 - `index.html`: the loader (inline markup and styles); `src/main.js`: what drives it
 - `src/scene.js`: `createScene(containerEl)` → `{ destroy() }`; the 2D layer (name and role, the
   keys, now playing, the colours, sound and reset) is its `UI` and `CSS`
@@ -83,8 +94,8 @@ the physics and the cable's mesh both read it.
   and opens it: everyone's thumbprints on the left page, yours on the right (pick an ink, add a name
   and a place if you like, press and hold the pad). Each print is drawn from a random number, one of
   a kind (`print.js`), not anyone's real finger.
-- Shared prints are kept by `api/visitors.js` (at the repository's root), a Vercel function over
-  Upstash Redis. To turn it on: in the Vercel project, Storage, add an Upstash Redis database
+- Shared prints are kept by `api/visitors.js` (here; the repository's own `api/visitors.js` hands
+  over to it), a Vercel function over Upstash Redis. To turn it on: in the Vercel project, Storage, add an Upstash Redis database
   (Marketplace) and connect it to the project; Vercel sets `UPSTASH_REDIS_REST_URL` and
   `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL` and `KV_REST_API_TOKEN`), and redeploy. Until
   then, or anywhere without it (`npm run dev`), the book keeps a visitor's print in their browser.
