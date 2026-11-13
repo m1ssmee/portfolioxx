@@ -22,9 +22,10 @@ import { createBadge } from './objects/badge.js'
 import { createNotebook } from './objects/notebook.js'
 import { createDeskMat, MAT, MAT_COLORS } from './objects/deskMat.js'
 import { createRoom, ROOM } from './objects/room.js'
-import { createLaptop } from './objects/laptop.js'
+import { createLaptop, LAPTOP } from './objects/laptop.js'
+import { keyLayout, WELL, PAD } from './objects/laptopGeo.js'
 import { createCan, CAN } from './objects/can.js'
-import { createLamp } from './objects/lamp.js'
+import { createLamp, LAMP } from './objects/lamp.js'
 import caveatUrl from './assets/caveat.woff2?url'
 import { createVisitorsBook } from './visitors/book.js'
 import badgeFaceUrl from './assets/badge-face.webp?url'
@@ -165,6 +166,7 @@ const UI = `<div class="cg-ui">
     <li class="cg-fine"><kbd>P</kbd>power</li>
     <li class="cg-fine"><kbd>Esc</kbd>back</li>
     <li class="cg-fine"><kbd>Space</kbd>light</li>
+    <li class="cg-fine"><kbd>L</kbd>lamp</li>
     <li class="cg-coarse"><kbd>drag</kbd>look around</li>
     <li class="cg-coarse"><kbd>double-tap</kbd>closer</li>
     <li class="cg-coarse"><kbd>hold</kbd>pick up</li>
@@ -272,7 +274,7 @@ export function createScene(container, options = {}) {
     const canvas = renderer.domElement
     canvas.className = 'cg-canvas'
     canvas.setAttribute('role', 'img')
-    canvas.setAttribute('aria-label', 'A desk at dusk under a black arm lamp: a white music player with wired earbuds plugged in on a green felt mat, a ceramic ashtray with a lit cigarette and a lighter, a silver laptop open on a browser, an energy drink, a notebook, and on the wall a cork board with sticky notes, a calendar and an ID badge.')
+    canvas.setAttribute('aria-label', 'A desk at dusk against a deep green panelled wall, lit by a cream and brass desk lamp: a white music player with wired earbuds plugged in on a sage felt mat, a stoneware ashtray with a lit cigarette and a lighter, a graphite laptop open on a browser with a tab for each project, a can of "late.", a notebook, and on the wall a cork board in an oak frame with sticky notes, a calendar, a postcard and an ID badge.')
     stageEl.appendChild(canvas)
 
     // ---- the workers: every mesh and texture built off this thread, side by side (up to three:
@@ -312,6 +314,8 @@ export function createScene(container, options = {}) {
     }
     // (in the order the build below needs them: each worker takes its own one after another)
     const bakeJob = job({ type: 'bake' }, 2)
+    // (the room's textures: wanted first, as soon as the environment is made)
+    const roomJob = job({ type: 'room', L: ROOM }, 1.5)
     const budJob = job({ type: 'earbud', name: 'bud' }, 12)
     const remoteJob = job({ type: 'earbud', name: 'remote' }, 8)
     const earTexJob = job({ type: 'earbudsTex' }, 0.5)
@@ -319,6 +323,8 @@ export function createScene(container, options = {}) {
     const trayJob = job({ type: 'tray', h: Q.trayH }, 17)
     const lighterJob = job({ type: 'lighter', h: Q.lighterH }, 3)
     const curlJob = job({ type: 'curl' }, 1)
+    // (the laptop's bead-blast and its deck's wear, from its keys' layout)
+    const laptopJob = job({ type: 'laptop', keys: keyLayout(), well: WELL, pad: PAD, deck: [LAPTOP.w, LAPTOP.d] }, 0.4)
 
     const scene = new THREE.Scene()
     // (no scene.background: a colour background makes three.js clear before every render, even
@@ -347,7 +353,7 @@ export function createScene(container, options = {}) {
       const mats = [
         panel(300, 300, at(-700, -380, 1500), 16, [1, 0.84, 0.64]), // (the lamp)
         panel(1600, 1150, at(2000, 300, 650), 0.62, [0.74, 0.83, 1]), // (the window)
-        panel(3200, 2000, at(0, -2000, 400), 0.17, [1, 0.95, 0.88]), // (the wall behind the desk)
+        panel(3200, 2000, at(0, -2000, 400), 0.06, [0.42, 0.56, 0.5]), // (the wall behind the desk: its deep green)
         panel(3200, 2000, at(0, 2000, 400), 0.08, [0.9, 0.9, 0.95]), // (the room behind)
         panel(3200, 3200, [0, -1700, 0], 0.3, [1, 0.95, 0.88]), // (the desk under it all)
         panel(3600, 3600, [0, 2200, 0], 0.2, [0.95, 0.92, 0.88]), // (the ceiling, faintly lit)
@@ -441,8 +447,9 @@ export function createScene(container, options = {}) {
       }
       vec3 neutralInv(vec3 c) { return vec3(neutralInv(c.r), neutralInv(c.g), neutralInv(c.b)); }`
 
-    // ---- the room (objects/room.js): a matte white desk against an off-white wall, a cork board
-    // on the wall with the owner's notes, this month's calendar and a pin for the ID badge. Its
+    // ---- the room (objects/room.js): a matte white desk against a deep green panelled wall, a cork
+    // board in an oak frame on it with the owner's notes, this month's calendar, a postcard, a ticket,
+    // a clipped sketch and a pin for the ID badge. Its textures come from the worker; its paper's
     // print needs its fonts: Inter (the player's) and a handwriting face for the notes
     const FONT = '"Inter", "Helvetica Neue", Helvetica, Arial, sans-serif'
     const HAND = '"Caveat", "Segoe Print", "Bradley Hand", cursive'
@@ -453,7 +460,10 @@ export function createScene(container, options = {}) {
       ]).catch(() => {}),
       new Promise((r) => setTimeout(r, 4000)),
     ])
+    const roomBaked = await roomJob.catch(() => null) // (no worker: the room bakes them itself)
+    if (destroyed) return
     const room = createRoom({
+      baked: roomBaked?.tex,
       fwd: LAYOUT.FWD,
       right: LAYOUT.RIGHT,
       font: FONT,
@@ -466,20 +476,25 @@ export function createScene(container, options = {}) {
       ],
     })
     scene.add(room.group)
-    // (the desk: what used to be the ground; the shadows fall on it, the wall and the board)
+    // (the desk: what used to be the ground; the shadows fall on it, the wall and the board. The
+    // wall's parts and the paper mark themselves)
     const ground = room.desk
     for (const m of [room.desk, room.wall, ...room.boardMeshes]) m.userData.takesShadow = true
+    for (const m of room.litMaterials) withEmber(m)
     step('room')
     await yieldNow()
 
-    // ---- lights: dusk, and a desk lamp. The lamp (objects/lamp.js: a black arm lamp at the back
-    // left) is the key: a warm spotlight from its bulb, its soft shadow the only one cast (onto the
-    // desk, the mat, the wall and the board). Round it the room is dim: a cool dusk sky from all
-    // round, a window's last light from the right, and the ember and the flame themselves
+    // ---- lights: dusk, and a desk lamp. The lamp (objects/lamp.js: a cream and brass spring lamp
+    // at the back left, switched by a tap, aimed by a drag on its head) is the key: a warm spotlight
+    // from its bulb along its shade, its soft shadow the only one cast (onto the desk, the mat, the
+    // wall and the board), as bright as the lamp's own glow (lamp.level). Round it the room is dim:
+    // a cool dusk sky from all round, a window's last light from the right, and the ember and the
+    // flame themselves
     const lamp = createLamp({
       base: new THREE.Vector3(...LAYOUT.DESK.lampBase).setY(ROOM.deskY),
       head: new THREE.Vector3(...LAYOUT.DESK.lampHead),
       aim: new THREE.Vector3(...LAYOUT.DESK.lampAim),
+      anisotropy: aniso,
     })
     scene.add(lamp.group)
     // (candela: its light falls off with the square of the distance; the middle of its pool, half a
@@ -487,7 +502,7 @@ export function createScene(container, options = {}) {
     const LAMP_CD = 7.2e5
     const key = new THREE.SpotLight(0xffe2c4, LAMP_CD, 0, 1.08, 0.85, 2)
     key.position.copy(lamp.bulb)
-    key.target.position.set(...LAYOUT.DESK.lampAim)
+    key.target.position.copy(lamp.bulb).addScaledVector(lamp.axis, 400)
     key.target.updateMatrixWorld()
     key.castShadow = true
     key.shadow.mapSize.set(Q.shadow, Q.shadow)
@@ -506,8 +521,10 @@ export function createScene(container, options = {}) {
     const fill = new THREE.HemisphereLight(0xb4c0dc, 0x9a8470, 1.0)
     scene.add(fill)
     // (the room behind the viewer, lit by the lamp too, gives back a little warm light: the wall and
-    // the board face it. A far, soft light from behind and above the chair, without a shadow)
-    const bounce = new THREE.DirectionalLight(0xffe9d4, 0.6)
+    // the board face it. A far, soft light from behind and above the chair, without a shadow; the
+    // green wall's main light, enough for its grooves and the board's edges to read. It dims with
+    // the lamp, to what the dusk alone gives back)
+    const bounce = new THREE.DirectionalLight(0xffe9d4, 0.75)
     bounce.position.set(...LAYOUT.deskAt(-200, 1600, 900))
     bounce.target.position.set(...LAYOUT.deskAt(-40, -300, 300))
     scene.add(bounce, bounce.target)
@@ -1167,11 +1184,22 @@ export function createScene(container, options = {}) {
     notebookBox.set(notebook.group.matrixWorld)
     deskBoxes.push(notebookBox)
 
-    // ---- the laptop (objects/laptop.js): at the back, its display a browser with the projects
-    const laptop = createLaptop({ at: [LAYOUT.DESK.laptop[0], ROOM.deskY, LAYOUT.DESK.laptop[2]], yaw: LAYOUT.PLAYER.yaw + LAYOUT.DESK.laptopTurn, projects: portfolio.projects, font: FONT, anisotropy: aniso })
+    // ---- the laptop (objects/laptop.js): at the back, graphite, its display a browser with a tab for
+    // each project (a tap on a tab switches to it; up close, a drag or the wheel scrolls the page),
+    // its keys pressed by a tap, its keyboard lit when the lamp is off
+    const laptopBaked = await laptopJob.catch(() => null)
+    if (destroyed) return
+    const laptop = createLaptop({ at: [LAYOUT.DESK.laptop[0], ROOM.deskY, LAYOUT.DESK.laptop[2]], yaw: LAYOUT.PLAYER.yaw + LAYOUT.DESK.laptopTurn, projects: portfolio.projects, font: FONT, anisotropy: aniso, baked: laptopBaked?.tex })
     scene.add(laptop.group)
     disposables.push(laptop)
-    const laptopBox = boxOf(null, [152, 3.2, 107.5], 4, 3.2, 200)
+    // (behind the loader the lid is shut: it opens as the visitor comes in, handle.enter)
+    let lidShut = false
+    if (opts.hold && !reduceMotion) {
+      laptop.setOpen(0)
+      laptop.update(10)
+      lidShut = true
+    }
+    const laptopBox = boxOf(null, LAPTOP.box.half, LAPTOP.box.r, LAPTOP.box.y, 200)
     laptopBox.set(laptop.group.matrixWorld)
     deskBoxes.push(laptopBox)
 
@@ -1199,7 +1227,7 @@ export function createScene(container, options = {}) {
       // the wall
       let d = -(x * FWDv.x + z * FWDv.z) - ROOM.wallV
       // the lamp's foot
-      d = Math.min(d, Math.max(Math.hypot(x - lampFoot.x, z - lampFoot.z) - 73, y - (ROOM.deskY + 34)))
+      d = Math.min(d, Math.max(Math.hypot(x - lampFoot.x, z - lampFoot.z) - LAMP.footR, y - (ROOM.deskY + LAMP.footH)))
       d = Math.min(d, ashtraySDF(x, y, z))
       for (const o of obstacles) {
         obsP.set(x, y, z).applyMatrix4(o.inv)
@@ -1219,8 +1247,9 @@ export function createScene(container, options = {}) {
       g[2] /= l
       return d
     }
-    // ---- the energy drink (objects/can.js): on the bare desk to the laptop's right; knocked over, it
-    // spills. (Its brand faces the room, turned a little)
+    // ---- the drink (objects/can.js): a can of "late.", sealed, by the laptop's right corner. Up close
+    // the first tap opens it; then a tap high on it (or a flick) knocks it over, and open, it spills; a
+    // tap low on it rocks it. (Its brand faces the room, turned a little)
     const canHome = new THREE.Vector3(LAYOUT.DESK.can[0], ROOM.deskY, LAYOUT.DESK.can[2])
     const can = createCan({
       home: canHome,
@@ -1238,9 +1267,12 @@ export function createScene(container, options = {}) {
       },
       font: FONT,
       anisotropy: aniso,
-      onLand: () => audio.click(),
+      // (a fall's landing, full; its base slapping the desk as it rocks, softer by the blow)
+      onLand: (k = 1) => audio.click(k >= 1 ? 0.8 : 0.4 * k),
+      // (the seal broken: the crack and the hiss)
+      onOpen: () => audio.canOpen(),
     })
-    scene.add(can.group, can.puddle, can.drops)
+    scene.add(can.group, can.puddle, can.drops, ...can.extras)
     disposables.push(can)
     let bookPending = false
     const book = createVisitorsBook({ host: root, onClose: () => wake() })
@@ -1326,19 +1358,26 @@ export function createScene(container, options = {}) {
       V.az = Math.atan2(V.pos.x - V.target.x, V.pos.z - V.target.z)
     }
     // (seated: what must be in the picture, in the view's own axes [u, v, height]: the front of
-    // the desk's things, the lamp, the board's top; a tall screen keeps to the middle of it)
+    // the desk's things (the earbuds, the notebook's corner), the lamp's foot and its elbow, the
+    // board's top corners (from ROOM.board: the picture follows the board); a tall screen keeps to
+    // the middle of it. A wide screen is filled by height, from the board's top to the desk's front:
+    // the still life stands in its middle, the desk and the wall either side)
+    const uvOf = (p) => [p.x * RIGHT.x + p.z * RIGHT.z, -(p.x * FWD.x + p.z * FWD.z), p.y]
+    const BD = ROOM.board
+    const footUv = uvOf(lampFoot)
     const SEAT_WIDE = [
-      [-375, 145, 0],
-      [295, 178, 0],
-      [-490, -390, 0],
-      [-235, -470, 700],
-      [440, -470, 700],
+      [-375, 135, 0],
+      [290, 165, 0],
+      [footUv[0] - LAMP.footR, footUv[1], 0],
+      uvOf(lamp.elbow),
+      [BD.u - BD.w / 2 - 10, ROOM.wallV, BD.y0 + BD.h],
+      [BD.u + BD.w / 2 + 10, ROOM.wallV, BD.y0 + BD.h],
     ]
     const SEAT_TALL = [
-      [-215, 140, 0],
-      [250, 170, 0],
-      [-150, -470, 700],
-      [300, -470, 700],
+      [-210, 130, 0],
+      [230, 150, 0],
+      [-140, ROOM.wallV, BD.y0 + BD.h],
+      [280, ROOM.wallV, BD.y0 + BD.h],
     ]
     // (fitted through the camera itself: the desk's front is much nearer than the wall, and a
     // perspective picture makes the near things larger; a few rounds of aim, look, adjust)
@@ -1387,6 +1426,22 @@ export function createScene(container, options = {}) {
     }
     const lapC = new THREE.Vector3()
     const lapN = new THREE.Vector3()
+    const UP = new THREE.Vector3(0, 1, 0)
+    /**
+     * The laptop: along its display's own normal, turned 10 degrees to its right (the lamp's shade
+     * stands in front of its left end: square on, it came into the picture's left edge). Again each
+     * time the view goes to it: the lid may have moved since.
+     */
+    function fitLaptop(tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), tanH = tanV * camera.aspect) {
+      laptop.screenCenter(lapC)
+      laptop.screenNormal(lapN).applyAxisAngle(UP, 0.18)
+      LAPTOPV.target.copy(lapC)
+      LAPTOPV.dist = Math.max((212 + 60) / 2 / tanV, (304 + 70) / 2 / tanH)
+      LAPTOPV.pos.copy(lapC).addScaledVector(lapN, LAPTOPV.dist)
+      LAPTOPV.az = Math.atan2(LAPTOPV.pos.x - lapC.x, LAPTOPV.pos.z - lapC.z)
+      LAPTOPV.el = Math.asin(THREE.MathUtils.clamp(lapN.y, -1, 1))
+      return LAPTOPV
+    }
     /** Every view for the screen's shape (the field of view: resize()). */
     function fitHome() {
       const tanV = camera.aspect >= 1 ? Math.tan(LENS / 2) : Math.tan(LENS / 2) / camera.aspect
@@ -1402,14 +1457,7 @@ export function createScene(container, options = {}) {
       // (a tall screen crops the frame a little either side: what is pinned stays in)
       BOARDV.dist = Math.max((room.boardSize[1] + 70) / 2 / tanV, (camera.aspect < 0.9 ? 575 : room.boardSize[0] + 70) / 2 / tanH)
       viewFrom(BOARDV, FWD, BOARD_EL)
-      // the laptop: along its display's own normal
-      laptop.screenCenter(lapC)
-      laptop.screenNormal(lapN)
-      LAPTOPV.target.copy(lapC)
-      LAPTOPV.dist = Math.max((212 + 60) / 2 / tanV, (304 + 70) / 2 / tanH)
-      LAPTOPV.pos.copy(lapC).addScaledVector(lapN, LAPTOPV.dist)
-      LAPTOPV.az = Math.atan2(LAPTOPV.pos.x - lapC.x, LAPTOPV.pos.z - lapC.z)
-      LAPTOPV.el = Math.asin(THREE.MathUtils.clamp(lapN.y, -1, 1))
+      fitLaptop(tanV, tanH)
       // the project view: the player's, slid so its middle is at 27% of the picture's width
       const shift = narrowUI() ? 0 : (0.5 - 0.27) * 2 * PLAYERV.dist * tanH
       PROJ.target.copy(PLAYERV.target).addScaledVector(RIGHT, shift)
@@ -1485,6 +1533,13 @@ export function createScene(container, options = {}) {
         if (grab.held || projOpen || focus.moving) return
         e.preventDefault()
         e.stopImmediatePropagation()
+        // (up close on the laptop, over its display, the wheel or two fingers on a trackpad scroll its
+        // page, in pixels, lines or pages as the event gives them; a pinch, ctrl and the wheel, still zooms)
+        if (!e.ctrlKey && focus.focused === 'laptop' && overDisplay(e.clientX, e.clientY)) {
+          laptop.scroll(e.deltaY, e.deltaMode)
+          wake()
+          return
+        }
         const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY
         if (!zoom.on) {
           zoom.to = camera.position.distanceTo(controls.target)
@@ -1547,7 +1602,17 @@ export function createScene(container, options = {}) {
       // (the can: room round it for its fall and the puddle)
       can: down((o) => o.copy(canHome).setY(ROOM.deskY + 20).addScaledVector(RIGHT, 30), 175),
       board: { view: () => BOARDV, dof: (o) => o.copy(room.boardCenter), deep: 1.5 },
-      laptop: { view: () => LAPTOPV, dof: (o) => laptop.screenCenter(o), deep: 1.6 },
+      laptop: { view: () => fitLaptop(), dof: (o) => laptop.screenCenter(o), deep: 1.6 },
+      // (the lamp: from the chair's side, a little above, its foot to its head in the picture)
+      lamp: {
+        center: (o) => o.copy(lampFoot).setY(ROOM.deskY).add(lamp.elbow).add(lamp.head).divideScalar(3),
+        radius: 240,
+        el: THREE.MathUtils.degToRad(22),
+        azPull: 0.7,
+        get az() {
+          return HOME.az - 0.3
+        },
+      },
     }
     const focusMeshes = { ashtray: [trayMesh, ...cigs.flatMap((c) => [c.body, c.ash, c.ember])], lighter: lighter.meshes, player: [] }
     player.group.traverse((o) => o.isMesh && focusMeshes.player.push(o))
@@ -1555,6 +1620,7 @@ export function createScene(container, options = {}) {
     focusMeshes.notebook = notebook.meshes
     focusMeshes.can = can.meshes
     focusMeshes.laptop = laptop.meshes
+    focusMeshes.lamp = [...lamp.meshes, ...lamp.switchMeshes]
     // (the badge hangs on the board: a tap on it is a tap on the board)
     focusMeshes.board = [...room.boardMeshes, ...badge.meshes]
     const focus = createFocus({
@@ -1602,6 +1668,15 @@ export function createScene(container, options = {}) {
         }
       }
       return best
+    }
+    /** Is the laptop's display under a point of the screen (nothing in front of it). */
+    function overDisplay(cx, cy) {
+      const r = canvas.getBoundingClientRect()
+      focusNdc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1)
+      focusRay.setFromCamera(focusNdc, camera)
+      focusHits.length = 0
+      focusRay.intersectObjects(laptop.meshes, false, focusHits)
+      return focusHits.length > 0 && focusHits[0].object === laptop.display
     }
     function focusAt(cx, cy) {
       const name = focusableAt(cx, cy)
@@ -1666,6 +1741,18 @@ export function createScene(container, options = {}) {
     const EMBER_CD = 180 // (the ember's light at full glow, candela)
     const LIGHTS = { key: key.intensity, rim: rim.intensity, fill: fill.intensity, bounce: bounce.intensity, env: scene.environmentIntensity }
     let emberNow = 0 // (the ember's light this frame)
+    /**
+     * The lights as the lamp's glow has them (`only`: the ember's frame, all dark): the key as bright
+     * as the glow; with it off, the room gives back less, and what the glossy things reflect of the
+     * lamp goes, so the dusk sky carries the scene. (Every frame while the glow eases: a moving frame
+     * is drawn with the lights as they are, without a setMode)
+     */
+    function lampLights(only = false) {
+      const lk = lamp.level
+      key.intensity = only ? 0 : LIGHTS.key * lk
+      bounce.intensity = only ? 0 : LIGHTS.bounce * (0.45 + 0.55 * lk)
+      scene.environmentIntensity = only ? 0 : LIGHTS.env * (0.55 + 0.45 * lk)
+    }
     function setMode(mode) {
       // the burning cigarette's paper: all of it, all but its last 4 mm (cache), or only those
       const part = mode === 'static' || mode === 'ember' ? 1 : mode === 'region' ? 2 : 0
@@ -1675,11 +1762,9 @@ export function createScene(container, options = {}) {
       // laptop's display, is dark in it, or it would be counted twice)
       lamp.glow(!only)
       laptop.glow(!only)
-      key.intensity = only ? 0 : LIGHTS.key
       rim.intensity = only ? 0 : LIGHTS.rim
       fill.intensity = only ? 0 : LIGHTS.fill
-      bounce.intensity = only ? 0 : LIGHTS.bounce
-      scene.environmentIntensity = only ? 0 : LIGHTS.env
+      lampLights(only)
       setEmberLight(emberWorld, camera, mode === 'static' ? 0 : only ? 1 : emberNow / EMBER_CD, EMBER_CD)
     }
     const frameCache = createFrame({ renderer, camera, Q, smokeScene, SU, setMode, onMark: (l) => dbg?.mark(l) })
@@ -1912,7 +1997,8 @@ export function createScene(container, options = {}) {
           bookPending = true
           return true
         }
-        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : cigItems.includes(hit.item) ? 'ashtray' : null
+        // (the lamp's head and switch are its own at once: a tap switches it, from anywhere)
+        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : hit.item === lampItem ? 'lamp' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
         if (projOpen) leaveProject()
         focus.focusOn(name)
@@ -1968,24 +2054,98 @@ export function createScene(container, options = {}) {
       onTap: () => {},
     }
     grab.add(lighterItem)
-    // the board (and the badge hung on it): only tapped (the camera comes to it); a drag turns the camera
-    const boardItem = { meshes: [...room.boardMeshes, ...badge.meshes], fixed: true, canGrab: () => true, onTap: () => {} }
-    grab.add(boardItem)
-    // the laptop: tapped from afar, the camera comes to it; tapped there, its browser goes to the
-    // next project's tab
-    const laptopItem = {
-      meshes: laptop.meshes,
+    // the board (and the badge hung on it): tapped from afar, the camera comes to it; tapped there,
+    // what is pinned up moves (room.items: a note peels up, the calendar turns to next month, the
+    // clip and the ticket swing; the badge swings on its pin); a drag turns the camera
+    const badgeM0 = badge.group.matrix.clone()
+    const swingM = new THREE.Matrix4()
+    const swingT = new THREE.Matrix4()
+    const badgeSwing = room.hang(room.badgePin, (q) => {
+      // (turned by q about the board's outward axis, through the pin)
+      const p = room.badgePin
+      swingM.makeTranslation(p.x, p.y, p.z).multiply(swingT.makeRotationAxis(room.boardOut, q)).multiply(swingT.makeTranslation(-p.x, -p.y, -p.z))
+      badge.group.matrix.multiplyMatrices(swingM, badgeM0)
+      badge.group.matrixWorldNeedsUpdate = true
+      room.badgeShade.rotation.z = 0.06 + q
+    })
+    const boardItem = {
+      meshes: [...new Set([...room.boardMeshes, ...room.items.flatMap((it) => it.meshes), ...badge.meshes])],
       fixed: true,
       canGrab: () => true,
-      onTap: () => {
-        laptop.nextTab()
-        frameCache.valid = false
+      onTap: (hit) => {
+        if (badge.meshes.includes(hit.object)) {
+          badgeSwing.tap(hit)
+          audio.rustle(0.3)
+        } else {
+          const it = room.items.find((x) => x.meshes.includes(hit.object))
+          if (!it) return
+          it.tap(hit)
+          audio.rustle(it.name === 'calendar' ? 1 : it.name === 'clip' ? 0.35 : 0.7)
+        }
         wake()
       },
     }
+    grab.add(boardItem)
+    // the laptop: tapped from afar, the camera comes to it. There (laptop.tapAt): a tab switches to
+    // its project, the page goes to the next one, a key dips; a drag on the display, or the wheel
+    // over it, scrolls the page (a flick goes on a little); a drag elsewhere turns the camera
+    const lapUp = () => focus.focused === 'laptop' && !focus.moving
+    const lapRay = new THREE.Raycaster()
+    const lapHits = []
+    const lapDrag = { v: NaN, at: 0, vel: 0 }
+    /** Where a ray meets the display: its uv's height (1 at the top), or NaN. */
+    function displayV(ray) {
+      lapRay.ray.copy(ray)
+      lapHits.length = 0
+      laptop.display.raycast(lapRay, lapHits)
+      return lapHits.length && lapHits[0].uv ? lapHits[0].uv.y : NaN
+    }
+    function lapAnswer(r) {
+      if (!r) return
+      if (r === 'key') audio.keyTick()
+      else audio.tick()
+      frameCache.valid = false
+      wake()
+    }
+    const laptopItem = {
+      meshes: laptop.meshes,
+      fixed: (hit) => !(lapUp() && hit.object === laptop.display),
+      canGrab: () => true,
+      pick: (hit) => {
+        lapDrag.v = hit.uv ? hit.uv.y : NaN
+        lapDrag.at = performance.now()
+        lapDrag.vel = 0
+      },
+      aim: (ray) => {
+        const v = displayV(ray)
+        if (Number.isNaN(v)) return
+        if (!Number.isNaN(lapDrag.v)) {
+          // (the page goes with the hand: up the screen, the page scrolls down)
+          const dy = (v - lapDrag.v) * LAPTOP.screen.h
+          const now = performance.now()
+          const dt = Math.max(1, now - lapDrag.at) / 1000
+          lapDrag.vel += (dy / dt - lapDrag.vel) * 0.5
+          lapDrag.at = now
+          laptop.scroll(dy)
+          wake()
+        }
+        lapDrag.v = v
+      },
+      twist: () => {},
+      // (let go moving: the page goes on a little, slowing)
+      release: () => {
+        if (performance.now() - lapDrag.at < 90) laptop.fling(lapDrag.vel)
+        wake()
+      },
+      home: () => {},
+      cancel: () => {},
+      onTap: (hit) => lapAnswer(laptop.tapAt(hit)),
+    }
     grab.add(laptopItem)
-    // the energy drink: flicked (a drag from it), it goes over the way it was pushed; tapped up close,
-    // over the way the tap pushed it; tapped where it lies, it is stood up again, full
+    // the drink: tapped up close, a sealed can opens (the tab, the hiss); open, a tap high on it knocks
+    // it over the way the tap pushed it, a tap low on it rocks it on its base; flicked (a drag from
+    // it), it goes over the way it was pushed (sealed, it rolls and does not pour); tapped where it
+    // lies, it is stood up again, full
     const canPress = new THREE.Vector3()
     const canPlane = new THREE.Plane()
     const canHit = new THREE.Vector3()
@@ -2021,13 +2181,68 @@ export function createScene(container, options = {}) {
             dx = FWD.x
             dz = FWD.z
           }
-          can.knock(dx, dz, 0.6)
+          // (the first tap opens it; one while it opens, or low on it, only rocks it)
+          if (!can.opened) {
+            if (!can.open()) can.nudge(dx, dz, 0.5)
+          } else if (hit.point.y < ROOM.deskY + 0.45 * CAN.h) can.nudge(dx, dz, 0.6)
+          else can.knock(dx, dz, 0.6)
         } else can.standUp()
         shadowDirty = true
         wake()
       },
     }
     grab.add(canItem)
+    // the lamp: a tap on its head or its switch turns it on or off, from anywhere (the room's light
+    // with it); a drag on its head aims it at what is under the pointer (the desk, or the wall behind
+    // it); a tap on its arm or its foot brings the camera to it, a drag there turns the camera
+    const LAMP_AIM0 = new THREE.Vector3(...LAYOUT.DESK.lampAim)
+    const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+    const wallPlane = new THREE.Plane(FWD.clone().negate(), -ROOM.wallV) // (v = wallV: its normal is -FWD)
+    const lampTo = new THREE.Vector3()
+    const lampTo2 = new THREE.Vector3()
+    let lampTapAt = -1e9
+    function setLamp(on) {
+      if (on === lamp.on) return
+      lamp.setOn(on)
+      audio.lampSwitch(on)
+      // (in the dark, the laptop's keyboard lights up)
+      laptop.backlight(on ? 0 : 1)
+      wake()
+    }
+    /** What a ray from the eye points the lamp at: the desk in front of the wall, else the wall. */
+    function lampTarget(ray, out) {
+      const d = ray.intersectPlane(deskPlane, out)
+      if (d && -(out.x * FWD.x + out.z * FWD.z) > ROOM.wallV) return out
+      return ray.intersectPlane(wallPlane, lampTo2) && lampTo2.y > 0 ? out.copy(lampTo2) : null
+    }
+    const lampHeadItem = {
+      meshes: [...lamp.headMeshes, ...lamp.switchMeshes],
+      canGrab: () => true,
+      cursor: (hit) => (lamp.switchMeshes.includes(hit.object) ? 'pointer' : 'grab'),
+      pick: () => {},
+      aim: (ray) => {
+        if (!lampTarget(ray, lampTo)) return
+        lamp.aimAt(lampTo)
+        wake()
+      },
+      twist: () => {},
+      release: () => {},
+      home: () => {
+        lamp.aimAt(LAMP_AIM0)
+        wake()
+      },
+      cancel: () => {},
+      onTap: () => {
+        // (the second tap of a double-click switches nothing: the first did)
+        const now = performance.now()
+        if (now - lampTapAt < 400) return
+        lampTapAt = now
+        setLamp(!lamp.on)
+      },
+    }
+    grab.add(lampHeadItem)
+    const lampItem = { meshes: lamp.meshes.filter((m) => !lampHeadItem.meshes.includes(m)), fixed: true, canGrab: () => true, onTap: () => {} }
+    grab.add(lampItem)
     // the notebook: only tapped (it opens); a drag on it turns the camera
     const notebookItem = { meshes: notebook.meshes, fixed: true, canGrab: () => !book.isOpen, onTap: () => openBook() }
     grab.add(notebookItem)
@@ -2187,6 +2402,29 @@ export function createScene(container, options = {}) {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || (e.key !== 'p' && e.key !== 'P')) return
       if (e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return
       togglePower()
+    })
+    // (L: the lamp on and off. Up close on the laptop: the arrows up and down scroll its page, left
+    // and right go through its tabs; Page Up and Page Down a screen at a time, Home and End its ends)
+    const LAP_KEYS = { ArrowDown: [80, 0], ArrowUp: [-80, 0], PageDown: [1, 2], PageUp: [-1, 2], End: [1e5, 0], Home: [-1e5, 0] }
+    listen(window, 'keydown', (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return
+      if (e.key === 'l' || e.key === 'L') {
+        if (!e.repeat) setLamp(!lamp.on)
+        return
+      }
+      if (focus.focused !== 'laptop' || focus.moving || osUp || grab.held) return
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        laptop.setTab(laptop.tab + (e.key === 'ArrowRight' ? 1 : -1))
+        lapAnswer('tab')
+        return
+      }
+      const k = LAP_KEYS[e.key]
+      if (!k) return
+      e.preventDefault()
+      laptop.scroll(k[0], k[1])
+      wake()
     })
     const osPts = new Float64Array(8)
     const osV = new THREE.Vector3()
@@ -2449,8 +2687,15 @@ export function createScene(container, options = {}) {
       if (grab.held) grab.drop('home')
       if (pickup.st.mode === 'lying' || pickup.st.mode === 'fall') pickup.glideTo(cigs[cur].notch)
       lighter.home()
+      // (the can stood up, full and sealed again; the lamp on and aimed as it was; the laptop open
+      // on its first tab, at the top of the page, its keyboard dark)
       can.reset()
+      setLamp(true)
+      lamp.aimAt(LAMP_AIM0)
       laptop.setTab(0)
+      laptop.scroll(-1e5)
+      laptop.setOpen(1)
+      shadowDirty = true
       frameCache.valid = false
       if (!earbudsLive.plugged) earbudsLive.plug()
       // (home: from a close-up, or from wherever the view was turned to)
@@ -2483,6 +2728,10 @@ export function createScene(container, options = {}) {
     let last = performance.now()
     let shadowDirty = true
     let shadowClock = 0
+    // (the lamp's bulb and shade as the key light last followed them)
+    const lampBulb0 = lamp.bulb.clone()
+    const lampAxis0 = lamp.axis.clone()
+    let lampMoved = false
     let simTime = 0
     let loopReady = false
     // what changed this frame: the camera (controls, tween), falling ash, a cigarette fading
@@ -2602,6 +2851,16 @@ export function createScene(container, options = {}) {
     api.quality = () => ({ level: gov.level, dpr: renderer.getPixelRatio(), moveScale: frameCache.moveScale, moveSamples: frameCache.moveSamples })
     api.stillWhy = () => ({ screenBusy, keyAnim, glare, osUp, level: os?.level, dirty: os?.dirty, power: os?.power })
     api.gov = gov // (tests: switched on by hand, a slow frame faked by its bias, ms)
+    // (tests and review pictures: the moving frames as the governor leaves them at a step, 0..2;
+    // with flags.cache = 0 every frame is a moving one, so a picture shows it)
+    api.forceQuality = (level) => {
+      gov.level = Math.max(0, Math.min(2, level))
+      moveSamplesOff = gov.level > 0
+      moveScaleK = 0.8 ** gov.level
+      resize()
+      wake()
+      return api.quality()
+    }
     let shadowTurn = 0
     // ---- the frames' pace
     //   live:     ABOVE a second more than the screen's own refresh (70 on 60 Hz, 130 on 120 Hz),
@@ -2744,6 +3003,31 @@ export function createScene(container, options = {}) {
       const badgeBusy = badge.update(dt)
       const canBusy = can.update(dt)
       if (canBusy) shadowDirty = true
+      // the lamp: its head re-aimed, its glow easing (the key light on its bulb, along its shade, and
+      // as bright: setMode); its shadow drawn again only when the head moved
+      const lampBusy = lamp.update(dt)
+      if (lampBusy) {
+        lampMoved = !lampBulb0.equals(lamp.bulb) || !lampAxis0.equals(lamp.axis)
+        if (lampMoved) {
+          lampBulb0.copy(lamp.bulb)
+          lampAxis0.copy(lamp.axis)
+          key.position.copy(lamp.bulb)
+          key.target.position.copy(lamp.bulb).addScaledVector(lamp.axis, 400)
+          key.target.updateMatrixWorld()
+          SU.uKeyPos.value.subVectors(key.position, key.target.position).setLength(4000).add(key.target.position)
+          shadowDirty = true
+        }
+        SU.uBright.value = 0.6 + 0.4 * lamp.level
+        lampLights()
+      } else lampMoved = false
+      // the laptop: its keys, its page's scroll, its backlight, its lid (whose shadow moves with it)
+      const lidWas = laptop.open
+      const lapBusy = laptop.update(dt)
+      const lidBusy = laptop.open !== lidWas
+      if (lidBusy) shadowDirty = true
+      // the board: a note peeling, the calendar's page, what swings on its pin
+      const roomBusy = room.update(dt)
+      if (roomBusy) shadowDirty = true
       // (the cable drawn between its last two steps: physics.alpha)
       const cableBusy = earbudsLive.update(physics.alpha)
       stepOS(dt)
@@ -2831,9 +3115,11 @@ export function createScene(container, options = {}) {
       camMoved = false
       // (the cigarette or the lighter carried, gliding or falling, or the flame burning: drawn whole,
       // the shadows drawn again every frame)
-      const dragging = carried || lighterBusy || cableBusy || badgeBusy || canBusy
+      const dragging = carried || lighterBusy || cableBusy || badgeBusy || canBusy || lampMoved || lidBusy || roomBusy
       if (dragging) shadowDirty = true
-      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
+      // (the lamp switched changes the whole picture: drawn whole while its light eases, then the
+      // cache baked again; so does the laptop while anything of it moves)
+      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
       // (the cache is baked once the view has been still for an eighth of a second: a slow zoom or
@@ -3020,6 +3306,9 @@ export function createScene(container, options = {}) {
     // (every program, including the region layer's and the smoke's, before the first frame)
     camera.layers.enableAll()
     lighter.group.traverse((o) => o.material?.isShaderMaterial && (o.visible = true))
+    // (the can's hidden parts too, the fog of its opening and the spill: their first use would stall)
+    const canHidden = [can.puddle, ...can.extras, ...can.group.children].filter((o) => !o.visible)
+    for (const o of canHidden) o.visible = true
     // (for the target the scene is really drawn into: a program is keyed by its output, so one
     // compiled for the screen would be compiled again the first time it is drawn into the frame;
     // the flame and its spark, drawn first at the first ignition, would stall it)
@@ -3027,6 +3316,7 @@ export function createScene(container, options = {}) {
     warmTarget.dispose()
     renderer.setRenderTarget(frameCache.live)
     await renderer.compileAsync(scene, camera)
+    for (const o of canHidden) o.visible = false
     camera.layers.set(0)
     stage('light', 'done')
     // the smoke: its programs, then the first whole frame (the shadows made, the flame's too, so its
@@ -3094,8 +3384,12 @@ export function createScene(container, options = {}) {
     last = performance.now()
     wake()
 
-    /** The reveal (after a loader): the scene fades up from black, the camera pushes in a little. */
+    /** The reveal (after a loader): the scene fades up from black, the camera pushes in a little, and
+     * the laptop's lid opens as the visitor arrives. */
     handle.enter = ({ sound = true } = {}) => {
+      if (!reduceMotion && lidShut) setTimeout(() => !destroyed && (laptop.setOpen(1), wake()), 450)
+      else laptop.setOpen(1)
+      lidShut = false
       if (sound) {
         audio.enable(true, 1.6)
         root.querySelector('[data-act="sound"]').setAttribute('aria-pressed', 'true')
@@ -3121,7 +3415,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },

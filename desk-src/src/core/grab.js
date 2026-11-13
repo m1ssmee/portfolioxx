@@ -9,7 +9,9 @@
 //              and each one straight to the object would jerk it.
 // Each grabbable: { meshes, canGrab(), pick(hit), aim(ray), twist(rad), release(), home(), cancel(), onTap() }
 // A fixed one ({ meshes, fixed: true, canGrab(), onTap() }, the notebook): only tapped; a drag on it
-// turns the camera, as on the desk.
+// turns the camera, as on the desk. `fixed` may be a function of the hit (the laptop: fixed but for
+// its display up close, where a drag scrolls the page). `cursor(hit)`, if given, is the pointer over
+// it (else 'pointer' over a fixed one, which only taps, and 'grab' over the rest).
 import * as THREE from 'three'
 
 export const GRAB_LAYER = 5
@@ -49,9 +51,11 @@ export function createGrab({ canvas, camera, controls, listen, onActive, tapFirs
     hits.sort((a, b) => a.distance - b.distance)
     const h = hits[0]
     const item = items.find((it) => it.meshes.includes(h.object))
-    // (index: which particle of a cable, for a hit on its proxy)
-    return item ? { item, point: h.point.clone(), object: h.object, index: h.index } : null
+    // (index: which particle of a cable, for a hit on its proxy; uv and instanceId: where on a
+    // display, which key of an instanced keyboard)
+    return item ? { item, point: h.point.clone(), object: h.object, index: h.index, uv: h.uv?.clone(), instanceId: h.instanceId } : null
   }
+  const isFixed = (hit) => (typeof hit.item.fixed === 'function' ? hit.item.fixed(hit) : !!hit.item.fixed)
   function start(p) {
     held = p.hit.item
     heldFrom = p
@@ -94,7 +98,7 @@ export function createGrab({ canvas, camera, controls, listen, onActive, tapFirs
       if (e.button > 0) return
       const hit = hitAt(e.clientX, e.clientY)
       if (!hit) return
-      if (hit.item.fixed) {
+      if (isFixed(hit)) {
         // (the camera has the press too: still and quick, it is a tap)
         press = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), stamp: e.timeStamp, hit, touch: e.pointerType === 'touch', timer: 0, moved: false, fixed: true }
         return
@@ -239,7 +243,7 @@ export function createGrab({ canvas, camera, controls, listen, onActive, tapFirs
     hover() {
       if (!hoverAt || held || press) return
       const h = hitAt(hoverAt.x, hoverAt.y)
-      canvas.style.cursor = h ? 'grab' : ''
+      canvas.style.cursor = !h ? '' : h.item.cursor?.(h) || (isFixed(h) ? 'pointer' : 'grab')
       hoverAt = null
     },
     dispose() {

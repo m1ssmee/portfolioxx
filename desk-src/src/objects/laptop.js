@@ -1,759 +1,819 @@
-// A thin silver laptop in the style of a 13-inch aluminium notebook (no maker's mark): a
-// unibody base with black keys and a glass trackpad, the lid open at 110 degrees, a black glass
-// face with a notch, and on its display a browser with the owner's projects, a tab each.
+// A thin graphite laptop in the style of a 13-inch aluminium notebook (no maker's mark), open on a
+// browser with the owner's projects, a tab each. Its shapes are laptopGeo.js's, its textures
+// laptopTex.js's, its screen laptopScreen.js's; here, its materials, its parts and what it does.
 // Frame: x across (its width), z towards the person at it (the hinge at -z), y up; on y = 0.
+//   finish   warm graphite anodising, bead-blasted (a fine normal map), a little uneven; polished
+//            chamfers round the deck's edge, the thumb scoop and the lid's face; the keyboard's well
+//            black; a glass trackpad with a hairline round it; speaker grilles; palm-rest smudges,
+//            prints on the trackpad, a little dust; the ports, the case's seam, the vent behind
+//            the hinge; the clutch dark, its seams and polished ends; rubber feet; two stickers on
+//            the lid's back. One material (aluminium, its zones per vertex), one for the keys (one
+//            instanced mesh: dished tops, printed legends from one atlas, the most used keys
+//            polished), one for the glass (the display, its bezel, the camera, the gasket)
+//   screen   the browser's chrome and the page are two textures drawn only when the tab changes;
+//            the glass's shader shows the page through a window that moves as it scrolls (a uniform:
+//            nothing is drawn or uploaded while scrolling). Its light is undone from the frame's
+//            tone mapping (as the player's screen is), so the pages keep their own colours. Its
+//            anti-glare coating spreads the lamp's highlight to a faint sheen; the bezel round it is
+//            glossy black glass, rougher where it is smudged
+//   light    the display's light falls on the keys and the deck nearest it (an emissive tint); the
+//            keyboard's backlight lights the legends and leaks from under the keys
+//   moves    keys dip and spring back, the page scrolls with a little inertia, the lid opens and
+//            closes, the backlight fades: update(dt) is true only while something moves
 import * as THREE from 'three'
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+import { LAPTOP, LID, DISP, SCREEN, CAM, WELL, PAD, GRILLE, PORTS, FEET, KEY, keyLayout, baseGeometry, lidGeometry, glassGeometry, keyGeometry, lidReach } from './laptopGeo.js'
+import { beadPixels, wearPixels, drawLegends, drawStickers, drawContact, ATLAS, STICKERS } from './laptopTex.js'
+import { drawChrome, drawPage, drawDisplay, CHROME, PAGE, VIEW_H } from './laptopScreen.js'
 
-export const LAPTOP = { w: 304, d: 215, base: 6.4, lid: 4.6, lidD: 212, r: 9.5, open: THREE.MathUtils.degToRad(110) }
-// the display, in the lid's face (mm from the lid's left and its top edge)
-const DISP = { x: 7.4, y: 9.5, w: 289.2, h: 188 }
-const NOTCH = { w: 31, h: 5.6 }
+export { LAPTOP, drawDisplay }
 
-/** A rounded rectangle (centred), as a Shape. */
-function rrShape(w, h, r) {
-  const s = new THREE.Shape()
-  const x = -w / 2
-  const y = -h / 2
-  s.moveTo(x + r, y)
-  s.lineTo(x + w - r, y)
-  s.quadraticCurveTo(x + w, y, x + w, y + r)
-  s.lineTo(x + w, y + h - r)
-  s.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  s.lineTo(x + r, y + h)
-  s.quadraticCurveTo(x, y + h, x, y + h - r)
-  s.lineTo(x, y + r)
-  s.quadraticCurveTo(x, y, x + r, y)
-  return s
+/** A number as a GLSL float literal. */
+const f = (x) => {
+  const s = String(+(+x).toFixed(5))
+  return /[.e]/.test(s) ? s : `${s}.0`
 }
-/** A slab with a soft edge all round: an extruded rounded rectangle, lying flat (y up), its top at
- * y = t, the shape's x across and its y along -z (so the uv of the top runs as the plan reads). */
-function slab(w, d, t, r, bevel) {
-  const g = new THREE.ExtrudeGeometry(rrShape(w, d, r), { depth: t - 2 * bevel, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 10 })
-  g.translate(0, 0, bevel)
-  g.rotateX(-Math.PI / 2)
+const canvas = (w, h) => {
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  return c
+}
+/** A BufferGeometry from laptopGeo.js's arrays. */
+function toGeometry(o) {
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(o.position, 3))
+  g.setAttribute('normal', new THREE.BufferAttribute(o.normal, 3))
+  if (o.uv) g.setAttribute('uv', new THREE.BufferAttribute(o.uv, 2))
+  if (o.zone) g.setAttribute('aZone', new THREE.BufferAttribute(o.zone, 1))
+  g.setIndex(new THREE.BufferAttribute(o.index, 1))
+  g.computeBoundingBox()
+  g.computeBoundingSphere()
   return g
 }
 
-/** Rounded-rectangle path on a 2D context. */
-function rr(g, x, y, w, h, r) {
-  g.beginPath()
-  g.moveTo(x + r, y)
-  g.arcTo(x + w, y, x + w, y + h, r)
-  g.arcTo(x + w, y + h, x, y + h, r)
-  g.arcTo(x, y + h, x, y, r)
-  g.arcTo(x, y, x + w, y, r)
-  g.closePath()
-}
-/** Text cut to a width (with an ellipsis), on its own lines (a crude wrap). */
-function wrap(g, text, x, y, maxW, lead, maxLines = 4) {
-  const words = text.split(' ')
-  let line = ''
-  let n = 0
-  for (let i = 0; i < words.length; i++) {
-    const t = line ? line + ' ' + words[i] : words[i]
-    if (g.measureText(t).width > maxW && line) {
-      g.fillText(n === maxLines - 1 ? line + '…' : line, x, y + n * lead)
-      n++
-      if (n >= maxLines) return n
-      line = words[i]
-    } else line = t
+// (the frame's tone mapping, core/frame.js's composite (PBR Neutral), undone: the screen gives the
+// light that comes out as the page's own colour; scene.js's NEUTRAL_INV, keep the two together)
+const NEUTRAL_INV = /* glsl */ `
+  float lapNeutralInv(float w) {
+    if (w < 0.04) return sqrt(max(w, 0.0) / 6.25);
+    if (w < 0.76) return w + 0.04;
+    return 0.0576 / (1.0 - min(w, 0.995)) - 0.24 + 0.76 + 0.04;
   }
-  if (line) g.fillText(line, x, y + n * lead)
-  return n + 1
-}
-/** How many lines `wrap` would take for text in maxW (nothing drawn). */
-function measureLines(g, text, maxW) {
-  let line = ''
-  let n = 1
-  for (const word of text.split(' ')) {
-    const t = line ? line + ' ' + word : word
-    if (g.measureText(t).width > maxW && line) {
-      n++
-      line = word
-    } else line = t
-  }
-  return n
-}
-
-// ---- the projects' pages, each in its own look (drawn, not screenshots)
-const THEMES = {
-  bodymap: { bg: '#f6f8fb', ink: '#0f172a', sub: '#475569', accent: '#e0464e', soft: '#e6ecf4' },
-  'codebase-tavern': { bg: '#1c1410', ink: '#f5e6c8', sub: '#c8ad84', accent: '#f0a33a', soft: '#2c2019' },
-  'lunar-rover': { bg: '#0d1117', ink: '#e6edf3', sub: '#8b949e', accent: '#58a6ff', soft: '#161b22' },
-  cropscan: { bg: '#f3f8f0', ink: '#14301f', sub: '#4d6b57', accent: '#2f9e55', soft: '#e1eedb' },
-}
-
-function drawBodyMap(g, x, y, w, h, th, font) {
-  // a figure, front on, its findings pinned and glowing by severity
-  const cx = x + w * 0.73
-  const top = y + 46
-  const s = h / 560
-  g.save()
-  g.fillStyle = '#dfe6ef'
-  g.strokeStyle = '#c3cfdd'
-  g.lineWidth = 2
-  const part = (px, py, rx, ry) => {
-    g.beginPath()
-    g.ellipse(cx + px * s, top + py * s, rx * s, ry * s, 0, 0, Math.PI * 2)
-    g.fill()
-    g.stroke()
-  }
-  part(0, 40, 34, 40) // head
-  part(0, 170, 70, 95) // chest
-  part(0, 300, 58, 70) // belly
-  part(-92, 190, 18, 92) // arms
-  part(92, 190, 18, 92)
-  part(-34, 450, 26, 110) // legs
-  part(34, 450, 26, 110)
-  const dot = (px, py, col, r) => {
-    const gx = cx + px * s
-    const gy = top + py * s
-    const gr = g.createRadialGradient(gx, gy, 0, gx, gy, r * 3 * s)
-    gr.addColorStop(0, col)
-    gr.addColorStop(1, 'rgba(255,255,255,0)')
-    g.fillStyle = gr
-    g.beginPath()
-    g.arc(gx, gy, r * 3 * s, 0, Math.PI * 2)
-    g.fill()
-    g.fillStyle = col
-    g.beginPath()
-    g.arc(gx, gy, r * s, 0, Math.PI * 2)
-    g.fill()
-  }
-  dot(-24, 165, '#e0464e', 9)
-  dot(28, 290, '#f0a33a', 8)
-  dot(-34, 470, '#33b07a', 7)
-  dot(4, 52, '#f0a33a', 6)
-  // (a finding's card beside the body)
-  g.fillStyle = '#ffffff'
-  g.shadowColor = 'rgba(15,23,42,0.12)'
-  g.shadowBlur = 18
-  rr(g, cx - 250 * s - 120, top + 120 * s, 190, 92, 14)
-  g.fill()
-  g.shadowBlur = 0
-  g.fillStyle = '#e0464e'
-  g.beginPath()
-  g.arc(cx - 250 * s - 98, top + 120 * s + 26, 6, 0, Math.PI * 2)
-  g.fill()
-  g.fillStyle = th.ink
-  g.font = `600 17px ${font}`
-  g.fillText('Hemoglobin  10.9', cx - 250 * s - 84, top + 120 * s + 32)
-  g.fillStyle = th.sub
-  g.font = `400 14px ${font}`
-  g.fillText('Below range (13 – 17 g/dL):', cx - 250 * s - 104, top + 120 * s + 58)
-  g.fillText('a little low, explained', cx - 250 * s - 104, top + 120 * s + 77)
-  g.restore()
-}
-function drawTavern(g, x, y, w, h, th, font) {
-  // the modules as characters round a table, a speech bubble citing a line
-  const cx = x + w * 0.7
-  const cy = y + h * 0.5
-  const ppl = [
-    ['auth.ts', -170, -120, '#f0a33a'],
-    ['db.py', 150, -140, '#d96a3a'],
-    ['api/routes', -190, 110, '#c99a4a'],
-    ['cache.go', 170, 120, '#e8c06a'],
-    ['main.rs', 0, 190, '#b8653a'],
-  ]
-  g.save()
-  g.strokeStyle = 'rgba(240,163,58,0.25)'
-  g.lineWidth = 2
-  for (let i = 0; i < ppl.length; i++)
-    for (let j = i + 1; j < ppl.length; j++) {
-      if ((i + j) % 2) continue
-      g.beginPath()
-      g.moveTo(cx + ppl[i][1], cy + ppl[i][2])
-      g.lineTo(cx + ppl[j][1], cy + ppl[j][2])
-      g.stroke()
-    }
-  g.fillStyle = '#3a2a1e'
-  g.beginPath()
-  g.ellipse(cx, cy, 120, 70, 0, 0, Math.PI * 2)
-  g.fill()
-  for (const [name, px, py, col] of ppl) {
-    g.fillStyle = col
-    g.beginPath()
-    g.arc(cx + px, cy + py, 26, 0, Math.PI * 2)
-    g.fill()
-    g.fillStyle = '#1c1410'
-    g.beginPath()
-    g.arc(cx + px - 8, cy + py - 4, 3.5, 0, Math.PI * 2)
-    g.arc(cx + px + 8, cy + py - 4, 3.5, 0, Math.PI * 2)
-    g.fill()
-    g.fillStyle = th.sub
-    g.font = `500 14px ${font}`
-    g.textAlign = 'center'
-    g.fillText(name, cx + px, cy + py + 46)
-    g.textAlign = 'left'
-  }
-  g.fillStyle = '#f5e6c8'
-  rr(g, cx - 330, cy - 230, 260, 64, 12)
-  g.fill()
-  g.fillStyle = '#1c1410'
-  g.font = `600 15px ${font}`
-  g.fillText('“Not me. The bug is in', cx - 316, cy - 204)
-  g.fillText('  db.py:142, see the retry.”', cx - 316, cy - 182)
-  g.restore()
-}
-function drawRover(g, x, y, w, h, th, font) {
-  // a repository page: the files, then the map the rover built and its telemetry
-  const fx = x + 40
-  let fy = y + 28
-  g.save()
-  g.fillStyle = th.soft
-  rr(g, fx, fy, w * 0.52, 196, 10)
-  g.fill()
-  g.font = `500 15px ${font}`
-  const files = ['rover_description/', 'rover_navigation/', 'habitat_monitor/', 'launch/', 'README.md']
-  files.forEach((f, i) => {
-    g.fillStyle = i < 4 ? th.accent : th.ink
-    g.fillText(f, fx + 22, fy + 34 + i * 34)
-    g.fillStyle = th.sub
-    g.fillText(i < 4 ? 'feat: Nav2 goals, EKF fusion' : 'docs', fx + w * 0.22, fy + 34 + i * 34)
-  })
-  fy += 220
-  // the map
-  const mx = fx
-  const my = fy
-  const mw = w * 0.52
-  const mh = h - (fy - y) - 24
-  g.fillStyle = '#0a0f15'
-  rr(g, mx, my, mw, mh, 10)
-  g.fill()
-  g.strokeStyle = 'rgba(88,166,255,0.12)'
-  g.lineWidth = 1
-  for (let gx = mx + 20; gx < mx + mw; gx += 26) {
-    g.beginPath()
-    g.moveTo(gx, my)
-    g.lineTo(gx, my + mh)
-    g.stroke()
-  }
-  for (let gy = my + 20; gy < my + mh; gy += 26) {
-    g.beginPath()
-    g.moveTo(mx, gy)
-    g.lineTo(mx + mw, gy)
-    g.stroke()
-  }
-  g.fillStyle = 'rgba(230,237,243,0.75)'
-  for (const [rx, ry, rad] of [
-    [0.2, 0.3, 14],
-    [0.62, 0.22, 20],
-    [0.75, 0.68, 12],
-    [0.33, 0.72, 9],
-  ]) {
-    g.beginPath()
-    g.arc(mx + rx * mw, my + ry * mh, rad, 0, Math.PI * 2)
-    g.fill()
-  }
-  g.strokeStyle = th.accent
-  g.lineWidth = 3
-  g.setLineDash([8, 6])
-  g.beginPath()
-  g.moveTo(mx + 0.08 * mw, my + 0.85 * mh)
-  g.bezierCurveTo(mx + 0.4 * mw, my + 0.95 * mh, mx + 0.45 * mw, my + 0.45 * mh, mx + 0.86 * mw, my + 0.4 * mh)
-  g.stroke()
-  g.setLineDash([])
-  // telemetry
-  const tx = x + w * 0.62
-  const items = [
-    ['O₂', '20.9 %', 'NOMINAL', '#3fb950'],
-    ['Temp', '21.4 °C', 'NOMINAL', '#3fb950'],
-    ['Pressure', '99.1 kPa', 'WARNING', '#d29922'],
-    ['Localization', 'EKF + SLAM', 'OK', '#3fb950'],
-  ]
-  items.forEach(([k, v, st, col], i) => {
-    const ty = y + 40 + i * 104
-    g.fillStyle = th.soft
-    rr(g, tx, ty, w * 0.33, 86, 10)
-    g.fill()
-    g.fillStyle = th.sub
-    g.font = `500 15px ${font}`
-    g.fillText(k, tx + 18, ty + 30)
-    g.fillStyle = th.ink
-    g.font = `600 26px ${font}`
-    g.fillText(v, tx + 18, ty + 66)
-    g.fillStyle = col
-    g.font = `600 13px ${font}`
-    g.fillText(st, tx + w * 0.33 - 18 - g.measureText(st).width, ty + 30)
-  })
-  g.restore()
-}
-function drawCrop(g, x, y, w, h, th, font) {
-  // a leaf, scanned: its outline, a box round the lesions and the top predictions
-  const cx = x + w * 0.62
-  const cy = y + h * 0.48
-  g.save()
-  g.fillStyle = '#5fae5a'
-  g.beginPath()
-  g.moveTo(cx - 170, cy + 120)
-  g.bezierCurveTo(cx - 180, cy - 60, cx - 40, cy - 190, cx + 150, cy - 170)
-  g.bezierCurveTo(cx + 170, cy + 10, cx + 40, cy + 150, cx - 170, cy + 120)
-  g.fill()
-  g.strokeStyle = '#3f8a3c'
-  g.lineWidth = 4
-  g.beginPath()
-  g.moveTo(cx - 170, cy + 120)
-  g.quadraticCurveTo(cx - 10, cy - 10, cx + 150, cy - 170)
-  g.stroke()
-  g.fillStyle = '#8a6a2e'
-  for (const [px, py, rad] of [
-    [-40, 10, 12],
-    [-12, 40, 8],
-    [10, -30, 10],
-    [-62, 52, 7],
-  ]) {
-    g.beginPath()
-    g.arc(cx + px, cy + py, rad, 0, Math.PI * 2)
-    g.fill()
-  }
-  g.strokeStyle = '#e0464e'
-  g.lineWidth = 3
-  g.strokeRect(cx - 90, cy - 60, 120, 130)
-  g.fillStyle = '#e0464e'
-  g.font = `600 14px ${font}`
-  g.fillText('lesions', cx - 88, cy - 68)
-  // predictions
-  const px = x + 44
-  const py = y + h * 0.56
-  const preds = [
-    ['Tomato · early blight', 0.94],
-    ['Tomato · late blight', 0.04],
-    ['Tomato · healthy', 0.01],
-  ]
-  preds.forEach(([k, v], i) => {
-    g.fillStyle = th.ink
-    g.font = `500 16px ${font}`
-    g.fillText(k, px, py + i * 54)
-    g.fillStyle = th.soft
-    rr(g, px, py + 12 + i * 54, w * 0.3, 10, 5)
-    g.fill()
-    g.fillStyle = i ? '#9cc9a4' : th.accent
-    rr(g, px, py + 12 + i * 54, Math.max(10, w * 0.3 * v), 10, 5)
-    g.fill()
-    g.fillStyle = th.sub
-    g.fillText(`${Math.round(v * 100)}%`, px + w * 0.3 + 12, py + 22 + i * 54)
-  })
-  g.restore()
-}
-const ART = { bodymap: drawBodyMap, 'codebase-tavern': drawTavern, 'lunar-rover': drawRover, cropscan: drawCrop }
-
-/** The display (sRGB, W x H px): a dusk wallpaper, the menu bar, a browser at the project. */
-export function drawDisplay(c, projects, active, font) {
-  const g = c.getContext('2d')
-  const W = c.width
-  const H = c.height
-  const k = W / 1600
-  g.setTransform(k, 0, 0, k, 0, 0)
-  const w = 1600
-  const h = H / k
-  // wallpaper
-  const wp = g.createLinearGradient(0, 0, w, h)
-  wp.addColorStop(0, '#2b2540')
-  wp.addColorStop(0.55, '#5b4a6e')
-  wp.addColorStop(1, '#d98f6b')
-  g.fillStyle = wp
-  g.fillRect(0, 0, w, h)
-  // the menu bar (the notch sits in its middle)
-  g.fillStyle = 'rgba(12,12,16,0.82)'
-  g.fillRect(0, 0, w, 34)
-  g.fillStyle = 'rgba(255,255,255,0.88)'
-  g.font = `600 17px ${font}`
-  g.fillText('Browser', 52, 23)
-  g.font = `400 17px ${font}`
-  ;['File', 'Edit', 'View', 'History', 'Window'].forEach((t, i) => g.fillText(t, 140 + i * 74, 23))
-  const now = new Date()
-  const hh = now.getHours() % 12 || 12
-  const mm = String(now.getMinutes()).padStart(2, '0')
-  const clock = `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getDay()]} ${hh}:${mm} ${now.getHours() < 12 ? 'AM' : 'PM'}`
-  g.fillText(clock, w - 34 - g.measureText(clock).width, 23)
-  // the window
-  const wx = 46
-  const wy = 58
-  const ww = w - 92
-  const wh = h - 58 - 34
-  g.save()
-  g.shadowColor = 'rgba(0,0,0,0.45)'
-  g.shadowBlur = 40
-  g.shadowOffsetY = 12
-  g.fillStyle = '#23252b'
-  rr(g, wx, wy, ww, wh, 14)
-  g.fill()
-  g.restore()
-  // tab strip
-  g.save()
-  rr(g, wx, wy, ww, wh, 14)
-  g.clip()
-  g.fillStyle = '#1b1d22'
-  g.fillRect(wx, wy, ww, 50)
-  ;['#ff5f57', '#febc2e', '#28c840'].forEach((col, i) => {
-    g.fillStyle = col
-    g.beginPath()
-    g.arc(wx + 26 + i * 22, wy + 25, 7, 0, Math.PI * 2)
-    g.fill()
-  })
-  const tabW = Math.min(250, (ww - 120) / projects.length)
-  projects.forEach((p, i) => {
-    const tx = wx + 100 + i * (tabW + 6)
-    const on = i === active
-    g.fillStyle = on ? '#2f3239' : 'rgba(255,255,255,0.04)'
-    rr(g, tx, wy + 9, tabW, 34, 9)
-    g.fill()
-    const th = THEMES[p.id] || THEMES.bodymap
-    g.fillStyle = th.accent
-    g.beginPath()
-    g.arc(tx + 18, wy + 26, 6, 0, Math.PI * 2)
-    g.fill()
-    g.fillStyle = on ? '#f1f2f4' : '#9aa0aa'
-    g.font = `500 15px ${font}`
-    let t = p.name
-    while (g.measureText(t).width > tabW - 48 && t.length > 4) t = t.slice(0, -2)
-    if (t !== p.name) t = t.trimEnd() + '…'
-    g.fillText(t, tx + 32, wy + 31)
-  })
-  // address bar
-  g.fillStyle = '#2f3239'
-  g.fillRect(wx, wy + 50, ww, 50)
-  const p = projects[active]
-  const url = (p.live || p.github || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
-  g.fillStyle = '#1b1d22'
-  rr(g, wx + 140, wy + 59, ww - 280, 32, 16)
-  g.fill()
-  // (a padlock, drawn)
-  g.strokeStyle = '#9aa0aa'
-  g.fillStyle = '#9aa0aa'
-  g.lineWidth = 2
-  g.beginPath()
-  g.arc(wx + 163, wy + 72, 4.5, Math.PI, 0)
-  g.stroke()
-  g.fillRect(wx + 157, wy + 72, 12, 9)
-  g.fillStyle = '#e8eaee'
-  g.font = `500 15px ${font}`
-  g.fillText(url, wx + 184, wy + 81)
-  // back, forward, reload
-  g.strokeStyle = '#9aa0aa'
-  g.lineWidth = 2.2
-  g.lineCap = 'round'
-  g.lineJoin = 'round'
-  g.beginPath()
-  g.moveTo(wx + 32, wy + 68)
-  g.lineTo(wx + 25, wy + 75)
-  g.lineTo(wx + 32, wy + 82)
-  g.moveTo(wx + 58, wy + 68)
-  g.lineTo(wx + 65, wy + 75)
-  g.lineTo(wx + 58, wy + 82)
-  g.stroke()
-  g.beginPath()
-  g.arc(wx + 102, wy + 75, 7, -Math.PI * 0.35, Math.PI * 1.45)
-  g.stroke()
-  g.beginPath()
-  g.moveTo(wx + 104, wy + 64)
-  g.lineTo(wx + 108, wy + 69)
-  g.lineTo(wx + 102, wy + 71)
-  g.stroke()
-  // the page
-  const th = THEMES[p.id] || THEMES.bodymap
-  const px = wx
-  const py = wy + 100
-  const pw = ww
-  const ph = wh - 100
-  g.fillStyle = th.bg
-  g.fillRect(px, py, pw, ph)
-  // its own header
-  g.fillStyle = th.accent
-  g.beginPath()
-  g.arc(px + 46, py + 38, 10, 0, Math.PI * 2)
-  g.fill()
-  g.fillStyle = th.ink
-  g.font = `700 20px ${font}`
-  g.fillText(p.name, px + 66, py + 45)
-  g.fillStyle = th.sub
-  g.font = `500 15px ${font}`
-  const nav = p.live ? ['How it works', 'Privacy', 'GitHub'] : ['Code', 'Issues', 'README']
-  nav.forEach((t, i) => g.fillText(t, px + pw - 320 + i * 110, py + 44))
-  g.fillStyle = th.soft
-  g.fillRect(px, py + 72, pw, 2)
-  // the hero: the project's own words on the left, its picture on the right
-  const hx = px + 46
-  const hy = py + 150
-  g.fillStyle = th.ink
-  g.font = `700 52px ${font}`
-  const lines = wrap(g, p.name, hx, hy, pw * 0.42, 60, 2)
-  g.fillStyle = th.sub
-  g.font = `400 21px ${font}`
-  const n2 = wrap(g, p.oneLiner, hx, hy + lines * 60 + 12, pw * 0.4, 31, 4)
-  const by = hy + lines * 60 + 12 + n2 * 31 + 26
-  g.fillStyle = th.accent
-  rr(g, hx, by, 196, 50, 25)
-  g.fill()
-  g.fillStyle = th.bg
-  g.font = `600 17px ${font}`
-  g.fillText(p.live ? 'Try it live' : 'View the code', hx + 30, by + 31)
-  g.strokeStyle = th.sub
-  g.lineWidth = 1.5
-  rr(g, hx + 212, by, 150, 50, 25)
-  g.stroke()
-  g.fillStyle = th.ink
-  g.fillText(p.live ? 'GitHub' : 'README', hx + 250, by + 31)
-  // its stack
-  g.font = `500 14px ${font}`
-  let sx = hx
-  const sy = by + 92
-  for (const s of p.stack.slice(0, 5)) {
-    const tw = g.measureText(s).width + 26
-    if (sx + tw > hx + pw * 0.44) break
-    g.fillStyle = th.soft
-    rr(g, sx, sy, tw, 32, 16)
-    g.fill()
-    g.fillStyle = th.sub
-    g.fillText(s, sx + 13, sy + 21)
-    sx += tw + 8
-  }
-  // below the fold: what was hard, from the project's own notes (as many cards as fit)
-  const bottom = py + ph - 26
-  let cy = sy + 84
-  const cw = pw * 0.42
-  if ((p.challenges || []).length && cy + 90 < bottom) {
-    g.fillStyle = th.sub
-    g.font = `600 13px ${font}`
-    g.fillText('UNDER THE HOOD', hx, cy)
-    cy += 20
-    for (const text of p.challenges) {
-      g.font = `400 16px ${font}`
-      // (measured first: its height from the lines it wraps to, at most three)
-      const lines = Math.min(3, measureLines(g, text, cw - 58))
-      const chh = 30 + lines * 24
-      if (cy + chh > bottom) break
-      g.fillStyle = th.soft
-      rr(g, hx, cy, cw, chh, 12)
-      g.fill()
-      g.fillStyle = th.accent
-      rr(g, hx + 18, cy + 20, 4, chh - 40 + 8, 2)
-      g.fill()
-      g.fillStyle = th.ink
-      wrap(g, text, hx + 38, cy + 33, cw - 58, 24, 3)
-      cy += chh + 12
-    }
-  }
-  ;(ART[p.id] || drawBodyMap)(g, px + pw * 0.46, py + 80, pw * 0.54, ph - 80, th, font)
-  g.restore()
-  // the dock's hint, below the window
-  g.fillStyle = 'rgba(255,255,255,0.16)'
-  rr(g, w / 2 - 170, h - 26, 340, 18, 9)
-  g.fill()
-  g.setTransform(1, 0, 0, 1, 0, 0)
-}
+  vec3 lapNeutralInv(vec3 c) { return vec3(lapNeutralInv(c.r), lapNeutralInv(c.g), lapNeutralInv(c.b)); }`
+const BOX = /* glsl */ `
+  float lapBox(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+  float lapLine(float d, float w) { float fw = fwidth(d); return 1.0 - smoothstep(w, w + fw + 1e-4, abs(d)); }`
 
 /**
  * The laptop at `at` (world, on the desk at its height), turned `yaw`. projects: portfolio.ts's;
- * font: a loaded CSS family for the display. Returns { group, meshes, screen, center(out),
- * screenCenter(out), screenNormal(out), tab, nextTab(), materials, dispose() }.
+ * font: a loaded CSS family for the screen and the keys.
  */
-export function createLaptop({ at, yaw, projects, font, anisotropy = 4 }) {
+export function createLaptop({ at, yaw, projects, font, anisotropy = 4, baked }) {
   const L = LAPTOP
+  const TOP = L.base
   const group = new THREE.Group()
+  group.name = 'laptop'
   group.position.set(at[0], at[1], at[2])
   group.rotation.y = yaw
   const geometries = []
   const materials = []
   const textures = []
+  const keys = keyLayout()
 
-  // ---- materials
-  // (anodised, bead-blasted: a little of the room's light scattered too, so it stays silver at dusk)
-  const alu = new THREE.MeshPhysicalMaterial({ color: 0xdadde1, metalness: 0.72, roughness: 0.38, clearcoat: 0.15, clearcoatRoughness: 0.4 })
-  const aluDark = new THREE.MeshPhysicalMaterial({ color: 0xb9bdc3, metalness: 1, roughness: 0.42 })
-  const keyMat = new THREE.MeshPhysicalMaterial({ color: 0x18191c, roughness: 0.55, metalness: 0, sheen: 0.3, sheenRoughness: 0.6, sheenColor: 0x2a2c31 })
-  const glass = new THREE.MeshPhysicalMaterial({ color: 0x060607, roughness: 0.08, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, specularIntensity: 0.8, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 })
-  const pad = new THREE.MeshPhysicalMaterial({ color: 0xc9cdd3, metalness: 0.9, roughness: 0.2, clearcoat: 0.5, clearcoatRoughness: 0.1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 })
-  const hinge = new THREE.MeshPhysicalMaterial({ color: 0x3c3f45, metalness: 0.8, roughness: 0.5 })
-  materials.push(alu, aluDark, keyMat, glass, pad, hinge)
+  // ---- textures
+  const dataTex = (px, w, h, repeat) => {
+    const t = new THREE.DataTexture(px, w, h)
+    if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.magFilter = THREE.LinearFilter
+    t.minFilter = THREE.LinearMipmapLinearFilter
+    t.generateMipmaps = true
+    t.anisotropy = anisotropy
+    t.needsUpdate = true
+    textures.push(t)
+    return t
+  }
+  const canvasTex = (c, srgb) => {
+    const t = new THREE.CanvasTexture(c)
+    t.flipY = false
+    t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace
+    t.anisotropy = anisotropy
+    textures.push(t)
+    return t
+  }
+  // (the bakes: pure functions, laptopTex.js; `baked`, if given, has them from the scene's worker)
+  const bead = baked?.bead || beadPixels(128)
+  const beadTex = dataTex(bead.px, bead.size, bead.size, true)
+  const wear = baked?.wear || wearPixels(keys, WELL, PAD, [L.w, L.d])
+  const wearTex = dataTex(wear.px, wear.w, wear.h, false)
+  const atlasC = canvas(ATLAS.w, ATLAS.h)
+  const cells = drawLegends(atlasC.getContext('2d'), keys, font)
+  const atlasTex = canvasTex(atlasC, false)
+  const stickC = canvas(STICKERS.w, STICKERS.h)
+  drawStickers(stickC.getContext('2d'), font)
+  const stickTex = canvasTex(stickC, true)
+  // the screen: the browser's chrome (a strip) and the page (taller than the screen)
+  const chromeC = canvas(CHROME.texW, CHROME.texH)
+  const pageC = canvas(PAGE.texW, PAGE.texH)
+  const chromeTex = canvasTex(chromeC, true)
+  const pageTex = canvasTex(pageC, true)
 
-  // ---- the base: a slab, its back edge (the hinge) at z = -d/2
-  const baseGeo = slab(L.w, L.d, L.base, L.r, 1.4)
-  geometries.push(baseGeo)
-  const base = new THREE.Mesh(baseGeo, alu)
-  // the keyboard well: a shallow dark recess the keys stand in
-  const kbW = 278
-  const kbD = 106
-  const kbZ = -L.d / 2 + 12 + kbD / 2
-  const wellGeo = new THREE.PlaneGeometry(kbW + 2, kbD + 2).rotateX(-Math.PI / 2)
-  wellGeo.translate(0, L.base + 0.02, kbZ)
-  geometries.push(wellGeo)
-  const wellMat = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 })
-  materials.push(wellMat)
-  const well = new THREE.Mesh(wellGeo, wellMat)
-  // the keys: six rows, a short function row, the arrows' half keys at the end of the last
-  const rows = [
-    { h: 9, keys: [1.55, ...Array(12).fill(1), 1] },
-    { h: 16.3, keys: [...Array(13).fill(1), 1.55] },
-    { h: 16.3, keys: [1.55, ...Array(13).fill(1)] },
-    { h: 16.3, keys: [1.85, ...Array(11).fill(1), 1.85] },
-    { h: 16.3, keys: [2.4, ...Array(10).fill(1), 2.4] },
-    { h: 16.3, keys: [1, 1, 1, 1.25, 5.1, 1.25, 1, 'arrows'] },
-  ]
-  const pitch = 18.9
-  const keyGeo = new RoundedBoxGeometry(1, 0.9, 1, 2, 0.32)
-  geometries.push(keyGeo)
-  const placed = []
-  {
-    let z = kbZ - kbD / 2 + 2
-    for (const row of rows) {
-      const units = row.keys.reduce((a, u) => a + (u === 'arrows' ? 3 : u), 0)
-      const scale = (kbW - 4) / (units * pitch)
-      let x = -kbW / 2 + 2
-      for (const u of row.keys) {
-        if (u === 'arrows') {
-          const kw = pitch * scale - 2.4
-          const half = (row.h - 1.2) / 2
-          // ← and →, full width and half height; ↑ ↓ stacked
-          placed.push([x + kw / 2, z + row.h / 2 + half / 2 + 0.3, kw, half])
-          placed.push([x + pitch * scale + kw / 2, z + half / 2, kw, half])
-          placed.push([x + pitch * scale + kw / 2, z + row.h - half / 2, kw, half])
-          placed.push([x + 2 * pitch * scale + kw / 2, z + row.h / 2 + half / 2 + 0.3, kw, half])
-          x += 3 * pitch * scale
-          continue
+  // ---- uniforms shared by the materials
+  const U = {
+    uGlowA: { value: 1 }, // (self-lit parts on, off: the ember's frame draws them dark)
+    uScreen: { value: new THREE.Color(0, 0, 0) }, // (the display's light where it falls: colour x strength)
+    uBacklightA: { value: 0 },
+  }
+  const D = {
+    tChrome: { value: chromeTex },
+    tPage: { value: pageTex },
+    uScroll: { value: 0 },
+    uPageH: { value: PAGE.h },
+    uThumb: { value: new THREE.Vector4(0, 0, 0, 0) },
+    uFlash: { value: new THREE.Vector4(0, 0, 0, 0) },
+    uFlashK: { value: 0 },
+    uBright: { value: 0.86 },
+  }
+
+  // ---- the aluminium: one material for the base, the lid, the clutch and the feet, its zones per
+  // vertex (laptopGeo.js's ZONE)
+  const H = L.hinge
+  const SCR_Z = H.z + 3 // (where the display's light starts on the deck)
+  const alu = new THREE.MeshStandardMaterial({ name: 'laptop.alu', color: 0xffffff, roughness: 0.44, metalness: 0.5, normalMap: beadTex, normalScale: new THREE.Vector2(0.12, 0.12) })
+  alu.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U, { tWear: { value: wearTex }, tSticker: { value: stickTex } })
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aZone;\nvarying float vZone;\nvarying vec3 vLP;\nvarying vec3 vLN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvZone = aZone;\nvLP = position;\nvLN = normal;')
+    const G = GRILLE
+    const usb = PORTS.filter((p) => p[2] === 'usbc').map((p) => p[1])
+    const jack = PORTS.find((p) => p[2] === 'jack')[1]
+    const sa = { x: -70, s: 66 } // (the stickers on the lid's back, its frame)
+    const sb = { x: 58, s: 150, r: 0.12 }
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `#include <common>
+        varying float vZone;
+        varying vec3 vLP;
+        varying vec3 vLN;
+        uniform sampler2D tWear;
+        uniform sampler2D tSticker;
+        uniform vec3 uScreen;
+        uniform float uGlowA;
+        uniform float uBacklightA;
+        ${BOX}`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        /* glsl */ `#include <color_fragment>
+        // ---- which part (constant over a triangle)
+        float zn = vZone;
+        float isLid = step(1.5, zn) * step(zn, 2.5) + step(5.5, zn);
+        float isWell = step(0.5, zn) * step(zn, 1.5);
+        float isClutch = step(2.5, zn) * step(zn, 3.5);
+        float isFoot = step(3.5, zn) * step(zn, 4.5);
+        float isCham = step(4.5, zn);
+        vec3 lp = vLP;
+        vec3 ln = normalize(vLN);
+        // (the wear map: the deck's plan; on the lid, its own, its tone only)
+        vec2 wuv = isLid > 0.5 ? vec2((lp.x + 152.0) / 304.0, (lp.z - 3.0) / 208.0) : vec2((lp.x + 152.0) / 304.0, (lp.z + 107.5) / 215.0);
+        vec4 wear = texture2D(tWear, wuv);
+        // graphite anodising, a little uneven
+        vec3 lapCol = vec3(0.135, 0.134, 0.136) * (0.93 + 0.14 * wear.a);
+        float lapRough = 0.44;
+        float lapMetal = 0.5;
+        float lapBead = 1.0;
+        float lapAo = 1.0;
+        vec3 lapEmit = vec3(0.0);
+        vec3 lapLit = vec3(0.0);
+        if (zn < 0.5) {
+          if (ln.y > 0.9 && lp.y > ${f(TOP - 0.01)}) {
+            // ---- the deck: the trackpad, glass, a hairline round it
+            float dPad = lapBox(lp.xz - vec2(0.0, ${f(PAD.z)}), vec2(${f(PAD.w / 2)}, ${f(PAD.d / 2)}), ${f(PAD.r)});
+            float inPad = 1.0 - smoothstep(-0.02, 0.02, dPad);
+            lapCol = mix(lapCol, lapCol * 0.94, inPad);
+            lapRough = mix(lapRough - 0.13 * wear.r, 0.3 - 0.14 * wear.r + 0.12 * wear.g, inPad);
+            lapCol *= 1.0 - 0.05 * wear.r * (1.0 - inPad);
+            lapMetal = mix(lapMetal, 0.42, inPad);
+            lapBead = mix(1.0, 0.25, inPad);
+            float seam = lapLine(dPad + 0.06, 0.07);
+            lapCol *= 1.0 - 0.85 * seam;
+            lapRough = mix(lapRough, 0.75, seam);
+            // the speaker grilles: holes on a hexagonal pitch; their average where finer than a pixel
+            vec2 gq = vec2(abs(lp.x) - ${f(G.x0)}, lp.z - ${f(G.z0)});
+            float rowH = ${f(G.pitch * 0.8660254)};
+            float row = floor(gq.y / rowH + 0.5);
+            float off = mod(row, 2.0) * ${f(G.pitch / 2)};
+            vec2 hc = vec2(floor((gq.x - off) / ${f(G.pitch)} + 0.5) * ${f(G.pitch)} + off, row * rowH);
+            float inG = step(${f(G.hole + 0.2)}, hc.x) * step(hc.x, ${f(G.x1 - G.x0 - G.hole - 0.2)}) * step(${f(G.hole + 0.2)}, hc.y) * step(hc.y, ${f(G.z1 - G.z0 - G.hole - 0.2)});
+            float fwg = max(fwidth(gq.x), fwidth(gq.y));
+            float far = smoothstep(${f(0.22 * G.pitch)}, ${f(0.55 * G.pitch)}, fwg);
+            float hole = 1.0 - smoothstep(-0.7 * fwg, 0.7 * fwg, length(gq - hc) - ${f(G.hole)});
+            float field = step(0.0, gq.x) * step(gq.x, ${f(G.x1 - G.x0)}) * step(0.0, gq.y) * step(gq.y, ${f(G.z1 - G.z0)});
+            hole = mix(hole * inG, ${f((Math.PI * G.hole * G.hole) / (G.pitch * G.pitch * 0.8660254))} * field, far);
+            lapCol = mix(lapCol, vec3(0.006), hole);
+            lapRough = mix(lapRough, 0.95, hole);
+            lapBead *= 1.0 - hole;
+            // a little dust, where nothing wipes it
+            float dust = wear.b * (1.0 - inPad);
+            lapCol = mix(lapCol, vec3(0.42, 0.4, 0.37), 0.18 * dust);
+            lapRough = mix(lapRough, 0.9, 0.6 * dust);
+            // the shade round the hinge's barrel
+            float acrossH = 1.0 - smoothstep(${f(H.half - 6)}, ${f(H.half + 2)}, abs(lp.x));
+            float dz = max(lp.z - ${f(H.z + Math.sqrt(H.r * H.r - (H.y - TOP) ** 2))}, 0.0);
+            lapAo *= 1.0 - acrossH * (0.55 * exp(-dz / 1.4) + 0.2 * exp(-dz / 12.0));
+            // the display's light, strongest nearest it
+            lapLit = uScreen * (0.04 + 0.2 * exp(-(lp.z - ${f(SCR_Z)}) / 46.0));
+          } else if (abs(ln.y) < 0.5) {
+            // ---- the walls: the seam where the top case meets the bottom one, darker low down
+            lapCol *= 1.0 - 0.75 * lapLine(lp.y - ${f(L.foot + 2.7)}, 0.06);
+            lapAo *= 0.7 + 0.3 * smoothstep(${f(L.foot)}, ${f(L.foot + 4.5)}, lp.y);
+            if (abs(ln.x) > 0.7) {
+              // a side's ports: two USB-C on the left, the headphone jack on the right
+              vec2 q = vec2(lp.z, lp.y - ${f((L.foot + 2.4 + TOP - L.chamfer) / 2)});
+              float left = step(lp.x, 0.0);
+              float dp = mix(length(q - vec2(${f(jack)}, 0.0)) - 1.75, min(lapBox(q - vec2(${f(usb[0])}, 0.0), vec2(4.2, 1.3), 1.3), lapBox(q - vec2(${f(usb[1])}, 0.0), vec2(4.2, 1.3), 1.3)), left);
+              float inP = 1.0 - smoothstep(-0.03, 0.03, dp);
+              float rim = (1.0 - smoothstep(0.22, 0.3, dp)) * (1.0 - inP);
+              float dt = min(lapBox(q - vec2(${f(usb[0])}, 0.0), vec2(3.0, 0.32), 0.25), lapBox(q - vec2(${f(usb[1])}, 0.0), vec2(3.0, 0.32), 0.25));
+              float tongue = left * (1.0 - smoothstep(-0.03, 0.03, dt));
+              lapCol = mix(lapCol, mix(vec3(0.01), vec3(0.05), tongue), inP);
+              lapRough = mix(lapRough, 0.9, inP);
+              lapBead *= 1.0 - inP;
+              // (the machined edge round each opening: polished)
+              lapCol = mix(lapCol, vec3(0.33, 0.32, 0.3), rim);
+              lapMetal = mix(lapMetal, 1.0, rim);
+              lapRough = mix(lapRough, 0.2, rim);
+              lapBead *= 1.0 - rim;
+            }
+            if (ln.z < -0.7) {
+              // the back: the vent's slot under the hinge, its fins
+              float inV = step(abs(lp.x), 112.0) * step(${f(L.foot + 3.0)}, lp.y) * step(lp.y, ${f(L.foot + 4.4)});
+              float fin = 1.0 - smoothstep(0.14, 0.22, abs(fract(lp.x / 1.6 + 0.5) - 0.5) * 1.6);
+              lapCol = mix(lapCol, mix(vec3(0.01), lapCol * 0.55, fin), inV);
+              lapRough = mix(lapRough, 0.8, inV);
+              lapBead *= 1.0 - inV;
+            }
+          }
         }
-        const kw = u * pitch * scale - 2.4
-        placed.push([x + kw / 2 + 1.2, z + row.h / 2, kw, row.h - 2.2])
-        x += u * pitch * scale
-      }
-      z += row.h + 2.6
-    }
+        if (isWell > 0.5) {
+          float dW = lapBox(lp.xz - vec2(0.0, ${f((WELL.z0 + WELL.z1) / 2)}), vec2(${f(WELL.hw)}, ${f((WELL.z1 - WELL.z0) / 2)}), ${f(WELL.r)});
+          if (lp.y < ${f(TOP - WELL.depth + 0.02)}) {
+            // the well's floor: black anodised, in the keys' shade and along its walls
+            lapCol = vec3(0.021, 0.021, 0.022);
+            lapMetal = 0.3;
+            lapRough = 0.55;
+            lapBead = 0.5;
+            float shade = wear.b;
+            lapAo *= (0.3 + 0.7 * shade) * (0.55 + 0.45 * smoothstep(0.0, 2.4, -dW));
+            // (the backlight leaking out under the keys' edges)
+            lapEmit += uBacklightA * vec3(1.0, 0.86, 0.68) * 0.05 * (1.0 - shade) * shade * 4.0;
+          } else {
+            // its wall: the deck's machined edge, darker deep down
+            lapAo *= 0.5 + 0.5 * smoothstep(${f(TOP - WELL.depth)}, ${f(TOP - 0.2)}, lp.y);
+          }
+        }
+        if (isLid > 0.5 && isCham < 0.5) {
+          if (ln.y > 0.9) {
+            // the lid's back: two stickers (read from behind the open lid), a thumb's smudge where
+            // it is opened
+            vec2 la = -(lp.xz - vec2(${f(sa.x)}, ${f(sa.s)}));
+            vec2 lb = -(lp.xz - vec2(${f(sb.x)}, ${f(sb.s)}));
+            lb = vec2(${f(Math.cos(sb.r))} * lb.x - ${f(Math.sin(sb.r))} * lb.y, ${f(Math.sin(sb.r))} * lb.x + ${f(Math.cos(sb.r))} * lb.y);
+            bool useA = dot(la, la) < dot(lb, lb);
+            vec2 sp = (useA ? la : lb) * ${f(STICKERS.pxmm)};
+            vec4 stk = texture2D(tSticker, (vec2(useA ? 128.0 : 384.0, 128.0) + sp) / vec2(512.0, 256.0));
+            float sAlpha = stk.a * step(abs(sp.x), 127.0) * step(abs(sp.y), 127.0);
+            lapCol = mix(lapCol, stk.rgb, sAlpha);
+            lapMetal = mix(lapMetal, 0.0, sAlpha);
+            lapRough = mix(lapRough, 0.36, sAlpha);
+            lapBead *= 1.0 - sAlpha;
+            float thumbS = exp(-pow(lp.x / 18.0, 2.0) - pow((lp.z - ${f(LID.s1 - 6)}) / 7.0, 2.0));
+            lapRough -= 0.12 * thumbS;
+          }
+          // (its hinge end, by the barrel: in shade)
+          lapAo *= 1.0 - 0.35 * exp(-max(lp.z - ${f(LID.s0)}, 0.0) / 2.0) * step(ln.y, 0.5);
+        }
+        if (isClutch > 0.5) {
+          // the clutch: dark, its seams where the hinges' parts meet, its ends polished
+          lapCol = vec3(0.03, 0.03, 0.032);
+          lapMetal = 0.6;
+          lapRough = 0.34;
+          lapBead = 0.2;
+          lapCol *= 1.0 - 0.7 * lapLine(abs(lp.x) - ${f(H.half - 22)}, 0.07);
+          float endR = smoothstep(${f(H.half - 0.9)}, ${f(H.half - 0.6)}, abs(lp.x));
+          lapCol = mix(lapCol, vec3(0.3, 0.295, 0.285), endR);
+          lapMetal = mix(lapMetal, 1.0, endR);
+          lapRough = mix(lapRough, 0.18, endR);
+          lapAo *= 0.45 + 0.55 * smoothstep(${f(TOP - 0.5)}, ${f(TOP + 2)}, lp.y);
+        }
+        if (isFoot > 0.5) {
+          lapCol = vec3(0.016);
+          lapMetal = 0.0;
+          lapRough = 0.85;
+          lapBead = 0.0;
+        }
+        if (isCham > 0.5) {
+          // the chamfers: cut bright through the anodising and polished
+          lapCol = vec3(0.3, 0.29, 0.275) * (0.96 + 0.08 * wear.a);
+          lapMetal = 1.0;
+          lapRough = 0.14;
+          lapBead = 0.0;
+        }
+        diffuseColor.rgb = lapCol * lapAo;`,
+      )
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(lapRough, 0.06, 1.0);')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = lapMetal;')
+      .replace('#include <normal_fragment_maps>', THREE.ShaderChunk.normal_fragment_maps.replace('mapN.xy *= normalScale;', 'mapN.xy *= normalScale * lapBead;'))
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += (lapEmit + lapLit * lapCol) * uGlowA;')
+      .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= lapAo;')
   }
-  const keys = new THREE.InstancedMesh(keyGeo, keyMat, placed.length)
-  {
-    const m4 = new THREE.Matrix4()
-    placed.forEach(([x, z, w, d], i) => {
-      m4.makeScale(w, 1, d).setPosition(x, L.base + 0.45, z)
-      keys.setMatrixAt(i, m4)
-    })
-    keys.instanceMatrix.needsUpdate = true
-  }
-  // the trackpad: glass, flush, a hair glossier than the deck
-  const tpGeo = new THREE.ShapeGeometry(rrShape(132, 82, 5), 8).rotateX(-Math.PI / 2)
-  tpGeo.translate(0, L.base + 0.03, L.d / 2 - 9 - 41)
-  geometries.push(tpGeo)
-  const trackpad = new THREE.Mesh(tpGeo, pad)
-  // the hinge: a dark barrel along the back
-  const hingeGeo = new THREE.CylinderGeometry(3.4, 3.4, L.w - 46, 20).rotateZ(Math.PI / 2)
-  hingeGeo.translate(0, L.base + 1.6, -L.d / 2 + 2.4)
-  geometries.push(hingeGeo)
-  const hingeMesh = new THREE.Mesh(hingeGeo, hinge)
+  alu.customProgramCacheKey = () => 'laptop.alu'
+  // (closed parts cast their shadows from their back faces: no acne on grazing edges)
+  alu.shadowSide = THREE.BackSide
 
-  // ---- the lid: hinged at the back edge, open; its face (glass, display) towards the person
+  // ---- the keys: one instanced mesh; each key's width, wear and print per instance
+  const KD0 = KEY.d0
+  const KW0 = KEY.w0
+  const keyMat = new THREE.MeshStandardMaterial({ name: 'laptop.keys', color: 0xffffff, roughness: 0.5, metalness: 0 })
+  keyMat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U, { tLegend: { value: atlasTex } })
+    sh.vertexShader = sh.vertexShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `#include <common>
+        attribute vec4 aKey;
+        attribute vec4 aLeg;
+        attribute float aDip;
+        varying vec2 vKP;
+        varying vec4 vKey;
+        varying vec4 vLeg;
+        varying float vKY;
+        varying float vKZ;
+        varying vec3 vAxX;
+        varying vec3 vAxZ;`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        /* glsl */ `vec3 transformed = vec3(position);
+        // (stretched to its width and depth: its corners stay round)
+        transformed.x += sign(position.x) * (aKey.x - ${f(KW0)}) * 0.5;
+        transformed.z += sign(position.z) * (aKey.y - ${f(KD0)}) * 0.5;
+        transformed.y -= aDip * ${f(KEY.travel)};
+        vKP = transformed.xz;
+        vKey = aKey;
+        vLeg = aLeg;
+        vKY = position.y;
+        vKZ = instanceMatrix[3].z;
+        vAxX = normalize(normalMatrix * vec3(1.0, 0.0, 0.0));
+        vAxZ = normalize(normalMatrix * vec3(0.0, 0.0, 1.0));`,
+      )
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `#include <common>
+        varying vec2 vKP;
+        varying vec4 vKey;
+        varying vec4 vLeg;
+        varying float vKY;
+        varying float vKZ;
+        varying vec3 vAxX;
+        varying vec3 vAxZ;
+        uniform sampler2D tLegend;
+        uniform vec3 uScreen;
+        uniform float uGlowA;
+        uniform float uBacklightA;`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        /* glsl */ `#include <color_fragment>
+        float kTop = step(-0.03, vKY);
+        float kTouch = step(0.5, vKey.w);
+        vec2 kHalf = vKey.xy * 0.5;
+        // the print: the key's cell in the atlas
+        vec2 lq = (vKP - vLeg.xy) / vec2(${f(ATLAS.mm[0])}, ${f(ATLAS.mm[1])}) + 0.5;
+        float inCell = step(0.0, lq.x) * step(lq.x, 1.0) * step(0.0, lq.y) * step(lq.y, 1.0) * step(-0.5, vLeg.z);
+        float ink = texture2D(tLegend, vLeg.zw + lq * vec2(${f(ATLAS.cw / ATLAS.w)}, ${f(ATLAS.ch / ATLAS.h)})).r * inCell * kTop;
+        // worn: polished where the fingers land
+        float worn = vKey.z * kTop * (1.0 - smoothstep(0.15, 0.8, length(vKP / max(kHalf, vec2(1.0)))));
+        vec3 kCol = mix(vec3(0.017, 0.017, 0.018), vec3(0.72, 0.72, 0.7), ink);
+        float kRough = mix(0.5, 0.36, worn);
+        float kMetal = 0.0;
+        // (Touch ID: glass, its ring polished metal)
+        float tid = kTouch * kTop;
+        kCol = mix(kCol, mix(vec3(0.01), vec3(0.32, 0.31, 0.3), ink), tid);
+        kRough = mix(kRough, mix(0.1, 0.2, ink), tid);
+        kMetal = mix(kMetal, ink, tid);
+        // (deep at its foot, in its neighbours' shade)
+        diffuseColor.rgb = kCol * (0.55 + 0.45 * smoothstep(${f(-KEY.h)}, ${f(-KEY.h + 0.8)}, vKY));`,
+      )
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = kRough;')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = kMetal;')
+      .replace(
+        '#include <normal_fragment_maps>',
+        /* glsl */ `#include <normal_fragment_maps>
+        // the top's slight dish: its normal leans towards the key's middle
+        vec2 kd = vKP / max(kHalf * kHalf, vec2(1.0)) * ${f(2 * 0.12)} * kTop * (1.0 - kTouch);
+        normal = normalize(normal - kd.x * vAxX - kd.y * vAxZ);`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        /* glsl */ `#include <emissivemap_fragment>
+        // the backlight through the legends (and from under the key); the display's light on the tops
+        float kFall = 0.04 + 0.2 * exp(-(vKZ - ${f(SCR_Z)}) / 46.0);
+        vec3 kBack = vec3(1.0, 0.88, 0.72) * (1.5 * ink * (1.0 - kTouch) + 0.06 * (1.0 - smoothstep(${f(-KEY.h)}, ${f(-KEY.h + 0.5)}, vKY)));
+        totalEmissiveRadiance += (uBacklightA * kBack + uScreen * kFall * kTop * (0.03 + 0.4 * ink)) * uGlowA;`,
+      )
+  }
+  keyMat.customProgramCacheKey = () => 'laptop.keys'
+
+  // ---- the glass: the display, the bezel, the camera, the gasket round it
+  const cs = (LID.s0 + LID.s1) / 2
+  const glass = new THREE.MeshStandardMaterial({ name: 'laptop.glass', color: 0xffffff, roughness: 0.07, metalness: 0, emissive: 0xffffff, envMapIntensity: 1.4 })
+  glass.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U, D, { tWear: { value: wearTex } })
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvLP = position;')
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `#include <common>
+        varying vec3 vLP;
+        uniform sampler2D tChrome;
+        uniform sampler2D tPage;
+        uniform sampler2D tWear;
+        uniform float uScroll;
+        uniform float uPageH;
+        uniform vec4 uThumb;
+        uniform vec4 uFlash;
+        uniform float uFlashK;
+        uniform float uBright;
+        uniform float uGlowA;
+        ${BOX}
+        ${NEUTRAL_INV}`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        /* glsl */ `#include <color_fragment>
+        // ---- where on the face: the display (0..1 across, 0..1 down), the bezel round it
+        vec2 dc = vec2((vLP.x - ${f(-L.w / 2 + DISP.x)}) / ${f(DISP.w)}, (${f(LID.s1 - DISP.y)} - vLP.z) / ${f(DISP.h)});
+        float inD = step(0.0, dc.x) * step(dc.x, 1.0) * step(0.0, dc.y) * step(dc.y, 1.0);
+        float dEdge = -lapBox(vec2(vLP.x, vLP.z - ${f(cs)}), vec2(${f(L.w / 2 - LID.rim)}, ${f(L.lidD / 2 - LID.rim)}), ${f(L.r - LID.rim)});
+        float gasket = 1.0 - smoothstep(0.8, 0.8 + max(fwidth(dEdge), 0.02), dEdge);
+        float dCam = length(vec2(vLP.x - ${f(CAM.x)}, vLP.z - ${f(CAM.s)}));
+        // smudges: prints and an oily film, rougher, a faint haze on the black
+        vec4 gw = texture2D(tWear, vec2(0.08 + 0.84 * (vLP.x + 152.0) / 304.0, 0.12 + 0.76 * (vLP.z - ${f(LID.s0)}) / ${f(L.lidD)}));
+        float smudge = clamp(0.8 * gw.g + 0.35 * gw.r, 0.0, 1.0);
+        vec3 gCol = vec3(0.004) + 0.01 * smudge;
+        // (the display's anti-glare coating: a lamp's highlight spread to a faint sheen, the room's
+        // reflections soft; the bezel round it glossy black glass)
+        float gRough = mix(0.06, 0.26, inD) + 0.14 * smudge;
+        float gSpec = mix(0.8, 0.18, inD);
+        // the camera: its lens, a ring of coating in it
+        float lens = 1.0 - smoothstep(${f(CAM.r - 0.05)}, ${f(CAM.r + 0.05)}, dCam);
+        gCol = mix(gCol, vec3(0.0015), lens);
+        gCol = mix(gCol, vec3(0.02, 0.026, 0.06), (1.0 - smoothstep(0.05, 0.09, abs(dCam - 0.45))) * lens);
+        gRough = mix(gRough, 0.05, lens);
+        // the rubber gasket round its edge: matte
+        gCol = mix(gCol, vec3(0.012), gasket);
+        gRough = mix(gRough, 0.85, gasket);
+        diffuseColor.rgb = gCol;`,
+      )
+      // (its reflections, fainter on the display's coating)
+      .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.directSpecular *= gSpec;\nreflectedLight.indirectSpecular *= gSpec;')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRough;')
+      .replace(
+        '#include <emissivemap_fragment>',
+        /* glsl */ `#include <emissivemap_fragment>
+        // ---- the screen: the chrome's strip over the page's window (both fetched: smooth either side)
+        vec2 sp = dc * vec2(${f(SCREEN.w)}, ${f(SCREEN.h)});
+        vec4 cC = texture2D(tChrome, vec2(dc.x, sp.y / ${f((CHROME.texH * SCREEN.w) / CHROME.texW)}));
+        vec4 cP = texture2D(tPage, vec2(dc.x, (sp.y - ${f(CHROME.h)} + uScroll) / ${f(PAGE.h)}));
+        vec3 scr = sp.y < ${f(CHROME.h)} ? cC.rgb : cP.rgb;
+        float vy = sp.y - ${f(CHROME.h)};
+        // the scroll thumb, where the page is taller than its window
+        float thumbH = max(48.0, ${f(VIEW_H * VIEW_H)} / max(uPageH, 1.0));
+        float thumbY = uScroll / max(uPageH - ${f(VIEW_H)}, 1.0) * (${f(VIEW_H)} - thumbH);
+        float tb = lapBox(vec2(sp.x - ${f(SCREEN.w - 7)}, vy - thumbY - thumbH * 0.5), vec2(3.0, thumbH * 0.5), 3.0);
+        scr = mix(scr, uThumb.rgb, (1.0 - smoothstep(-0.7, 0.7, tb)) * step(0.0, vy) * step(${f(VIEW_H + 1)}, uPageH) * uThumb.a);
+        // the main button, pressed
+        vec2 pp = vec2(sp.x, vy + uScroll);
+        float fb = lapBox(pp - uFlash.xy - uFlash.zw * 0.5, uFlash.zw * 0.5, uFlash.w * 0.5);
+        scr = mix(scr, scr * 0.7 + 0.08, (1.0 - smoothstep(-0.7, 0.7, fb)) * step(0.0, vy) * uFlashK);
+        // (the backlight: a touch dimmer towards the corners)
+        vec2 cq = dc - 0.5;
+        scr *= uBright * (1.0 - 0.18 * dot(cq, cq));
+        totalEmissiveRadiance = lapNeutralInv(clamp(scr, 0.0, 0.99)) * inD * uGlowA;`,
+      )
+  }
+  glass.customProgramCacheKey = () => 'laptop.glass'
+  materials.push(alu, keyMat, glass)
+
+  // ---- the parts
+  const baseGeo = toGeometry(baseGeometry())
+  const lidGeo = toGeometry(lidGeometry())
+  const glassGeo = toGeometry(glassGeometry())
+  const keyGeo = toGeometry(keyGeometry())
+  geometries.push(baseGeo, lidGeo, glassGeo, keyGeo)
+  const base = new THREE.Mesh(baseGeo, alu)
+  base.name = 'laptop.base'
+  base.castShadow = true
+  // the keys: their sizes, prints and wear per instance; how far each is pressed
+  const n = keys.length
+  const aKey = new Float32Array(n * 4)
+  const aLeg = new Float32Array(n * 4)
+  const dip = new Float32Array(n)
+  const m4 = new THREE.Matrix4()
+  const keyMesh = new THREE.InstancedMesh(keyGeo, keyMat, n)
+  keyMesh.name = 'laptop.keys'
+  keys.forEach((k, i) => {
+    aKey.set([k.w, k.d, k.wear, k.legend?.touchid ? 1 : 0], i * 4)
+    const c = cells[i]
+    aLeg.set(c ? [c.x, c.z, c.u, c.v] : [0, 0, -1, -1], i * 4)
+    keyMesh.setMatrixAt(i, m4.makeTranslation(k.x, KEY.top, k.z))
+  })
+  keyGeo.setAttribute('aKey', new THREE.InstancedBufferAttribute(aKey, 4))
+  keyGeo.setAttribute('aLeg', new THREE.InstancedBufferAttribute(aLeg, 4))
+  const dipAttr = new THREE.InstancedBufferAttribute(dip, 1)
+  dipAttr.setUsage(THREE.DynamicDrawUsage)
+  keyGeo.setAttribute('aDip', dipAttr)
+  keyMesh.instanceMatrix.needsUpdate = true
+  // (stretched in its shader: the 1u key's bounds are not the keys')
+  keyMesh.frustumCulled = false
+  // the soft shadow under it, on the desk (unlit; not something to tap)
+  const CM = 14
+  const contactC = canvas(256, Math.round((256 * (L.d + 2 * CM)) / (L.w + 2 * CM)))
+  drawContact(contactC.getContext('2d'), contactC.width, contactC.height, [L.w, L.d], CM, FEET)
+  const contactTex = canvasTex(contactC, false)
+  const contactGeo = new THREE.PlaneGeometry(L.w + 2 * CM, L.d + 2 * CM).rotateX(-Math.PI / 2)
+  geometries.push(contactGeo)
+  const contactMat = new THREE.MeshBasicMaterial({ name: 'laptop.contact', color: 0x000000, map: contactTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+  const contact = new THREE.Mesh(contactGeo, contactMat)
+  contact.name = 'laptop.contact'
+  contact.position.y = 0.04
+  contact.renderOrder = -1
+  contact.raycast = () => {}
+  // the lid: on the hinge's axis; its face the glass
   const lid = new THREE.Group()
-  lid.position.set(0, L.base + 1.6, -L.d / 2 + 2.4)
-  // (upright it would stand at 90 degrees: open to 110, it leans back by the difference)
-  lid.rotation.x = -(L.open - Math.PI / 2)
-  const lidGeo = slab(L.w, L.lidD, L.lid, L.r, 1.1)
-  // (the slab lies with its top at y = lid: stood up, its face (y = 0 side) towards the person)
-  lidGeo.rotateX(Math.PI / 2)
-  lidGeo.translate(0, L.lidD / 2, 0)
-  geometries.push(lidGeo)
+  lid.name = 'laptop.lid'
+  lid.position.set(0, H.y, H.z)
   const lidShell = new THREE.Mesh(lidGeo, alu)
-  lidShell.position.z = -L.lid
-  // the face: black glass over the whole inside of the lid, the display in it
-  const faceGeo = new THREE.ShapeGeometry(rrShape(L.w - 1.2, L.lidD - 1.2, L.r - 0.6), 10)
-  // (a quarter of a millimetre proud of the shell: at a desk's distance, closer is one depth step)
-  faceGeo.translate(0, L.lidD / 2, 0.25)
-  geometries.push(faceGeo)
-  const face = new THREE.Mesh(faceGeo, glass)
-  // the display: its own canvas, a browser
-  const dispCanvas = document.createElement('canvas')
-  dispCanvas.width = 2048
-  dispCanvas.height = Math.round((2048 * DISP.h) / DISP.w)
-  let tab = 0
-  drawDisplay(dispCanvas, projects, tab, font)
-  const dispTex = new THREE.CanvasTexture(dispCanvas)
-  dispTex.colorSpace = THREE.SRGBColorSpace
-  dispTex.anisotropy = anisotropy
-  textures.push(dispTex)
-  // (the notch: cut from the display's top edge)
-  const dShape = new THREE.Shape()
-  {
-    const w = DISP.w
-    const h = DISP.h
-    const x0 = -w / 2
-    const r = 7
-    dShape.moveTo(x0, 0)
-    dShape.lineTo(x0 + w, 0)
-    dShape.lineTo(x0 + w, h - r)
-    dShape.quadraticCurveTo(x0 + w, h, x0 + w - r, h)
-    dShape.lineTo(NOTCH.w / 2 + 1.5, h)
-    dShape.quadraticCurveTo(NOTCH.w / 2, h, NOTCH.w / 2, h - 1.5)
-    dShape.lineTo(NOTCH.w / 2, h - NOTCH.h + 2)
-    dShape.quadraticCurveTo(NOTCH.w / 2, h - NOTCH.h, NOTCH.w / 2 - 2, h - NOTCH.h)
-    dShape.lineTo(-NOTCH.w / 2 + 2, h - NOTCH.h)
-    dShape.quadraticCurveTo(-NOTCH.w / 2, h - NOTCH.h, -NOTCH.w / 2, h - NOTCH.h + 2)
-    dShape.lineTo(-NOTCH.w / 2, h - 1.5)
-    dShape.quadraticCurveTo(-NOTCH.w / 2, h, -NOTCH.w / 2 - 1.5, h)
-    dShape.lineTo(x0 + r, h)
-    dShape.quadraticCurveTo(x0, h, x0, h - r)
-    dShape.lineTo(x0, 0)
-  }
-  const dispGeo = new THREE.ShapeGeometry(dShape, 6)
-  {
-    const p = dispGeo.attributes.position
-    const uv = dispGeo.attributes.uv
-    for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + DISP.w / 2) / DISP.w, p.getY(i) / DISP.h)
-  }
-  dispGeo.translate(0, L.lidD - DISP.y - DISP.h, 0.35)
-  geometries.push(dispGeo)
-  // (its own light, under glass: the picture is emitted, the room's reflections lie over it)
-  // (an anti-glare display: the room's reflections soft and faint on it)
-  const dispMat = new THREE.MeshPhysicalMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: dispTex, emissiveIntensity: 0.9, roughness: 0.42, metalness: 0, specularIntensity: 0.12, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })
-  materials.push(dispMat)
-  const display = new THREE.Mesh(dispGeo, dispMat)
+  lidShell.name = 'laptop.lidShell'
+  lidShell.castShadow = true
+  const display = new THREE.Mesh(glassGeo, glass)
   display.name = 'laptop.display'
-  // the camera's dot, in the notch
-  const camGeo = new THREE.CircleGeometry(0.9, 12)
-  camGeo.translate(0, L.lidD - DISP.y - 2.6, 0.4)
-  geometries.push(camGeo)
-  const camDot = new THREE.Mesh(camGeo, hinge)
-  lid.add(lidShell, face, display, camDot)
+  lid.add(lidShell, display)
+  group.add(base, keyMesh, contact, lid)
 
-  group.add(base, well, keys, trackpad, hingeMesh, lid)
-  for (const m of [base, keys, lidShell, hingeMesh]) m.castShadow = true
+  // ---- the screen's content
+  let tab = 0
+  let tabs = []
+  let page = { h: PAGE.h, button: null, glow: [0, 0, 0] }
+  const thumbCol = new THREE.Color()
+  function drawScreen() {
+    const cg = chromeC.getContext('2d')
+    cg.setTransform(CHROME.texW / SCREEN.w, 0, 0, CHROME.texW / SCREEN.w, 0, 0)
+    tabs = drawChrome(cg, projects, tab, font)
+    const pg = pageC.getContext('2d')
+    pg.setTransform(PAGE.texW / PAGE.w, 0, 0, PAGE.texW / PAGE.w, 0, 0)
+    page = drawPage(pg, projects[tab], font)
+    chromeTex.needsUpdate = true
+    pageTex.needsUpdate = true
+    D.uPageH.value = page.h
+    thumbCol.setRGB(page.thumb[0], page.thumb[1], page.thumb[2], THREE.SRGBColorSpace)
+    D.uThumb.value.set(thumbCol.r, thumbCol.g, thumbCol.b, page.thumb[3])
+    const b = page.button || [0, 0, 0, 0]
+    D.uFlash.value.set(b[0], b[1], b[2], b[3])
+    D.uFlashK.value = flashK = 0
+    scrollY = scrollTo = fling = 0
+    D.uScroll.value = 0
+    lightUp()
+  }
+  /** The display's light on the keys and the deck: its page's light, its brightness, the lid's angle. */
+  function lightUp() {
+    const k = D.uBright.value * Math.max(0, Math.sin(Math.min(open, 1) * Math.PI * 0.5)) ** 2
+    U.uScreen.value.setRGB(page.glow[0] * k, page.glow[1] * k, page.glow[2] * k)
+  }
+
+  // ---- what moves: the lid, the keys, the scroll, the button, the backlight
+  let open = 1
+  const lidAnim = { from: 1, to: 1, t: 1, dur: 0 }
+  const placeLid = () => {
+    lid.rotation.x = -open * L.open
+    lid.updateMatrixWorld(true)
+    // (the screen sleeps as the lid closes)
+    D.uBright.value = 0.86 * THREE.MathUtils.smoothstep(open, 0.2, 0.7)
+    lightUp()
+  }
+  const press = new Float32Array(n) // (how long a key is still held down, s)
+  const vel = new Float32Array(n)
+  const live = new Set()
+  let scrollY = 0
+  let scrollTo = 0
+  let fling = 0
+  let flashK = 0
+  let back = 0
+  let backTo = 0
+  const maxScroll = () => Math.max(0, page.h - VIEW_H)
+  const clampScroll = (y) => Math.min(maxScroll(), Math.max(0, y))
+  function pressKey(i) {
+    if (i < 0 || i >= n) return
+    press[i] = 0.08
+    live.add(i)
+  }
+  const tmpV = new THREE.Vector3()
+  /** The key under a point of the deck (the base's frame), or -1. */
+  function keyAt(x, z) {
+    let best = -1
+    let bd = 1.4 // (mm: a tap in a gap still finds its key)
+    keys.forEach((k, i) => {
+      const d = Math.max(Math.abs(x - k.x) - k.w / 2, Math.abs(z - k.z) - k.d / 2)
+      if (d < bd) {
+        bd = d
+        best = i
+      }
+    })
+    return best
+  }
+
   group.updateMatrixWorld(true)
+  placeLid()
+  drawScreen()
 
   const api = {
     group,
-    meshes: [base, well, keys, trackpad, hingeMesh, lidShell, face, display],
+    meshes: [base, keyMesh, lidShell, display],
+    /** The keys (one instanced mesh: a hit's instanceId is the key's index in keys). */
+    keyMeshes: [keyMesh],
+    keys,
     display,
-    materials: [alu, aluDark, keyMat, glass, pad, hinge, wellMat],
+    materials,
     get tab() {
       return tab
     },
-    /** The display's light on or off. */
+    /** How far open the lid is (0 closed .. 1 at 110 degrees). */
+    get open() {
+      return open
+    },
+    /** The page's height and its scroll (px of the screen's 1440 x 936). */
+    get page() {
+      return { h: page.h, scroll: scrollY, max: maxScroll() }
+    },
+    /** The display's light on or off (and the backlight, and the light they cast). */
     glow(on) {
-      dispMat.emissiveIntensity = on ? 0.9 : 0
+      U.uGlowA.value = on ? 1 : 0
     },
     /** The next project's tab (wrapping); returns its index. */
     nextTab() {
       tab = (tab + 1) % projects.length
-      drawDisplay(dispCanvas, projects, tab, font)
-      dispTex.needsUpdate = true
+      drawScreen()
       return tab
     },
     setTab(i) {
+      i = ((i % projects.length) + projects.length) % projects.length
       if (i === tab) return
-      tab = ((i % projects.length) + projects.length) % projects.length
-      drawDisplay(dispCanvas, projects, tab, font)
-      dispTex.needsUpdate = true
+      tab = i
+      drawScreen()
+    },
+    /**
+     * A tap (a raycast hit on one of `meshes`): on a tab, that tab ('tab'); on the page's main
+     * button, it is pressed ('button'); elsewhere on the page, the next tab ('page'); on a key (or
+     * the deck under it), it dips ('key'). Anything else: null.
+     */
+    tapAt(hit) {
+      if (!hit) return null
+      if (hit.object === display) {
+        if (!hit.uv) return null
+        const u = hit.uv.x
+        const v = 1 - hit.uv.y
+        if (u < 0 || u > 1 || v < 0 || v > 1) return null
+        const sx = u * SCREEN.w
+        const sy = v * SCREEN.h
+        if (sy < CHROME.h) {
+          const i = tabs.findIndex((r) => sx >= r[0] && sx <= r[1] && sy >= r[2] && sy <= r[3])
+          if (i < 0) return null
+          api.setTab(i)
+          return 'tab'
+        }
+        const b = page.button
+        const py = sy - CHROME.h + scrollY
+        if (b && sx >= b[0] && sx <= b[0] + b[2] && py >= b[1] && py <= b[1] + b[3]) {
+          flashK = 1
+          D.uFlashK.value = 1
+          return 'button'
+        }
+        api.nextTab()
+        return 'page'
+      }
+      if (hit.object === keyMesh && hit.instanceId != null) {
+        pressKey(hit.instanceId)
+        return 'key'
+      }
+      if (hit.object === base) {
+        base.worldToLocal(tmpV.copy(hit.point))
+        const i = keyAt(tmpV.x, tmpV.z)
+        if (i < 0) return null
+        pressKey(i)
+        return 'key'
+      }
+      return null
+    },
+    /**
+     * Scroll the page by dy (px of the screen's page, down positive; mode: a WheelEvent's deltaMode:
+     * 0 pixels, 1 lines, 2 pages), eased there. For a drag over the display, dy is the hit's uv
+     * moved times SCREEN.h (LAPTOP.screen.h), and fling(v) on release keeps it going.
+     */
+    scroll(dy, mode = 0) {
+      const px = mode === 1 ? dy * 40 : mode === 2 ? dy * VIEW_H * 0.9 : dy
+      fling = 0
+      scrollTo = clampScroll(scrollTo + px)
+    },
+    /** Keep scrolling at v px/s, slowing (a flick's release). */
+    fling(v) {
+      fling = Math.max(-6000, Math.min(6000, v))
+    },
+    /** Open (1, 110 degrees) or close (0) the lid, eased. */
+    setOpen(t) {
+      t = Math.min(1, Math.max(0, t))
+      lidAnim.from = open
+      lidAnim.to = t
+      lidAnim.t = 0
+      lidAnim.dur = 0.25 + 0.9 * Math.abs(t - open)
+    },
+    /** The keyboard's backlight, 0 .. 1 (it fades there). */
+    backlight(k) {
+      backTo = Math.min(1, Math.max(0, k))
+    },
+    /** Advance what moves; true while anything still does. */
+    update(dt) {
+      let moving = false
+      // the lid
+      if (lidAnim.t < 1) {
+        lidAnim.t = Math.min(1, lidAnim.t + dt / Math.max(lidAnim.dur, 1e-3))
+        const e = lidAnim.t * lidAnim.t * lidAnim.t * (lidAnim.t * (lidAnim.t * 6 - 15) + 10)
+        open = lidAnim.from + (lidAnim.to - lidAnim.from) * e
+        placeLid()
+        moving = true
+      }
+      // the keys: a spring each, pressed for a moment, a little bounce on the way back
+      if (live.size) {
+        const steps = Math.max(1, Math.ceil(dt / 0.004))
+        const h = dt / steps
+        for (const i of live) {
+          for (let s = 0; s < steps; s++) {
+            const target = press[i] > 0 ? 1 : 0
+            press[i] -= h
+            const a = 3200 * (target - dip[i]) - 62 * vel[i]
+            vel[i] += a * h
+            dip[i] += vel[i] * h
+          }
+          dip[i] = Math.min(1.05, Math.max(-0.08, dip[i]))
+          if (press[i] <= 0 && Math.abs(dip[i]) < 0.002 && Math.abs(vel[i]) < 0.05) {
+            dip[i] = vel[i] = 0
+            live.delete(i)
+          }
+        }
+        dipAttr.needsUpdate = true
+        moving = true
+      }
+      // the scroll: eased to where it is going; a flick's speed fading
+      if (fling) {
+        scrollTo = clampScroll(scrollTo + fling * dt)
+        fling *= Math.exp(-dt / 0.32)
+        if (Math.abs(fling) < 8 || scrollTo === 0 || scrollTo === maxScroll()) fling = 0
+      }
+      if (scrollY !== scrollTo) {
+        scrollY += (scrollTo - scrollY) * (1 - Math.exp(-dt / 0.085))
+        if (Math.abs(scrollTo - scrollY) < 0.2) scrollY = scrollTo
+        D.uScroll.value = scrollY
+        moving = true
+      }
+      // the button, let go
+      if (flashK > 0) {
+        flashK = Math.max(0, flashK - dt / 0.32)
+        D.uFlashK.value = flashK * flashK
+        moving = true
+      }
+      // the backlight
+      if (back !== backTo) {
+        back += Math.sign(backTo - back) * Math.min(Math.abs(backTo - back), dt / 0.35)
+        U.uBacklightA.value = back * back
+        moving = true
+      }
+      return moving
     },
     /** The middle of the base (world). */
-    center: (out) => out.set(0, L.base, 0).applyMatrix4(group.matrixWorld),
-    /** The display's middle (world) and the way it faces (world). */
-    screenCenter: (out) => out.set(0, L.lidD - DISP.y - DISP.h / 2, 0.1).applyMatrix4(lid.matrixWorld),
-    screenNormal: (out) => out.set(0, 0, 1).transformDirection(lid.matrixWorld),
-    /** Its footprint on the desk, in its own frame: half width, half depth (mm), and the lid's
-     * reach behind the hinge. */
-    footprint: { hw: L.w / 2, hd: L.d / 2, back: L.lidD * Math.sin(L.open - Math.PI / 2) + 3 },
+    center: (out) => out.set(0, TOP, 0).applyMatrix4(group.matrixWorld),
+    /** The display's middle (world) and the way it faces (world): they follow the lid. */
+    screenCenter: (out) => out.set(0, LID.face - 0.05, LID.s1 - DISP.y - DISP.h / 2).applyMatrix4(lid.matrixWorld),
+    screenNormal: (out) => out.set(0, -1, 0).transformDirection(lid.matrixWorld),
+    /** Its footprint on the desk, in its own frame: half width, half depth (mm), and the open lid's
+     * reach behind the base. */
+    footprint: { hw: L.w / 2, hd: L.d / 2, back: lidReach() + 1 },
     dispose() {
       for (const g of geometries) g.dispose()
-      for (const m of materials) m.dispose()
+      for (const m of [...materials, contactMat]) m.dispose()
       for (const t of textures) t.dispose()
-      keys.dispose()
+      keyMesh.dispose()
     },
   }
   return api

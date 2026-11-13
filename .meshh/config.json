@@ -1,0 +1,73 @@
+{
+  "lead": "lead",
+  "maxParallel": 3,
+  "previewCommand": "",
+  "finalSummary": true,
+  "debate": {
+    "rounds": 2,
+    "arguers": []
+  },
+  "permissionMode": "manual",
+  "sandbox": true,
+  "allowedDomains": [
+    "registry.npmjs.org",
+    "registry.yarnpkg.com",
+    "pypi.org",
+    "files.pythonhosted.org",
+    "github.com",
+    "codeload.github.com",
+    "objects.githubusercontent.com",
+    "raw.githubusercontent.com"
+  ],
+  "tokenCap": 0,
+  "agents": {
+    "frontend": {
+      "icon": "✦",
+      "color": "#a855f7",
+      "role": "Frontend",
+      "scope": [],
+      "skills": [],
+      "preview": true
+    },
+    "lead": {
+      "icon": "◆",
+      "color": "#ff5b2e",
+      "role": "Lead",
+      "scope": [],
+      "skills": [],
+      "preview": false
+    },
+    "frontend-2": {
+      "icon": "✦",
+      "color": "#a855f7",
+      "role": "Frontend",
+      "scope": [],
+      "skills": [],
+      "preview": true
+    },
+    "frontend-3": {
+      "icon": "✦",
+      "color": "#a855f7",
+      "role": "Frontend",
+      "scope": [],
+      "skills": [],
+      "preview": true
+    },
+    "frontend-4": {
+      "icon": "✦",
+      "color": "#a855f7",
+      "role": "Frontend",
+      "scope": [],
+      "skills": [],
+      "preview": true
+    },
+    "frontend-5": {
+      "icon": "✦",
+      "color": "#a855f7",
+      "role": "Frontend",
+      "scope": [],
+      "skills": [],
+      "preview": true
+    }
+  }
+}
