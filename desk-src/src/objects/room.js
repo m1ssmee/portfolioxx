@@ -27,11 +27,11 @@ export const ROOM = {
   deskThick: 28,
   // the panelling: V-jointed boards `pitch` wide and `thick` on the wall (the plaster above the rail
   // that much further back), their joints at x = joint + k pitch, their face `gap` behind wallV
-  panel: { pitch: 120, joint: 60, thick: 12, gap: 6 },
+  panel: { pitch: 120, joint: 60, thick: 0, gap: 6 },
   // the oak rail capping it, a slim picture ledge: its underside's height and its height (mm). (At
   // 790, about 1.5 m off the floor, it is just out of the seated view's top: lower, it crowded the
   // board's top or was cut by the picture's edge)
-  rail: { y: 790, h: 17.6 },
+  rail: { y: 790, h: 0, none: true }, // (no rail now: only where the wall's two parts meet)
   // the double socket low on the right: its middle (x, height) and its size (mm)
   socket: { u: 330, y: 86, w: 151, h: 80 },
   // the cork board: its middle across the picture, its lower edge's height, its size, the oak
@@ -44,9 +44,11 @@ export const ROOM = {
     y0: 240,
     w: 580,
     h: 400,
-    frame: 28,
-    depth: 22,
+    frame: 5,
+    depth: 16,
     off: 5,
+    lip: 0.22, // (how much of a deep frame's shade its folded edge keeps)
+    peg: { pitch: 25, r: 2.5, margin: 9 }, // (the pegboard's holes: their grid, radius, and the plain margin)
     badge: [322, 344],
     notes: [
       [90, 318, -0.07],
@@ -62,20 +64,8 @@ export const ROOM = {
       [503, 64],
       [250, 356],
     ],
-    holes: [
-      [58, 198],
-      [61, 203],
-      [298, 58],
-      [519, 302],
-      [480, 44],
-      [536, 46],
-      [479, 95],
-      [533, 97],
-      [150, 122],
-      [392, 360],
-      [212, 98],
-    ],
-    ghost: [478, 42, 538, 98],
+    holes: [],
+    ghost: null,
   },
   // the wall's contact shade: where it is baked (the room's frame: x0, y0, x1, y1) and its texels
   wallAO: { rect: [-1200, -40, 1200, 1160], size: [512, 256] },
@@ -85,7 +75,7 @@ export const ROOM = {
 // fill, the bounce from behind the chair and the environment (the lamp's cone does not reach it):
 // together about 0.42 of the paint's own colour, which the tone mapping's toe darkens and saturates
 // further. Under that it reads as a deep bottle green, about #263932 (a deeper paint read near black)
-const WALL_GREEN = 0x6a8078
+const WALL_GREEN = 0xe9e4da // (a warm white now: the name is the old paint's)
 const DEG = Math.PI / 180
 
 /**
@@ -306,12 +296,6 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   }
   const tex = {
     paint: dataTex(T.paint, T.paint.px),
-    paintN: dataTex(T.paint, T.paint.nrm),
-    oak: dataTex(T.oak, T.oak.px, { srgb: true }),
-    oakN: dataTex(T.oak, T.oak.nrm),
-    oakR: dataTex(T.oak, T.oak.rough),
-    cork: dataTex(T.cork, T.cork.px, { srgb: true }),
-    corkN: dataTex(T.cork, T.cork.nrm),
     paperN: dataTex(T.paper, T.paper.nrm, { repeat: 3 }),
     wallAO: dataTex(T.wallAO, T.wallAO.px, { wrap: false, red: true }),
     corkAO: dataTex(T.corkAO, T.corkAO.px, { wrap: false, red: true }),
@@ -348,9 +332,7 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
       color: WALL_GREEN,
       roughness: 1,
       roughnessMap: tex.paint,
-      normalMap: tex.paintN,
-      normalScale: new THREE.Vector2(0.9, 0.9),
-      vertexColors: true,
+      vertexColors: true, // (smooth plaster: no relief to light, one texture fewer over half the picture)
     }),
   )
   const wallU = { tContact: { value: tex.wallAO }, uContact: { value: new THREE.Vector4(ax0, ay0, 1 / (ax1 - ax0), 1 / (ay1 - ay0)) } }
@@ -360,13 +342,7 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
       .replace('#include <common>', '#include <common>\nuniform vec4 uContact;\nvarying vec2 vContactUv;')
       .replace(
         '#include <uv_vertex>',
-        `#include <uv_vertex>
-        #ifdef USE_INSTANCING
-          float seed = fract(instanceMatrix[3].x * 0.00917 + 0.37);
-          vec2 tuv = vec2(seed > 0.5 ? 1.0 - vNormalMapUv.x : vNormalMapUv.x, vNormalMapUv.y + seed * 13.0);
-          vNormalMapUv = tuv;
-          vRoughnessMapUv = tuv;
-        #endif`,
+`#include <uv_vertex>`,
       )
       .replace(
         '#include <begin_vertex>',
@@ -382,7 +358,7 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
-        diffuseColor.rgb *= (0.86 + 0.28 * texture2D(roughnessMap, vRoughnessMapUv).r) * texture2D(tContact, vContactUv).r;`,
+        diffuseColor.rgb *= (0.97 + 0.06 * texture2D(roughnessMap, vRoughnessMapUv).r) * texture2D(tContact, vContactUv).r;`,
       )
   }
   wallMat.customProgramCacheKey = () => 'room.wall'
@@ -391,18 +367,11 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   // the next, closed at the tongue), from deep in the gap behind the desk up to the rail, the contact
   // shade along the desk and in the joints in its colour; instanced across the wall
   const ph = P.pitch / 2
+  // (plain plaster now: each strip flat, edge to edge)
   const boardProfile = [
-    [-ph, -6.8, 0.12],
-    [-ph + 0.45, -6.8, 0.22],
-    [-ph + 0.45, -2.6, 0.5],
-    [-ph + 2.65, -0.32, 0.88],
-    [-ph + 3.4, 0, 1],
-    [0, 0.12, 1],
-    [ph - 3.4, 0, 1],
-    [ph - 2.65, -0.32, 0.88],
-    [ph - 0.45, -2.6, 0.5],
-    [ph - 0.45, -6.8, 0.22],
-    [ph, -6.8, 0.12],
+    [-ph, 0, 1],
+    [0, 0, 1],
+    [ph, 0, 1],
   ]
   const dy = R.deskY
   const boardRows = [
@@ -441,10 +410,10 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     const r = (k, s) => (Math.sin(k * 127.1 + s * 311.7) * 43758.5453) % 1
     for (let k = first; k <= last; k++) {
       const i = k - first
-      q.setFromEuler(e.set(0, r(k, 1) * 0.003, 0))
-      m4.compose(new THREE.Vector3(P.joint + (k + 0.5) * P.pitch, 0, face + r(k, 2) * 0.3), q, new THREE.Vector3(1, 1, 1))
+      q.setFromEuler(e.set(0, 0, 0))
+      m4.compose(new THREE.Vector3(P.joint + (k + 0.5) * P.pitch, 0, face), q, new THREE.Vector3(1, 1, 1))
       panels.setMatrixAt(i, m4)
-      panels.setColorAt(i, c.setScalar(1 + 0.03 * r(k, 3)))
+      panels.setColorAt(i, c.setScalar(1))
     }
     panels.instanceMatrix.needsUpdate = true
     panels.instanceColor.needsUpdate = true
@@ -464,44 +433,11 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
 
   // the oak rail: a picture ledge on the panelling's top: a cove under its lip, a rounded nose, a
   // flat top running back to the plaster (oak: the frame's)
-  const oakMat = mat(
-    new THREE.MeshStandardMaterial({
-      map: tex.oak,
-      normalMap: tex.oakN,
-      normalScale: new THREE.Vector2(0.7, 0.7),
-      roughnessMap: tex.oakR,
-      roughness: 1,
-      vertexColors: true,
-      envMapIntensity: 0.9,
-    }),
-  )
-  oakMat.customProgramCacheKey = () => 'room.oak'
-  const railProfile = [
-    [-P.thick, 17.6, 0.72],
-    [-P.thick + 0.8, 17.6, 0.92],
-    [9.2, 17.6, 1],
-    [10.6, 17.2, 1],
-    [11.6, 16.2, 1],
-    [12, 14.4, 1],
-    [12, 1.6, 0.96],
-    [11.6, 0.5, 0.9],
-    [10.6, 0, 0.84],
-    [6.5, 0, 0.8],
-    [4.0, -0.5, 0.72],
-    [1.9, -1.9, 0.66],
-    [0.5, -4.0, 0.6],
-    [0, -6.5, 0.55],
-  ]
-  const railLen = 2 * R.deskHalf + 600
-  const railGeo = sweep(
-    railProfile,
-    () => Array.from({ length: 21 }, (_, k) => [railLen * (k / 20 - 0.5), 1]),
-    (a, b, s, o) => o.set(s, R.rail.y + b, face + a),
-    (na, nb, o) => o.set(0, nb, na),
-    (p, arc, s, o) => o.set(s / 340 + 0.31, arc / 42.5),
-  )
-  dust(railGeo, 0.5)
-  const rail = mesh(railGeo, oakMat, 'room.rail', { cast: true, takes: true })
+  // (the pegboard's steel, powder-coated white; the name is the old frame's)
+  const oakMat = mat(new THREE.MeshStandardMaterial({ color: 0xf1f0ec, roughness: 0.5, metalness: 0, vertexColors: true, envMapIntensity: 0.9 }))
+  oakMat.customProgramCacheKey = () => 'room.steel'
+  const rail = new THREE.Group() // (no rail on a plain wall)
+  rail.name = 'room.rail'
 
   // the socket: a matt black double frame (soft edges, two round recesses, each with its pin holes
   // and earth clips); a plug in the left one, its cable down into the gap behind the desk
@@ -610,17 +546,14 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   // cork) swept along each side, mitred; a dark seam where the mitres meet, a little dust on top
   {
     const D = B.depth
+    // (a folded edge: up the side, a small round, a flat a hair proud of the face)
     const prof = [
       [0, 0, 0.7],
-      [0, D - 1.8, 1],
-      [0.45, D - 0.55, 1],
-      [1.6, D, 1],
-      [F - 9.2, D, 1],
-      [F - 8.6, D - 0.3, 1],
-      [F - 2.4, D - 5.7, 0.88],
-      [F - 1.8, D - 6.15, 0.82],
-      [F - 1.3, D - 6.3, 0.76],
-      [F - 1.3, zc, 0.55],
+      [0, zc - 1.0, 1],
+      [0.35, zc - 0.2, 1],
+      [1.1, zc + 0.15, 1],
+      [F - 1.3, zc + 0.15, 1],
+      [F - 1.3, zc, 0.9],
     ]
     const sideOf = (len, put, turn, off) =>
       sweep(
@@ -658,19 +591,39 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   }
   // the cork: granules in relief, darkened by its contact shade (the frame's lip, the pins, old
   // holes, the ghost of a card)
-  const corkMat = mat(new THREE.MeshStandardMaterial({ map: tex.cork, normalMap: tex.corkN, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.9 }))
+  const corkMat = mat(new THREE.MeshStandardMaterial({ color: 0xf1f0ec, roughness: 0.5, metalness: 0, envMapIntensity: 0.9 }))
   {
-    const corkU = { tContact: { value: tex.corkAO }, uContact: { value: new THREE.Vector4(F, F, 1 / (B.w - 2 * F), 1 / (B.h - 2 * F)) } }
+    const corkU = {
+      tContact: { value: tex.corkAO },
+      uContact: { value: new THREE.Vector4(F, F, 1 / (B.w - 2 * F), 1 / (B.h - 2 * F)) },
+      uPeg: { value: new THREE.Vector4(B.w / 2, B.h / 2, B.peg.pitch, B.peg.r) },
+      uPegEdge: { value: new THREE.Vector3(B.w, B.h, B.peg.margin) },
+    }
     corkMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, corkU)
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform vec4 uContact;\nvarying vec2 vContactUv;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvContactUv = (transformed.xy - uContact.xy) * uContact.zw;')
+        .replace('#include <common>', '#include <common>\nuniform vec4 uContact;\nvarying vec2 vContactUv;\nvarying vec2 vPeg;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvContactUv = (transformed.xy - uContact.xy) * uContact.zw;\nvPeg = transformed.xy;')
+      // the holes: round, on a square grid centred on the board, none in the margin; each a dark
+      // well with a soft shade round its rim, its edge a pixel soft, fading out once smaller than one
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform sampler2D tContact;\nvarying vec2 vContactUv;')
-        .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= texture2D(tContact, vContactUv).r;')
+        .replace('#include <common>', '#include <common>\nuniform sampler2D tContact;\nuniform vec4 uPeg;\nuniform vec3 uPegEdge;\nvarying vec2 vContactUv;\nvarying vec2 vPeg;')
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+          diffuseColor.rgb *= texture2D(tContact, vContactUv).r;
+          {
+            vec2 pc = (fract((vPeg - uPeg.xy) / uPeg.z) - 0.5) * uPeg.z;
+            float pd = length(pc - vec2(0.0, 0.35));
+            float pw = max(length(fwidth(vPeg)) * 0.7, 1e-4);
+            float inside = step(uPegEdge.z, min(min(vPeg.x, uPegEdge.x - vPeg.x), min(vPeg.y, uPegEdge.y - vPeg.y)));
+            float hole = (1.0 - smoothstep(uPeg.w - pw, uPeg.w + pw, length(pc))) * clamp(uPeg.w / pw, 0.0, 1.0) * inside;
+            float rim = (1.0 - smoothstep(uPeg.w, uPeg.w + 2.4, pd)) * clamp(1.5 / pw, 0.0, 1.0) * inside;
+            diffuseColor.rgb *= (1.0 - 0.10 * rim) * mix(1.0, 0.07, hole);
+          }`,
+        )
     }
-    corkMat.customProgramCacheKey = () => 'room.cork'
+    corkMat.customProgramCacheKey = () => 'room.peg'
     const g = new THREE.PlaneGeometry(B.w - 2 * F + 3, B.h - 2 * F + 3)
     g.translate(B.w / 2, B.h / 2, zc)
     const p = g.attributes.position
@@ -1166,7 +1119,7 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   group.updateMatrixWorld(true)
 
   const onBoard = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(board.matrixWorld)
-  const wallMeshes = [panels, plaster, rail, ...socketMeshes]
+  const wallMeshes = [panels, plaster, ...socketMeshes]
   return {
     group,
     desk,

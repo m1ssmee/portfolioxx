@@ -7,19 +7,51 @@
 import * as THREE from 'three'
 
 export function createFocus({ camera, controls, home, targets, reduceMotion, onChange }) {
-  const tw = { on: false, t0: 0, ms: 900, p0: new THREE.Vector3(), q0: new THREE.Vector3(), p1: new THREE.Vector3(), q1: new THREE.Vector3() }
+  // The glide runs on six numbers, not on two points: the target (x, y, z) and the camera round it
+  // (azimuth, elevation, the log of its distance). The camera swings round what it looks at on an
+  // arc and closes in by ratio (a straight line between two camera positions cuts the corner: the
+  // distance dips and the view lurches midway). A glide begun while another is still running takes
+  // over at that one's speed (no dead stop and restart).
+  const N = 6
+  const tw = { on: false, t0: 0, ms: 900, s0: new Float64Array(N), s1: new Float64Array(N), v0: new Float64Array(N), s: new Float64Array(N), v: new Float64Array(N), last: 0 }
   const c = new THREE.Vector3()
   const d = new THREE.Vector3()
   let current = null
-  // (smootherstep: no jerk at either end, the camera eases out of rest and into it)
+  // (smootherstep: no jerk at either end, the camera eases out of rest and into it; its slope)
   const ease = (t) => t * t * t * (t * (6 * t - 15) + 10)
+  const easeD = (t) => 30 * t * t * (1 - t) * (1 - t)
+  // (what a starting speed adds: slope 1 at the start, nothing at the end, no jerk at either; its slope)
+  const carry = (t) => t - 6 * t * t * t + 8 * t * t * t * t - 3 * t * t * t * t * t
+  const carryD = (t) => 1 - 18 * t * t + 32 * t * t * t - 15 * t * t * t * t
+  const off = new THREE.Vector3() // (its own: `d` may be the very position passed in)
+  const toState = (pos, target, out) => {
+    off.subVectors(pos, target)
+    const len = Math.max(off.length(), 1e-6)
+    out[0] = target.x
+    out[1] = target.y
+    out[2] = target.z
+    out[3] = Math.atan2(off.x, off.z)
+    out[4] = Math.asin(THREE.MathUtils.clamp(off.y / len, -1, 1))
+    out[5] = Math.log(len)
+  }
+  const apply = (st) => {
+    const len = Math.exp(st[5])
+    const ce = Math.cos(st[4])
+    controls.target.set(st[0], st[1], st[2])
+    camera.position.set(st[0] + Math.sin(st[3]) * ce * len, st[1] + Math.sin(st[4]) * len, st[2] + Math.cos(st[3]) * ce * len)
+  }
 
   function glide(pos, target) {
-    tw.p0.copy(camera.position)
-    tw.q0.copy(controls.target)
-    tw.p1.copy(pos)
-    tw.q1.copy(target)
-    tw.t0 = performance.now()
+    const now = performance.now()
+    const moving = tw.on && !reduceMotion
+    toState(pos, target, tw.s1)
+    toState(camera.position, controls.target, tw.s0)
+    // (the short way round)
+    tw.s1[3] = tw.s0[3] + Math.atan2(Math.sin(tw.s1[3] - tw.s0[3]), Math.cos(tw.s1[3] - tw.s0[3]))
+    // (looking straight down, any azimuth is the same view: keep the other end's)
+    if (Math.cos(tw.s0[4]) < 1e-3) tw.s0[3] = tw.s1[3]
+    for (let i = 0; i < N; i++) tw.v0[i] = moving ? tw.v[i] : 0
+    tw.t0 = now
     tw.ms = reduceMotion ? 1 : 1150
     tw.on = true
     controls.enableDamping = false
@@ -71,10 +103,18 @@ export function createFocus({ camera, controls, home, targets, reduceMotion, onC
     /** Each frame: the glide (returns true while it moves the camera). */
     update(now) {
       if (!tw.on) return false
-      const t = Math.min(1, (now - tw.t0) / tw.ms)
-      const e = tw.ms > 1200 ? 1 - Math.pow(1 - t, 3) : ease(t) // (a long glide, the reveal's: it eases out only)
-      camera.position.lerpVectors(tw.p0, tw.p1, e)
-      controls.target.lerpVectors(tw.q0, tw.q1, e)
+      const t = Math.min(1, Math.max(0, (now - tw.t0) / tw.ms))
+      const long = tw.ms > 1200 // (a long glide, the reveal's: it eases out only)
+      const e = long ? 1 - Math.pow(1 - t, 3) : ease(t)
+      const eD = long ? 3 * (1 - t) * (1 - t) : easeD(t)
+      const h = long ? 0 : carry(t) * tw.ms
+      const hD = long ? 0 : carryD(t)
+      for (let i = 0; i < N; i++) {
+        const span = tw.s1[i] - tw.s0[i]
+        tw.s[i] = tw.s0[i] + span * e + tw.v0[i] * h
+        tw.v[i] = (span * eD) / tw.ms + tw.v0[i] * hD // (per ms: what the next glide starts from)
+      }
+      apply(tw.s)
       if (t >= 1) {
         tw.on = false
         controls.enableDamping = true

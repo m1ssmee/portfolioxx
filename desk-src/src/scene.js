@@ -274,7 +274,7 @@ export function createScene(container, options = {}) {
     const canvas = renderer.domElement
     canvas.className = 'cg-canvas'
     canvas.setAttribute('role', 'img')
-    canvas.setAttribute('aria-label', 'A desk at dusk against a deep green panelled wall, lit by a cream and brass desk lamp: a white music player with wired earbuds plugged in on a sage felt mat, a stoneware ashtray with a lit cigarette and a lighter, a graphite laptop open on a browser with a tab for each project, a can of "late.", a notebook, and on the wall a cork board in an oak frame with sticky notes, a calendar, a postcard and an ID badge.')
+    canvas.setAttribute('aria-label', 'A desk at dusk against a plain warm white wall, lit by a cream and brass desk lamp: a white music player with wired earbuds plugged in on a sage felt mat, a stoneware ashtray with a lit cigarette and a lighter, a graphite laptop open on a browser with a tab for each project, a can of "late.", a notebook, and on the wall a white pegboard with sticky notes, a calendar, a postcard and an ID badge.')
     stageEl.appendChild(canvas)
 
     // ---- the workers: every mesh and texture built off this thread, side by side (up to three:
@@ -353,7 +353,7 @@ export function createScene(container, options = {}) {
       const mats = [
         panel(300, 300, at(-700, -380, 1500), 16, [1, 0.84, 0.64]), // (the lamp)
         panel(1600, 1150, at(2000, 300, 650), 0.62, [0.74, 0.83, 1]), // (the window)
-        panel(3200, 2000, at(0, -2000, 400), 0.06, [0.42, 0.56, 0.5]), // (the wall behind the desk: its deep green)
+        panel(3200, 2000, at(0, -2000, 400), 0.08, [0.95, 0.9, 0.84]), // (the wall behind the desk: warm white)
         panel(3200, 2000, at(0, 2000, 400), 0.08, [0.9, 0.9, 0.95]), // (the room behind)
         panel(3200, 3200, [0, -1700, 0], 0.3, [1, 0.95, 0.88]), // (the desk under it all)
         panel(3600, 3600, [0, 2200, 0], 0.2, [0.95, 0.92, 0.88]), // (the ceiling, faintly lit)
@@ -447,7 +447,7 @@ export function createScene(container, options = {}) {
       }
       vec3 neutralInv(vec3 c) { return vec3(neutralInv(c.r), neutralInv(c.g), neutralInv(c.b)); }`
 
-    // ---- the room (objects/room.js): a matte white desk against a deep green panelled wall, a cork
+    // ---- the room (objects/room.js): a matte white desk against a plain warm white wall, a cork
     // board in an oak frame on it with the owner's notes, this month's calendar, a postcard, a ticket,
     // a clipped sketch and a pin for the ID badge. Its textures come from the worker; its paper's
     // print needs its fonts: Inter (the player's) and a handwriting face for the notes

@@ -395,7 +395,8 @@ export function wallAOTex(L) {
   for (let j = 0; j < H; j++) {
     const y = y0 + ((j + 0.5) / H) * (y1 - y0)
     let rail = 1
-    if (y < lo) rail = 1 - 0.42 * Math.exp(-(lo - y) / 6) - 0.1 * Math.exp(-(lo - y) / 30)
+    if (L.rail.none) rail = 1
+    else if (y < lo) rail = 1 - 0.42 * Math.exp(-(lo - y) / 6) - 0.1 * Math.exp(-(lo - y) / 30)
     else if (y > hi) rail = 1 - 0.3 * Math.exp(-(y - hi) / 7)
     for (let i = 0; i < W; i++) {
       const x = x0 + ((i + 0.5) / W) * (x1 - x0)
@@ -434,7 +435,8 @@ export function corkAOTex(L) {
     for (let i = 0; i < W; i++) {
       const x = (i + 0.5) * sx
       const d = Math.min(x, cw - x, y, ch - y)
-      let a = top * (d < 60 ? 1 - 0.46 * Math.exp(-d / 3.2) - 0.14 * Math.exp(-d / 16) : 1)
+      const lip = B.lip ?? 1
+      let a = (1 - lip * (1 - top)) * (d < 60 ? 1 - lip * (0.46 * Math.exp(-d / 3.2) + 0.14 * Math.exp(-d / 16)) : 1)
       if (g) {
         const e = Math.min(x - g[0], g[2] - x, y - g[1], g[3] - y)
         if (e > -2) a *= 1 - 0.05 * smooth(-1.5, 1.5, e)
@@ -469,8 +471,6 @@ export function corkAOTex(L) {
 export function bakeRoom(L) {
   return {
     paint: paintTex(),
-    oak: oakTex(),
-    cork: corkTex(),
     paper: paperTex(),
     wallAO: wallAOTex(L),
     corkAO: corkAOTex(L),
