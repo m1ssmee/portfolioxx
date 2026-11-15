@@ -147,6 +147,37 @@ the physics and the cable's mesh both read it.
 - What responds shows it: the pointer is a hand over what a tap moves and a grab over what a drag
   moves.
 
+## Round the desk
+
+- The wall is plain warm white; on it a white steel pegboard (`src/objects/room.js`: the holes are
+  drawn in its shader), what is pinned on it unchanged. The desk is a real one now: 1.32 m wide,
+  on two black steel end frames, over an oak floor, a skirting along the wall.
+- `src/objects/plush.js`, `plushGeo.js`: two plush toys right of the can, a purple ghost and a
+  yellow duck. Their shapes are distance fields meshed in the worker; their faces are drawn on a
+  canvas and laid on from the front. A tap closes in; a tap there pokes one (it squashes and
+  wobbles back).
+- `src/objects/studio.js`: a studio monitor on a floor stand at each end of the desk, turned in
+  towards the chair (a tap closes in; a tap there is the sound's switch), and a small stainless
+  steel pedal bin right of the right stand.
+- `src/objects/monitor.js`: a curved 27-inch monitor in portrait, left of the laptop, showing only
+  a terminal: four panes, a dev server on localhost in each (the projects from `portfolio.ts`, and
+  this desk's own). It hangs off the laptop's left USB-C port: a USB-C to HDMI adapter, then the
+  HDMI cable round the front of the monitor's foot and up its neck. The lamp moved to the desk's
+  left end to clear it.
+
+## The camera
+
+- A glide (`src/core/focus.js`) runs on the target and the camera's angle and distance round it:
+  an arc, eased at both ends, longer the further it goes, timed from its first frame. While it
+  runs the orbit controls are off and their limits do not apply; at its end the view's limits come
+  back, opened to hold the camera where it is. (Before, the limits of the view it was going to
+  were applied at its start and the camera jumped most of the way in one frame.)
+- While the camera moves, frames are drawn by the browser's frame callback, one a refresh. The
+  frames are no longer drawn faster than the screen shows them (`ABOVE` in `scene.js`).
+- Nothing is blurred: the depth of field is off (`DOF` in `scene.js`), moving frames are drawn at
+  the canvas's full size, and the quality governor never lowers the resolution (it only drops the
+  moving frames' multisampling). Textures are filtered 8x along a slant.
+
 ## The badge and the visitors' book
 
 - `src/objects/badge.js`: the owner's ID card (its face from `src/assets/badge-face.webp`, drawn

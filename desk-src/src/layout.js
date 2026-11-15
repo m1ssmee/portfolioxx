@@ -50,13 +50,35 @@ export const DESK = {
   // the way it was pushed where the desk is clear (a tap on its middle: straight back, past the
   // laptop's corner), else the nearest clear way to it (can.js)
   can: deskAt(190, -135),
+  // the plush toys, on the bare desk right of the can: the duck in front, the ghost behind it and
+  // further right, both turned a little towards the middle of the desk (turn: from facing the chair)
+  plushDuck: deskAt(300, -112),
+  plushDuckTurn: -0.32,
+  plushGhost: deskAt(392, -218),
+  plushGhostTurn: -0.2,
+  // beside the desk, on the floor (the desk runs from u = -760 to 560: objects/room.js): a studio
+  // monitor on a stand at each end, 35 mm off it and near the wall, turned in towards the chair
+  // (turn: from facing the chair, towards the right of the picture); a bin right of the right stand
+  speakerL: deskAt(-900, -318),
+  speakerLTurn: 0.42,
+  speakerR: deskAt(700, -318),
+  speakerRTurn: -0.42,
+  speakerTop: 950, // (the stands' top plates, above the floor)
+  bin: deskAt(962, -330),
   // the lamp: its foot at the back left, just behind the mat (33 mm off it, 92 mm in radius); its
   // head's pivot (325 mm up: low enough for the elbow to stand above it), out over the mat's corner
   // with the arm across the picture (its shade just over the laptop's lower left corner from the
   // chair); the point of the desk it lights, between the player and the ashtray
-  lampBase: deskAt(-400, -250),
-  lampHead: deskAt(-240, -110, 325),
-  lampAim: deskAt(-65, 30),
+  // (now further left, clear of the second screen: its foot beside the screen's, its arm up its left)
+  lampBase: deskAt(-652, -292),
+  lampHead: deskAt(-640, -30, 312),
+  lampAim: deskAt(-150, 34),
+  // the second screen: a curved monitor in portrait, left of the laptop, its foot near the wall,
+  // turned a little towards the chair's side of the laptop; the HDMI cable's way over the desk from
+  // the adapter by the laptop's left side: round the front of the monitor's foot, back up its left
+  monitor: deskAt(-345, -375),
+  monitorTurn: 0.1,
+  hdmiRun: [deskAt(-365, -180), deskAt(-430, -192), deskAt(-482, -232), deskAt(-498, -300), deskAt(-494, -372)],
 }
 /**
  * What the seated home view shows of the desk: its middle and its extent (mm, across and up the

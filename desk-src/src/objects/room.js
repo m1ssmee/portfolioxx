@@ -23,11 +23,16 @@ export const ROOM = {
   deskY: -3,
   wallV: -470, // (the desk's back edge; the panelling's face is panel.gap behind it)
   deskFront: 460,
-  deskHalf: 1700, // (the desk's half width: its ends never in the picture)
+  deskHalf: 1700, // (the wall's half width: its ends never in the picture)
+  // the desk itself: its two ends (its left and right, across the picture), 1.32 m of it, on two
+  // black steel end frames; the floor 730 mm below its top; the skirting along the wall
+  desk: { u0: -760, u1: 560, leg: 46, inset: 40 },
+  floorY: -733,
+  skirting: { h: 72, t: 13 },
   deskThick: 28,
   // the panelling: V-jointed boards `pitch` wide and `thick` on the wall (the plaster above the rail
   // that much further back), their joints at x = joint + k pitch, their face `gap` behind wallV
-  panel: { pitch: 120, joint: 60, thick: 0, gap: 6 },
+  panel: { pitch: 120, joint: 80, thick: 0, gap: 6 }, // (a joint at each end of the desk)
   // the oak rail capping it, a slim picture ledge: its underside's height and its height (mm). (At
   // 790, about 1.5 m off the floor, it is just out of the seated view's top: lower, it crowded the
   // board's top or was cut by the picture's edge)
@@ -40,7 +45,7 @@ export const ROOM = {
   // the notes' middles, the pins the calendar, the bulldog clip and the ticket hang from, the
   // postcard's middle, spare pins, old pin holes, the ghost of a card long gone
   board: {
-    u: 92,
+    u: 132,
     y0: 240,
     w: 580,
     h: 400,
@@ -302,8 +307,9 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   }
 
   // ---- the desk: a white slab against the wall, its top at deskY
-  const deskGeo = new THREE.BoxGeometry(2 * R.deskHalf, R.deskThick, R.deskFront - R.wallV)
-  deskGeo.translate(0, R.deskY - R.deskThick / 2, (R.deskFront + R.wallV) / 2)
+  const DK = R.desk
+  const deskGeo = new THREE.BoxGeometry(DK.u1 - DK.u0, R.deskThick, R.deskFront - R.wallV)
+  deskGeo.translate((DK.u0 + DK.u1) / 2, R.deskY - R.deskThick / 2, (R.deskFront + R.wallV) / 2)
   {
     // (the top's uv in tiles of 260 mm)
     const p = deskGeo.attributes.position
@@ -319,6 +325,49 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   const desk = new THREE.Mesh(deskGeo, deskMat)
   desk.name = 'room.desk'
   desk.receiveShadow = true
+
+  // its two end frames: black steel tube, a leg front and back and a rail under the top
+  const steelMat = mat(new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.48, metalness: 0.2 }))
+  steelMat.customProgramCacheKey = () => 'room.legs'
+  const under = R.deskY - R.deskThick
+  const legH = under - R.floorY
+  const legParts = []
+  for (const x of [DK.u0 + DK.inset + DK.leg / 2, DK.u1 - DK.inset - DK.leg / 2]) {
+    for (const z of [R.wallV + 40, R.deskFront - 60]) legParts.push(new THREE.BoxGeometry(DK.leg, legH, 28).translate(x, R.floorY + legH / 2, z))
+    legParts.push(new THREE.BoxGeometry(DK.leg, 28, R.deskFront - R.wallV - 100).translate(x, under - 14, (R.wallV + R.deskFront - 20) / 2))
+    legParts.push(new THREE.BoxGeometry(DK.leg, 28, R.deskFront - R.wallV - 100).translate(x, R.floorY + 14, (R.wallV + R.deskFront - 20) / 2))
+  }
+  const legs = mesh(mergeGeometries(legParts), steelMat, 'room.legs')
+  for (const g of legParts) g.dispose()
+
+  // ---- the floor: oak boards running along the wall, darker towards the wall and under the desk
+  // (the sky's light does not reach there); a white skirting where it meets the wall
+  const floorTex = canvasTex(floorCanvas())
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping
+  const floorMat = mat(new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.58, metalness: 0, vertexColors: true }))
+  floorMat.customProgramCacheKey = () => 'room.floor'
+  const floorGeo = new THREE.PlaneGeometry(2 * R.deskHalf + 600, 3000, 80, 50)
+  floorGeo.rotateX(-Math.PI / 2)
+  floorGeo.translate(0, R.floorY, R.wallV - R.panel.gap + 1500)
+  {
+    const p = floorGeo.attributes.position
+    const uv = floorGeo.attributes.uv
+    const col = new Float32Array(p.count * 3)
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i)
+      const z = p.getZ(i)
+      uv.setXY(i, x / 1120, z / 1120)
+      // (by the wall; under and beside the desk)
+      const wallD = z - (R.wallV - R.panel.gap)
+      const out = Math.hypot(Math.max(DK.u0 - x, 0, x - DK.u1), Math.max(z - R.deskFront, 0))
+      const k = (1 - 0.3 * Math.exp(-wallD / 90)) * (1 - 0.5 * Math.exp(-out / 260))
+      col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k
+    }
+    floorGeo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+  }
+  const floor = mesh(floorGeo, floorMat, 'room.floor')
+  const SK = R.skirting
+  const skirting = mesh(new THREE.BoxGeometry(2 * R.deskHalf + 600, SK.h, SK.t).translate(0, R.floorY + SK.h / 2, R.wallV - R.panel.gap + SK.t / 2), deskMat, 'room.skirting')
 
   // ---- the wall
   const P = R.panel
@@ -385,7 +434,7 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     // (then every 60 mm or so up to the rail: no long thin triangles)
     ...Array.from({ length: 12 }, (_, k) => [dy + 70 + ((R.rail.y - 10 - dy - 70) * k) / 12, 1]),
     [R.rail.y - 10, 1],
-    [R.rail.y, 0.9],
+    [R.rail.y, 1],
   ]
   const panelGeo = geo(
     sweep(
@@ -396,11 +445,28 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
       (p, arc, s, o) => o.set((p[0] + ph) / P.pitch, s / 480),
     ),
   )
+  // (beside the desk the wall runs down to the floor, with no desk to shade it)
+  const sideRows = [[R.floorY, 0.8], [R.floorY + 50, 0.95], ...Array.from({ length: 13 }, (_, k) => [R.floorY + 120 + ((R.rail.y - 10 - R.floorY - 120) * k) / 13, 1]), [R.rail.y - 10, 1], [R.rail.y, 1]]
+  const sideGeo = geo(
+    sweep(
+      boardProfile,
+      () => sideRows,
+      (a, b, s, o) => o.set(a, s, b),
+      (na, nb, o) => o.set(na, 0, nb),
+      (p, arc, s, o) => o.set((p[0] + ph) / P.pitch, s / 480),
+    ),
+  )
   const first = Math.ceil((-R.deskHalf - 300 - P.joint) / P.pitch)
   const last = Math.floor((R.deskHalf + 300 - P.joint) / P.pitch) - 1
-  const panels = new THREE.InstancedMesh(panelGeo, wallMat, last - first + 1)
+  const behindDesk = (k) => P.joint + (k + 0.5) * P.pitch > R.desk.u0 && P.joint + (k + 0.5) * P.pitch < R.desk.u1
+  let nBehind = 0
+  for (let k = first; k <= last; k++) if (behindDesk(k)) nBehind++
+  const panels = new THREE.InstancedMesh(panelGeo, wallMat, nBehind)
   panels.name = 'room.wall'
   panels.userData.takesShadow = true
+  const sidePanels = new THREE.InstancedMesh(sideGeo, wallMat, last - first + 1 - nBehind)
+  sidePanels.name = 'room.wall.side'
+  sidePanels.userData.takesShadow = true
   {
     // (each board a hair out of line with the next, and its paint a touch lighter or darker)
     const m4 = new THREE.Matrix4()
@@ -408,15 +474,20 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     const e = new THREE.Euler()
     const c = new THREE.Color()
     const r = (k, s) => (Math.sin(k * 127.1 + s * 311.7) * 43758.5453) % 1
+    let ia = 0
+    let ib = 0
     for (let k = first; k <= last; k++) {
-      const i = k - first
       q.setFromEuler(e.set(0, 0, 0))
       m4.compose(new THREE.Vector3(P.joint + (k + 0.5) * P.pitch, 0, face), q, new THREE.Vector3(1, 1, 1))
-      panels.setMatrixAt(i, m4)
-      panels.setColorAt(i, c.setScalar(1))
+      const to = behindDesk(k) ? panels : sidePanels
+      const i = behindDesk(k) ? ia++ : ib++
+      to.setMatrixAt(i, m4)
+      to.setColorAt(i, c.setScalar(1))
     }
-    panels.instanceMatrix.needsUpdate = true
-    panels.instanceColor.needsUpdate = true
+    for (const o of [panels, sidePanels]) {
+      o.instanceMatrix.needsUpdate = true
+      o.instanceColor.needsUpdate = true
+    }
   }
 
   // the plaster above the rail, as far back as the panelling is thick
@@ -1115,17 +1186,18 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   const badgeShade = shadeOf(board, B.badge[0] + 0.3, B.badge[1] - 1, zc + 0.35, 0.06, 56, 85, [3, 3, 3.5, 3], 0.32, 3.5)
 
   board.add(...boardMeshes.filter((o) => !o.parent))
-  group.add(desk, panels, plaster, rail, socket, board)
+  group.add(desk, legs, floor, skirting, panels, sidePanels, plaster, rail, socket, board)
   group.updateMatrixWorld(true)
 
   const onBoard = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(board.matrixWorld)
-  const wallMeshes = [panels, plaster, ...socketMeshes]
+  const wallMeshes = [panels, sidePanels, plaster, ...socketMeshes]
   return {
     group,
     desk,
     /** The panelling (an InstancedMesh, a board an instance), and every part of the wall. */
     wall: panels,
     wallMeshes,
+    floor,
     boardMeshes,
     /** The badge's pin (world), and which way is out of the board (world). */
     badgePin: onBoard(B.badge[0], B.badge[1], zc),
@@ -1163,6 +1235,39 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
 }
 
 /** A little dust where a surface faces up (its vertex colour lighter and greyer): k, how much. */
+/** The floor's boards (1120 mm square, tiling): eight rows of oak, their ends staggered. */
+function floorCanvas() {
+  const c = document.createElement('canvas')
+  c.width = c.height = 512
+  const g = c.getContext('2d')
+  let seed = 7
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  const rowH = 64
+  for (let r = 0; r < 8; r++) {
+    let x = -rnd() * 300
+    while (x < 512) {
+      const len = 260 + rnd() * 260
+      const l = 50 + rnd() * 7
+      g.fillStyle = `hsl(${29 + rnd() * 5}, ${34 + rnd() * 8}%, ${l}%)`
+      for (const dx of [0, -512, 512]) g.fillRect(x + dx, r * rowH, len, rowH)
+      // the grain: a few faint long streaks
+      for (let k = 0; k < 7; k++) {
+        g.fillStyle = `rgba(70,45,22,${0.03 + rnd() * 0.05})`
+        const gy = r * rowH + 3 + rnd() * (rowH - 6)
+        const gx = x + rnd() * len * 0.5
+        for (const dx of [0, -512, 512]) g.fillRect(gx + dx, gy, len * (0.3 + rnd() * 0.5), 1)
+      }
+      // the board's end
+      g.fillStyle = 'rgba(40,26,14,0.5)'
+      for (const dx of [0, -512, 512]) g.fillRect(x + len - 1 + dx, r * rowH, 1, rowH)
+      x += len
+    }
+    g.fillStyle = 'rgba(40,26,14,0.55)'
+    g.fillRect(0, r * rowH, 512, 1)
+  }
+  return c
+}
+
 function dust(g, k) {
   const n = g.attributes.normal
   const c = g.attributes.color

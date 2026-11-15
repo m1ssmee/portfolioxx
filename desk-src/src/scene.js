@@ -26,6 +26,9 @@ import { createLaptop, LAPTOP } from './objects/laptop.js'
 import { keyLayout, WELL, PAD } from './objects/laptopGeo.js'
 import { createCan, CAN } from './objects/can.js'
 import { createLamp, LAMP } from './objects/lamp.js'
+import { createPlush } from './objects/plush.js'
+import { createStudio, STUDIO } from './objects/studio.js'
+import { createMonitor, createHdmiLink, MONITOR } from './objects/monitor.js'
 import caveatUrl from './assets/caveat.woff2?url'
 import { createVisitorsBook } from './visitors/book.js'
 import badgeFaceUrl from './assets/badge-face.webp?url'
@@ -59,6 +62,9 @@ const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 
 // dashes. What the GPU pays while the view MOVES is handled inside the frame pipeline instead:
 // moving frames are drawn at a reduced size into fixed buffers and scaled up on screen)
 const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 2)
+// The lens: 0, everything sharp, near and far (1: a shallow depth of field in close-ups, which
+// blurred whatever stood before or behind the thing looked at, and cost three passes a frame).
+const DOF = 0
 
 const CSS = `
 .cg-root{--ink:#f1efe9;--label:#c9c4ba;--rule:rgba(241,239,233,.36);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
@@ -323,6 +329,7 @@ export function createScene(container, options = {}) {
     const trayJob = job({ type: 'tray', h: Q.trayH }, 17)
     const lighterJob = job({ type: 'lighter', h: Q.lighterH }, 3)
     const curlJob = job({ type: 'curl' }, 1)
+    const plushJobs = ['ghost', 'duck'].map((which) => job({ type: 'plush', which }, 1.5))
     // (the laptop's bead-blast and its deck's wear, from its keys' layout)
     const laptopJob = job({ type: 'laptop', keys: keyLayout(), well: WELL, pad: PAD, deck: [LAPTOP.w, LAPTOP.d] }, 0.4)
 
@@ -408,7 +415,8 @@ export function createScene(container, options = {}) {
     step('textures baked (worker)')
     if (destroyed) return
     // (4: the still life is seen from nearly above, where more buys nothing and costs bandwidth)
-    const aniso = Math.min(4, renderer.capabilities.getMaxAnisotropy())
+    // (textures seen at a slant, the screens, the board, the labels: sharp along the slant too)
+    const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy())
     const disposables = []
     function dataTex(d, arr, srgb, repeat = true) {
       const t = new THREE.DataTexture(arr, d.size, d.size)
@@ -468,7 +476,7 @@ export function createScene(container, options = {}) {
       right: LAYOUT.RIGHT,
       font: FONT,
       handFont: HAND,
-      anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy()),
+      anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
       notes: [
         { color: '#f4e38c', lines: ["hi, I'm Krish", 'I build AI', 'people can', 'actually use'] },
         { color: '#c6e6d3', lines: ['rule no. 1:', 'cite sources,', 'never guess', 'the numbers'] },
@@ -1273,6 +1281,56 @@ export function createScene(container, options = {}) {
       onOpen: () => audio.canOpen(),
     })
     scene.add(can.group, can.puddle, can.drops, ...can.extras)
+
+    // ---- the plush toys (objects/plush.js): a purple ghost and a yellow duck, right of the can. A
+    // tap closes in on them; a tap there pokes one: it squashes and wobbles back
+    const plushParts = await Promise.all(plushJobs)
+    if (destroyed) return
+    const plushies = ['ghost', 'duck'].map((which, i) => {
+      const at = which === 'ghost' ? LAYOUT.DESK.plushGhost : LAYOUT.DESK.plushDuck
+      const turn = which === 'ghost' ? LAYOUT.DESK.plushGhostTurn : LAYOUT.DESK.plushDuckTurn
+      const p = createPlush({ which, parts: plushParts[i].parts, at: new THREE.Vector3(at[0], ROOM.deskY, at[2]), yaw: LAYOUT.PLAYER.yaw + turn, anisotropy: aniso })
+      scene.add(p.group)
+      for (const m of p.materials) withEmber(m)
+      // (what falls there meets it: a rounded box about it)
+      addObstacle(p.group.matrixWorld, [p.radius * 0.8, p.top / 2, p.radius * 0.8], [0, p.top / 2, 0], p.radius * 0.5)
+      return p
+    })
+    step('plush toys (worker)')
+
+    // ---- beside the desk (objects/studio.js): a studio monitor on a stand at each end, a steel
+    // bin right of the right one. A tap closes in on a speaker; a tap there turns the sound on or off
+    const facing = (turn) => Math.atan2(-LAYOUT.FWD[0] * Math.cos(turn) + LAYOUT.RIGHT[0] * Math.sin(turn), -LAYOUT.FWD[2] * Math.cos(turn) + LAYOUT.RIGHT[2] * Math.sin(turn))
+    const studio = createStudio({
+      floorY: ROOM.floorY,
+      top: ROOM.floorY + LAYOUT.DESK.speakerTop,
+      left: new THREE.Vector3(...LAYOUT.DESK.speakerL),
+      right: new THREE.Vector3(...LAYOUT.DESK.speakerR),
+      yawL: facing(LAYOUT.DESK.speakerLTurn),
+      yawR: facing(LAYOUT.DESK.speakerRTurn),
+      bin: new THREE.Vector3(...LAYOUT.DESK.bin),
+      binYaw: facing(-0.5),
+    })
+    scene.add(studio.group)
+    for (const m of studio.materials) withEmber(m)
+
+    // ---- the second screen (objects/monitor.js): a curved monitor in portrait, a terminal on it;
+    // plugged into the laptop's left USB-C port through an adapter, by HDMI
+    const monitor = createMonitor({ at: new THREE.Vector3(LAYOUT.DESK.monitor[0], ROOM.deskY, LAYOUT.DESK.monitor[2]), yaw: facing(LAYOUT.DESK.monitorTurn), projects: portfolio.projects, anisotropy: aniso })
+    scene.add(monitor.group)
+    for (const m of monitor.materials) withEmber(m)
+    addObstacle(monitor.group.matrixWorld, [MONITOR.foot[0] / 2, 40, MONITOR.foot[1] / 2], [0, 40, -6], 3)
+    const hdmi = createHdmiLink({
+      // (the laptop's left side, its port nearer the hinge: objects/laptopGeo.js's PORTS)
+      port: new THREE.Vector3(-LAPTOP.w / 2, 4.4, -62).applyMatrix4(laptop.group.matrixWorld),
+      out: new THREE.Vector3(-1, 0, 0).transformDirection(laptop.group.matrixWorld),
+      fwd: new THREE.Vector3(...LAYOUT.FWD),
+      deskY: ROOM.deskY,
+      run: LAYOUT.DESK.hdmiRun.map((p) => new THREE.Vector3(...p)),
+      up: monitor.cableUp(),
+    })
+    scene.add(hdmi.group)
+    for (const m of hdmi.materials) withEmber(m)
     disposables.push(can)
     let bookPending = false
     const book = createVisitorsBook({ host: root, onClose: () => wake() })
@@ -1346,6 +1404,7 @@ export function createScene(container, options = {}) {
     const HOME = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: SEAT_EL }
     const PLAYERV = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: PLAYER_EL }
     const BOARDV = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: BOARD_EL }
+    const MONV = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: 0.1 }
     const LAPTOPV = { target: new THREE.Vector3(), pos: new THREE.Vector3(), dist: 1000, az: 0, el: 0.35 }
     root.querySelector('[data-act="all"]').hidden = true
     // (a project open: the player moved to the left third, the project told on the right; on a narrow
@@ -1372,12 +1431,20 @@ export function createScene(container, options = {}) {
       uvOf(lamp.elbow),
       [BD.u - BD.w / 2 - 10, ROOM.wallV, BD.y0 + BD.h],
       [BD.u + BD.w / 2 + 10, ROOM.wallV, BD.y0 + BD.h],
+      // (the second screen's top)
+      [uvOf(monitor.group.position)[0] - MONITOR.w / 2, uvOf(monitor.group.position)[1], MONITOR.bottom + MONITOR.h],
+      // (the speakers' outer top corners, the bin)
+      [uvOf(studio.speakers[0].group.position)[0] - 115, uvOf(studio.speakers[0].group.position)[1], ROOM.floorY + LAYOUT.DESK.speakerTop + STUDIO.speaker.h],
+      [uvOf(studio.speakers[1].group.position)[0] + 115, uvOf(studio.speakers[1].group.position)[1], ROOM.floorY + LAYOUT.DESK.speakerTop + STUDIO.speaker.h],
+      [uvOf(studio.bin.group.position)[0] + STUDIO.bin.r, uvOf(studio.bin.group.position)[1], ROOM.floorY + STUDIO.bin.h],
     ]
     const SEAT_TALL = [
       [-210, 130, 0],
       [230, 150, 0],
+      // (the duck, whole)
+      [354, -112, 40],
       [-140, ROOM.wallV, BD.y0 + BD.h],
-      [280, ROOM.wallV, BD.y0 + BD.h],
+      [BD.u + BD.w / 2 - 60, ROOM.wallV, BD.y0 + BD.h],
     ]
     // (fitted through the camera itself: the desk's front is much nearer than the wall, and a
     // perspective picture makes the near things larger; a few rounds of aim, look, adjust)
@@ -1423,6 +1490,19 @@ export function createScene(container, options = {}) {
         V.dist *= fill / 0.92
       }
       viewFrom(V, FWD, SEAT_EL)
+    }
+    /** The second screen: square to its glass, a touch from above, all of it in the picture. */
+    function fitMonitor(tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), tanH = tanV * camera.aspect) {
+      monitor.screenCenter(MONV.target)
+      // (from a little to its right: the lamp's shade stands in front of its lower left corner)
+      monitor.screenNormal(lapN).applyAxisAngle(UP, 0.26)
+      lapN.y = 0.07
+      lapN.normalize()
+      MONV.dist = Math.max((MONITOR.h + 60) / 2 / tanV, (MONITOR.w + 60) / 2 / tanH)
+      MONV.pos.copy(MONV.target).addScaledVector(lapN, MONV.dist)
+      MONV.az = Math.atan2(lapN.x, lapN.z)
+      MONV.el = Math.asin(lapN.y)
+      return MONV
     }
     const lapC = new THREE.Vector3()
     const lapN = new THREE.Vector3()
@@ -1487,7 +1567,7 @@ export function createScene(container, options = {}) {
      * behind the wall, nor under the desk.
      */
     function limitOrbit(name) {
-      const V = !name || name === 'all' ? HOME : name === 'player' || name === 'project' ? PLAYERV : name === 'board' ? BOARDV : name === 'laptop' ? LAPTOPV : null
+      const V = !name || name === 'all' ? HOME : name === 'player' || name === 'project' ? PLAYERV : name === 'board' ? BOARDV : name === 'laptop' ? LAPTOPV : name === 'monitor' ? MONV : null
       if (V) {
         const polar = Math.PI / 2 - V.el
         const home = V === HOME
@@ -1505,6 +1585,45 @@ export function createScene(container, options = {}) {
         controls.minDistance = 60
         controls.maxDistance = HOME.dist * 1.15
       }
+    }
+    /** While a glide runs: no limits (the glide alone moves the camera). */
+    function freeOrbit() {
+      controls.minPolarAngle = 0
+      controls.maxPolarAngle = Math.PI
+      controls.minAzimuthAngle = -Infinity
+      controls.maxAzimuthAngle = Infinity
+      controls.minDistance = 0
+      controls.maxDistance = Infinity
+    }
+    const orbitOff = new THREE.Vector3()
+    /**
+     * A glide has arrived (name: the focus): the view's own limits, opened where they must be to
+     * hold the camera exactly where the glide left it (a limit a hair inside it would move it, and
+     * that is a jump); then the controls take the camera as it is, with nothing left over from
+     * before (a drag begun during the glide is not replayed).
+     */
+    function settleOrbit(name) {
+      limitOrbit(name)
+      orbitOff.subVectors(camera.position, controls.target)
+      const dist = orbitOff.length()
+      const polar = Math.acos(THREE.MathUtils.clamp(orbitOff.y / dist, -1, 1))
+      const az = Math.atan2(orbitOff.x, orbitOff.z)
+      controls.minPolarAngle = Math.min(controls.minPolarAngle, polar)
+      controls.maxPolarAngle = Math.max(controls.maxPolarAngle, polar)
+      if (Number.isFinite(controls.minAzimuthAngle)) {
+        // (the azimuth as the controls count it: within a turn of their range's middle)
+        const mid = (controls.minAzimuthAngle + controls.maxAzimuthAngle) / 2
+        const a = mid + Math.atan2(Math.sin(az - mid), Math.cos(az - mid))
+        controls.minAzimuthAngle = Math.min(controls.minAzimuthAngle, a)
+        controls.maxAzimuthAngle = Math.max(controls.maxAzimuthAngle, a)
+      }
+      controls.minDistance = Math.min(controls.minDistance, dist)
+      controls.maxDistance = Math.max(controls.maxDistance, dist)
+      controls._sphericalDelta?.set(0, 0, 0)
+      controls._panOffset?.set(0, 0, 0)
+      if ('_scale' in controls) controls._scale = 1
+      controls.enabled = name !== 'project'
+      controls.update()
     }
     limitOrbit(null)
     // (the view turned or zoomed by hand: the resize keeps it where it is, rather than taking it home)
@@ -1586,6 +1705,8 @@ export function createScene(container, options = {}) {
       },
       azPull: 1,
     })
+    const plushV = new THREE.Vector3()
+    const plushV2 = new THREE.Vector3()
     const playerDof = (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld)
     const focusTargets = {
       ashtray: down((o) => o.set(4, 22, 2), 72),
@@ -1602,7 +1723,36 @@ export function createScene(container, options = {}) {
       // (the can: room round it for its fall and the puddle)
       can: down((o) => o.copy(canHome).setY(ROOM.deskY + 20).addScaledVector(RIGHT, 30), 175),
       board: { view: () => BOARDV, dof: (o) => o.copy(room.boardCenter), deep: 1.5 },
+      // (a speaker: from in front of it, a little above its middle)
+      ...Object.fromEntries(
+        studio.speakers.map((sp, i) => [
+          i ? 'speakerR' : 'speakerL',
+          {
+            center: (o) => sp.center(o),
+            radius: 250,
+            el: THREE.MathUtils.degToRad(9),
+            azPull: 1,
+            get az() {
+              sp.front(plushV)
+              return Math.atan2(plushV.x, plushV.z)
+            },
+            deep: 2,
+          },
+        ]),
+      ),
+      // (the plush toys: both, from the chair's side and low, their faces to the camera)
+      plush: {
+        center: (o) => o.copy(plushies[0].center(plushV)).add(plushies[1].center(plushV2)).multiplyScalar(0.5),
+        radius: 135,
+        el: THREE.MathUtils.degToRad(16),
+        azPull: 1,
+        get az() {
+          return HOME.az - 0.12
+        },
+        deep: 2,
+      },
       laptop: { view: () => fitLaptop(), dof: (o) => laptop.screenCenter(o), deep: 1.6 },
+      monitor: { view: () => fitMonitor(), dof: (o) => monitor.screenCenter(o), deep: 1.6 },
       // (the lamp: from the chair's side, a little above, its foot to its head in the picture)
       lamp: {
         center: (o) => o.copy(lampFoot).setY(ROOM.deskY).add(lamp.elbow).add(lamp.head).divideScalar(3),
@@ -1619,7 +1769,11 @@ export function createScene(container, options = {}) {
     focusMeshes.earbuds = earbudsLive.item.meshes
     focusMeshes.notebook = notebook.meshes
     focusMeshes.can = can.meshes
+    focusMeshes.plush = plushies.flatMap((p) => p.meshes)
+    focusMeshes.speakerL = studio.speakers[0].meshes
+    focusMeshes.speakerR = studio.speakers[1].meshes
     focusMeshes.laptop = laptop.meshes
+    focusMeshes.monitor = [...monitor.meshes, ...hdmi.meshes]
     focusMeshes.lamp = [...lamp.meshes, ...lamp.switchMeshes]
     // (the badge hangs on the board: a tap on it is a tap on the board)
     focusMeshes.board = [...room.boardMeshes, ...badge.meshes]
@@ -1629,16 +1783,15 @@ export function createScene(container, options = {}) {
       home: HOME,
       targets: focusTargets,
       reduceMotion,
+      onStart: freeOrbit,
+      onEnd: settleOrbit,
       onChange: (name) => {
         backBtn.hidden = !name || name === 'all' || name === 'project'
         // (home is the whole desk: nothing further to step back to)
         allBtn.hidden = true
-        // (a project open: the composition holds, the camera does not orbit)
-        controls.enabled = name !== 'project'
         // (up close on something else, the view is the object's: the key hints step aside)
         root.classList.toggle('cg-close', !!name && name !== 'player' && name !== 'all')
         frameCache.valid = false
-        limitOrbit(name)
         if (!name) orbited = false
         // (closer on the player: its screen wakes, even if it was switched off)
         if (name === 'player' && os) {
@@ -1762,6 +1915,8 @@ export function createScene(container, options = {}) {
       // laptop's display, is dark in it, or it would be counted twice)
       lamp.glow(!only)
       laptop.glow(!only)
+      monitor.glow(!only)
+      studio.setPower(!only)
       rim.intensity = only ? 0 : LIGHTS.rim
       fill.intensity = only ? 0 : LIGHTS.fill
       lampLights(only)
@@ -1830,21 +1985,23 @@ export function createScene(container, options = {}) {
       camera.updateProjectionMatrix()
       // (the home view follows the screen's shape; the camera with it, if it is there)
       const f = focus.focused
-      const framed = !f || f === 'all' || f === 'player' || f === 'project' || f === 'board' || f === 'laptop'
+      const framed = !f || f === 'all' || f === 'player' || f === 'project' || f === 'board' || f === 'laptop' || f === 'monitor'
       fitHome()
       if (framed && !orbited && !focus.moving) {
-        const V = f === 'player' ? PLAYERV : f === 'project' ? PROJ : f === 'board' ? BOARDV : f === 'laptop' ? LAPTOPV : HOME
+        const V = f === 'player' ? PLAYERV : f === 'project' ? PROJ : f === 'board' ? BOARDV : f === 'laptop' ? LAPTOPV : f === 'monitor' ? fitMonitor() : HOME
         controls.target.copy(V.target)
         camera.position.copy(V.pos)
         controls.update()
       }
-      limitOrbit(f)
+      if (!focus.moving) limitOrbit(f)
       renderer.setPixelRatio(dpr)
       renderer.setSize(w, h, false)
       renderer.getDrawingBufferSize(dbs)
       // (moving frames at 85% of a 2x canvas's size, 90% of a 1.5x one, and less if the governor
       // had to step down: motion hides it, and a 2x canvas is four times the pixels)
-      frameCache.setSize(dbs.x, dbs.y, (dpr >= 2 ? 0.85 : dpr > 1.25 ? 0.9 : 1) * moveScaleK)
+      // (moving frames at the canvas's own size: nothing goes soft while the view moves, and nothing
+      // snaps sharp when it stops)
+      frameCache.setSize(dbs.x, dbs.y, moveScaleK)
       // (moving frames on a dense canvas: no multisampling, SMAA smoothing them after (a WebGL
       // multisample resolve is a whole extra pass over the frame); on a 1x screen, where the
       // pixels are few, the usual)
@@ -1982,6 +2139,9 @@ export function createScene(container, options = {}) {
     const seatPts = seats.map((s) => new THREE.Vector3(s.dir[0] * (TRAY.bowlTop + 2.3), s.y + CIG.radius + 0.05, s.dir[2] * (TRAY.bowlTop + 2.3)))
     // (a tap on an object from afar, or from another object's close-up, brings the camera to it, and
     // only to it; once there, taps are the object's own: a flick, the remote's button)
+    const plushItems = []
+    const monitorItem = { meshes: [...monitor.meshes, ...hdmi.meshes], fixed: true, canGrab: () => true, onTap: () => {} }
+    const speakerItems = []
     const grab = createGrab({
       canvas,
       camera,
@@ -1998,7 +2158,7 @@ export function createScene(container, options = {}) {
           return true
         }
         // (the lamp's head and switch are its own at once: a tap switches it, from anywhere)
-        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : hit.item === lampItem ? 'lamp' : cigItems.includes(hit.item) ? 'ashtray' : null
+        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : hit.item === monitorItem ? 'monitor' : plushItems.includes(hit.item) ? 'plush' : hit.item === speakerItems[0] ? 'speakerL' : hit.item === speakerItems[1] ? 'speakerR' : hit.item === lampItem ? 'lamp' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
         if (projOpen) leaveProject()
         focus.focusOn(name)
@@ -2192,6 +2352,30 @@ export function createScene(container, options = {}) {
       },
     }
     grab.add(canItem)
+    // the second screen and its cable: only looked at
+    grab.add(monitorItem)
+    // the speakers: a tap on one (up close) is the sound's switch
+    for (const sp of studio.speakers) {
+      const it = { meshes: sp.meshes, fixed: true, canGrab: () => true, onTap: () => root.querySelector('[data-act="sound"]').click() }
+      speakerItems.push(it)
+      grab.add(it)
+    }
+    // the plush toys: only poked (a drag on one turns the camera)
+    for (const p of plushies) {
+      const it = {
+        meshes: p.meshes,
+        fixed: true,
+        canGrab: () => true,
+        onTap: () => {
+          p.poke()
+          audio.plush?.()
+          shadowDirty = true
+          wake()
+        },
+      }
+      plushItems.push(it)
+      grab.add(it)
+    }
     // the lamp: a tap on its head or its switch turns it on or off, from anywhere (the room's light
     // with it); a drag on its head aims it at what is under the pointer (the desk, or the wall behind
     // it); a tap on its arm or its foot brings the camera to it, a drag there turns the camera
@@ -2839,10 +3023,10 @@ export function createScene(container, options = {}) {
       // (the first frames of a motion pay for its start, not its pace)
       if (++gov.n < 4) return
       gov.ema += (Math.min(interval + gov.bias, 100) - gov.ema) * 0.08
-      if (gov.ema < 19.5 || gov.n < 36 || performance.now() < gov.after || gov.level >= 2) return
+      // (one step only, and never fewer pixels: the moving frames' multisampling goes, SMAA smooths them)
+      if (gov.ema < 19.5 || gov.n < 36 || performance.now() < gov.after || gov.level >= 1) return
       gov.level++
       moveSamplesOff = true
-      moveScaleK *= 0.8
       resize()
       gov.n = 0
       gov.ema = 16.7
@@ -2854,9 +3038,8 @@ export function createScene(container, options = {}) {
     // (tests and review pictures: the moving frames as the governor leaves them at a step, 0..2;
     // with flags.cache = 0 every frame is a moving one, so a picture shows it)
     api.forceQuality = (level) => {
-      gov.level = Math.max(0, Math.min(2, level))
+      gov.level = Math.max(0, Math.min(1, level))
       moveSamplesOff = gov.level > 0
-      moveScaleK = 0.8 ** gov.level
       resize()
       wake()
       return api.quality()
@@ -2879,7 +3062,10 @@ export function createScene(container, options = {}) {
     // at every refresh, and the misses that decide it)
     const pace = { tick: 0, refresh: 16.7, full: true, misses: 0, n: 0, retryAt: 0 }
     api.pace = pace
-    const ABOVE = 10 // (frames a second over the refresh)
+    // (frames a second over the refresh: none. Frames drawn faster than the screen shows them are
+    // thrown away by it, a seventh of the GPU's work on a 60 Hz screen, and the ones it does show
+    // come unevenly. Set it above 0 to draw by a timer at that many over the refresh again)
+    const ABOVE = 0
     let timer = 0
     let overAt = 0
     let lastKind = 0
@@ -2897,7 +3083,7 @@ export function createScene(container, options = {}) {
       timer = 0
       if (!running || destroyed) return
       const now = performance.now()
-      if (!pace.full || calmGap(now) || dbgFlags.fixedDt) return wake()
+      if (!pace.full || calmGap(now) || dbgFlags.fixedDt || camLive(now)) return wake()
       draw(now, true)
       overAt += overGap()
       const t = performance.now()
@@ -2906,6 +3092,12 @@ export function createScene(container, options = {}) {
     }
     let inputAt = 0
     const touched = () => (inputAt = performance.now())
+    // (the camera in motion, by a glide, the wheel, a drag or its coasting: its frames are drawn
+    // by the browser's own frame callback, one a refresh, each with that refresh's time. Drawn by
+    // the timer instead, a little faster than the screen shows them, every few frames one is
+    // dropped and the motion stutters)
+    let camMovedAt = -1e9
+    const camLive = (now) => focus.moving || zoom.on || !!dragFrom || now - camMovedAt < 300
     for (const t of ['pointerdown', 'wheel', 'keydown', 'touchstart']) listen(window, t, touched, { passive: true })
     listen(window, 'pointermove', (e) => e.buttons && touched(), { passive: true })
     function frame(now) {
@@ -2920,7 +3112,7 @@ export function createScene(container, options = {}) {
       }
       const calmG = calmGap(now)
       // (live at the faster pace: the timer draws, this callback only keeps the refresh measured)
-      if (!calmG && pace.full && ABOVE > 0 && !dbgFlags.fixedDt) {
+      if (!calmG && pace.full && ABOVE > 0 && !dbgFlags.fixedDt && !camLive(now)) {
         if (!timer) {
           overAt = Math.max(now, lastDrawn + overGap())
           timer = setTimeout(overTick, overAt - performance.now())
@@ -2968,9 +3160,15 @@ export function createScene(container, options = {}) {
       if (dbgFlags.fixedDt) dt = dbgFlags.fixedDt // (tests: each frame this long, whatever the clock says)
       simTime += dt * (reduceMotion ? 0.35 : 1)
       U.uTime.value = simTime
-      focus.update(now)
+      // the camera: a glide is its own (the controls stand by); otherwise the wheel's zoom, then the
+      // controls (a drag, and its coasting to rest: damped by time, not by frames, so it feels the
+      // same at 60 and at 120 a second)
+      const gliding = focus.update(now)
       stepZoom(dt)
-      controls.update()
+      if (!gliding) {
+        controls.dampingFactor = 1 - Math.pow(0.95, Math.min(dt, 0.05) * 60)
+        controls.update()
+      }
       grab.hover()
       // the held object aimed at the pointer, eased (core/grab.js), then every simulation at its
       // fixed step (the cable, the dropped lighter and cigarette, the ash)
@@ -3003,6 +3201,9 @@ export function createScene(container, options = {}) {
       const badgeBusy = badge.update(dt)
       const canBusy = can.update(dt)
       if (canBusy) shadowDirty = true
+      let plushBusy = false
+      for (const p of plushies) if (p.update(dt)) plushBusy = true
+      if (plushBusy) shadowDirty = true
       // the lamp: its head re-aimed, its glow easing (the key light on its bulb, along its shade, and
       // as bright: setMode); its shadow drawn again only when the head moved
       const lampBusy = lamp.update(dt)
@@ -3112,14 +3313,15 @@ export function createScene(container, options = {}) {
       // (the camera: changed since the cache was baked, by the controls or by anything else)
       camera.updateMatrixWorld()
       const camChanged = camMoved || !nearly(bakedCam, camera.matrixWorld) || !nearly(bakedProj, camera.projectionMatrix)
+      if (camMoved) camMovedAt = now
       camMoved = false
       // (the cigarette or the lighter carried, gliding or falling, or the flame burning: drawn whole,
       // the shadows drawn again every frame)
-      const dragging = carried || lighterBusy || cableBusy || badgeBusy || canBusy || lampMoved || lidBusy || roomBusy
+      const dragging = carried || lighterBusy || cableBusy || badgeBusy || canBusy || plushBusy || lampMoved || lidBusy || roomBusy
       if (dragging) shadowDirty = true
       // (the lamp switched changes the whole picture: drawn whole while its light eases, then the
       // cache baked again; so does the laptop while anything of it moves)
-      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
+      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || plushBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
       // (the cache is baked once the view has been still for an eighth of a second: a slow zoom or
@@ -3198,7 +3400,7 @@ export function createScene(container, options = {}) {
       F.truth = !!dbgFlags.truth
       F.emberI = emberNow / EMBER_CD
       // (the depth of field eased in, not switched on)
-      F.dofK = dofK * dofK * (3 - 2 * dofK)
+      F.dofK = DOF * dofK * dofK * (3 - 2 * dofK)
       cigBox(c, c.b - 4.6, c.b + 0.7 + c.ashLen + 0.8, 4.7, F.regionBox)
       cigDirty.copy(F.regionBox)
       // (the player's screen is drawn over the cache too: the box takes it in)
@@ -3415,7 +3617,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, plushies, studio, monitor, hdmi, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },
