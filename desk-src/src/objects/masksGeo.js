@@ -10,7 +10,7 @@ import { smin, smax, sdEllipsoid, sdRoundCone, sdRoundRect2 } from './../core/sd
 
 // ---- lines on the face: a curve in (x, y), cut in as a furrow or raised as a ridge
 /** A curve through `ctrl` ([[x, y], ...], Catmull-Rom), as a polyline with its bounds. */
-function curve(ctrl, n = 10) {
+export function curve(ctrl, n = 10) {
   const P = [ctrl[0], ...ctrl, ctrl[ctrl.length - 1]]
   const pts = []
   for (let i = 1; i < P.length - 2; i++)
@@ -39,7 +39,7 @@ function curve(ctrl, n = 10) {
  * negative, out (a ridge), `w` mm wide; fading out towards its ends (ends: 0 none, 1 both, 2 only
  * its last end).
  */
-function line(d, x, y, c, depth, w, ends = 1) {
+export function line(d, x, y, c, depth, w, ends = 1) {
   const pad = 3 * w
   if (x < c.x0 - pad || x > c.x1 + pad || y < c.y0 - pad || y > c.y1 + pad) return d
   let best = Infinity

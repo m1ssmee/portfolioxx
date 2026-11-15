@@ -171,6 +171,24 @@ The laptop's tabs show the sites' own screenshots where a project has one (`src/
 Up close on the laptop a button at the bottom opens the open tab's live site, or its code. "tour"
 (top right) takes the camera from thing to thing with a line about each (`TOUR` in `scene.js`).
 
+Three pictures hang on the wall (`src/objects/portraits.js`). They are not drawings: each frame is a
+window onto a small lit scene of its own, a life-size bald, gaunt head and shoulders
+(`src/objects/headGeo.js`, a distance field meshed in a worker at 2 mm; `src/objects/headRig.js`
+gives it skin, a jaw that opens, eyeballs that turn, lids that blink and a hand), drawn into a
+render target only when something in it changes and only while it is in view, one picture a frame,
+then printed like an old photograph (drained of colour, hard, dark at the edges, grainy):
+- `face`: lit from above left; it looks at you wherever you stand, blinks, and now and then its
+  mouth comes open;
+- `void`: a black hole where its face should be, two lights in it that blink and follow you;
+- `coal`: lit from below; every fourteen seconds its hand comes up, takes out its eye and eats it,
+  and the eye grows back (a tap, or the tour, starts it).
+The pictures are black until the head's mesh comes from the worker; the scene does not wait for it.
+Under automation they hold still unless the address has `?art`; `api.art.clock` holds their time
+at a given second for tests.
+
+On the desk, right of the can, two marble faces on a granite plinth (`src/objects/masks.js`,
+`src/objects/masksGeo.js`): unfinished, still being carved.
+
 ## The camera
 
 - A glide (`src/core/focus.js`) runs on the target and the camera's angle and distance round it:

@@ -353,6 +353,8 @@ export function createScene(container, options = {}) {
     const lighterJob = job({ type: 'lighter', h: Q.lighterH }, 3)
     const curlJob = job({ type: 'curl' }, 1)
     const maskJobs = ['one', 'two'].map((which) => job({ type: 'mask', which }, 5))
+    // (the figure in the pictures on the wall: not waited for, the pictures are black until it comes)
+    const headJob = job({ type: 'head' }, 14)
     // (the laptop's bead-blast and its deck's wear, from its keys' layout)
     const laptopJob = job({ type: 'laptop', keys: keyLayout(), well: WELL, pad: PAD, deck: [LAPTOP.w, LAPTOP.d] }, 0.4)
 
@@ -1336,7 +1338,20 @@ export function createScene(container, options = {}) {
     scene.add(portraits.group)
     for (const m of portraits.materials) withEmber(m)
     let artOn = !navigator.webdriver || new URLSearchParams(location.search).has('art')
-    api.art = { get on() { return artOn }, set on(v) { artOn = !!v }, play: (kind) => portraits.play(kind, performance.now() / 1000) }
+    // (when the figure comes: each picture drawn as it is at the start, then the room drawn again)
+    let artFresh = false
+    const artFrustum = new THREE.Frustum()
+    const artPV = new THREE.Matrix4()
+    // (clock: for tests, the pictures' time held at a given second instead of the page's)
+    let artClock = null
+    const artNow = () => artClock ?? performance.now() / 1000
+    api.art = {
+      get on() { return artOn },
+      set on(v) { artOn = !!v },
+      get clock() { return artClock },
+      set clock(v) { artClock = v },
+      play: (kind) => portraits.play(kind, artNow()),
+    }
 
     // ---- beside the desk (objects/studio.js): a studio monitor on a stand at each end, a steel
     // bin right of the right one. A tap closes in on a speaker; a tap there turns the sound on or off
@@ -1793,7 +1808,7 @@ export function createScene(container, options = {}) {
             view: () => {
               const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
               const dist = Math.max((it.size[1] + 70) / 2 / tanV, (it.size[0] + 70) / 2 / (tanV * camera.aspect))
-              return { target: it.center, pos: artPos.copy(it.center).addScaledVector(it.normal, dist) }
+              return { target: it.center, pos: artPos.copy(it.center).addScaledVector(it.normal, dist * Math.cos(it.turn)).addScaledVector(it.side, dist * Math.sin(it.turn)) }
             },
             dof: (o) => o.copy(it.center),
             deep: 1.5,
@@ -2947,7 +2962,7 @@ export function createScene(container, options = {}) {
       ['monitor', 'The second screen', 'A terminal, every project running on localhost. Pull the USB-C plug at the laptop\u2019s side and it loses its signal.'],
       ['board', 'The pegboard', 'A few notes, this month with today ringed, and my badge. Tap a note and it lifts.'],
       ['notebook', 'The visitors\u2019 book', 'Open it and leave a thumbprint. Everyone\u2019s who came before is in there.'],
-      ['art-coal', 'The pictures', 'Three on the wall. Two of them blink. This one does worse, every so often.'],
+      ['art-coal', 'The pictures', 'Three on the wall. They watch you. This one does worse, every so often.'],
       ['masks', 'Two faces', 'Cut in marble, one turned up and one turned down. They are only to look at.'],
       ['speakerR', 'The speakers', 'Tap one for music. The lamp has a switch too, and the can opens.'],
       [null, 'That\u2019s the tour', 'Drag to look around, scroll to zoom. Escape always steps back.'],
@@ -3126,6 +3141,19 @@ export function createScene(container, options = {}) {
     function wake() {
       if (!raf && running && loopReady && !destroyed) raf = requestAnimationFrame(frame)
     }
+    // (the figure for the pictures on the wall, when it comes: each picture drawn as it is at the
+    // start, then the room drawn again)
+    headJob
+      .then(async (r) => {
+        if (destroyed) return
+        await portraits.setHead(r.mesh, renderer)
+        if (destroyed) return
+        portraits.update(0, camera.position)
+        portraits.render(renderer, null, true)
+        artFresh = true
+        wake()
+      })
+      .catch(() => {})
     const emberFlicker = (t) => 0.82 + 0.1 * Math.sin(t * 1.3) + 0.07 * noise3(t * 2.7, 0.5, 0.5) + 0.05 * noise3(t * 9, 3.1, 0.2)
     // the flame's light (core/emberlight.js): full = FLAME_CD candela, at the bright middle of the flame
     const FLAME_CD = 9000
@@ -3349,7 +3377,18 @@ export function createScene(container, options = {}) {
       if (canBusy) shadowDirty = true
       // the pictures: painted again when one's state changes (by the clock)
       // (not before the scene has started: its first frames must come to rest)
-      const artBusy = artOn && loopReady && !dbgFlags.freeze && portraits.update(performance.now() / 1000)
+      // (each drawn into its own picture, one a frame, only those in view; the room's frame drawn
+      // again when one was. They look at you: where the camera is counts)
+      let artBusy = artFresh
+      artFresh = false
+      if (artOn && loopReady && !dbgFlags.freeze) {
+        portraits.update(artNow(), camera.position)
+        if (dbgFlags.draw) {
+          camera.updateMatrixWorld()
+          artFrustum.setFromProjectionMatrix(artPV.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
+          artBusy = portraits.render(renderer, artFrustum) || artBusy
+        }
+      }
       const linkBusy = hdmi.update(dt)
       const monBusy = monitor.update(dt)
       if (linkBusy) shadowDirty = true
