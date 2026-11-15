@@ -90,6 +90,26 @@ export function drawTerminal(c, projects) {
         [[' GET / ', 'text'], ['200', 'green'], [' in 61ms', 'dim']],
       ]),
     })
+  if (has('blinkscope'))
+    panes.push({
+      title: 'blinkscope',
+      lines: next('blinkscope', 3002, [[[' GET /view?ra=133.75976&dec=-7.24219 ', 'text'], ['200', 'green'], [' in 412ms', 'dim']]]),
+    })
+  if (has('meshh'))
+    panes.push({
+      title: 'meshh',
+      lines: [
+        [['~/code/meshh', 'cyan'], [' $ ', 'green'], ['npm start', 'white']],
+        [],
+        [['> meshh@0.1.0 start', 'dim']],
+        [['> node bin/meshh.js', 'dim']],
+        [],
+        [['  Meshh ', 'white'], ['running at ', 'text'], ['http://localhost:4317', 'blue', true]],
+        [['  project  ', 'dim'], ['~/code/portfolioxx', 'text']],
+        [['  agents   ', 'dim'], ['lead, frontend x5', 'text']],
+        [['  ready. ', 'green'], ['Ctrl+C to stop', 'dim']],
+      ],
+    })
   if (has('cropscan'))
     panes.push({
       title: 'cropscan',
@@ -141,7 +161,8 @@ export function drawTerminal(c, projects) {
     g.font = mono
     let y = top + 52
     let endX = X0
-    for (const l of p.lines) {
+    // (many panes: no blank lines in them)
+    for (const l of panes.length > 4 ? p.lines.filter((q) => q.length) : p.lines) {
       if (y > top + ph - 14) break
       endX = l.length ? line(y, l) : X0
       y += LH

@@ -52,9 +52,9 @@ export const DESK = {
   can: deskAt(190, -135),
   // the plush toys, on the bare desk right of the can: the duck in front, the ghost behind it and
   // further right, both turned a little towards the middle of the desk (turn: from facing the chair)
-  plushDuck: deskAt(332, -122),
+  plushDuck: deskAt(336, -128),
   plushDuckTurn: -0.3,
-  plushGhost: deskAt(442, -238),
+  plushGhost: deskAt(440, -246),
   plushGhostTurn: -0.22,
   // beside the desk, on the floor (the desk runs from u = -760 to 560: objects/room.js): a studio
   // monitor on a stand at each end, 35 mm off it and near the wall, turned in towards the chair

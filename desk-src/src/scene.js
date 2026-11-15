@@ -23,6 +23,10 @@ import { createNotebook } from './objects/notebook.js'
 import { createDeskMat, MAT, MAT_COLORS } from './objects/deskMat.js'
 import { createRoom, ROOM } from './objects/room.js'
 import { createLaptop, LAPTOP } from './objects/laptop.js'
+import shotBodymap from './assets/sites/bodymap.webp?url'
+import shotTavern from './assets/sites/codebase-tavern.webp?url'
+import shotMeshh from './assets/sites/meshh.webp?url'
+import shotBlinkscope from './assets/sites/blinkscope.webp?url'
 import { keyLayout, WELL, PAD } from './objects/laptopGeo.js'
 import { createCan, CAN } from './objects/can.js'
 import { createLamp, LAMP } from './objects/lamp.js'
@@ -135,6 +139,16 @@ const CSS = `
 .cg-now-k{color:var(--label)}
 .cg-now-t{font:500 11px/1 var(--mono);letter-spacing:.01em}
 .cg-now-t:empty{display:none}
+.cg-live{position:absolute;left:50%;bottom:max(56px,calc(env(safe-area-inset-bottom) + 44px));transform:translateX(-50%);z-index:2;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.cg-live[hidden]{display:none}
+.cg-tour{position:absolute;left:50%;bottom:max(112px,calc(env(safe-area-inset-bottom) + 100px));transform:translateX(-50%);z-index:3;box-sizing:border-box;width:min(460px,calc(100% - 40px));padding:16px 18px 12px;border-radius:14px;background:rgba(24,23,22,.93);border:1px solid var(--rule);box-shadow:0 10px 40px rgba(0,0,0,.4)}
+.cg-tour[hidden]{display:none}
+.cg-tour-k{margin:0 0 7px;color:var(--label)}
+.cg-tour-t{margin:0;font:400 14.5px/1.5 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink)}
+.cg-tour-acts{display:flex;gap:6px;justify-content:flex-end;margin-top:8px}
+.cg-tour-bar{height:2px;margin-top:8px;border-radius:1px;background:rgba(241,239,233,.16);overflow:hidden}
+.cg-tour-bar i{display:block;height:100%;width:0;background:var(--ink)}
+.cg-touring .cg-keys,.cg-touring .cg-live{opacity:0;pointer-events:none}
 .cg-copy{position:absolute;left:50%;bottom:max(22px,env(safe-area-inset-bottom));margin:0;transform:translateX(-50%);white-space:nowrap;color:var(--label);pointer-events:none}
 .cg-flame{position:absolute;left:50%;bottom:max(52px,calc(env(safe-area-inset-bottom) + 40px));width:56px;height:56px;padding:0;border-radius:50%;display:grid;place-items:center;background:#2a2826;border:1px solid var(--rule);opacity:0;visibility:hidden;transform:translate(-50%,6px);transition:opacity .2s,transform .2s,visibility 0s .2s,background .12s,border-color .12s;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 .cg-lighter .cg-flame{opacity:1;visibility:visible;transform:translate(-50%,0);transition:opacity .2s,transform .2s,visibility 0s,background .12s,border-color .12s}
@@ -163,6 +177,7 @@ const UI = `<div class="cg-ui">
   <div class="cg-tools">
     <button class="cg-txt cg-cap" data-act="back" hidden><span>&larr; back</span></button>
     <button class="cg-txt cg-cap" data-act="all"><span>step back</span></button>
+    <button class="cg-txt cg-cap" data-act="tour"><span>tour</span></button>
     <button class="cg-txt cg-cap" data-act="sound" aria-pressed="false"><span class="off">sound off</span><span class="on">sound on</span></button>
     <button class="cg-txt cg-cap" data-act="reset"><span>reset</span></button>
   </div>
@@ -178,6 +193,13 @@ const UI = `<div class="cg-ui">
     <li class="cg-coarse"><kbd>hold</kbd>pick up</li>
   </ul>
   <p class="cg-now"><span class="cg-now-k cg-cap">sound off</span><span class="cg-now-t"></span></p>
+  <div class="cg-tour" data-tour hidden role="status" aria-live="polite">
+    <p class="cg-tour-k cg-cap" data-tour-k></p>
+    <p class="cg-tour-t" data-tour-t></p>
+    <div class="cg-tour-acts"><button class="cg-txt cg-cap" data-act="tour-end"><span>end tour</span></button><button class="cg-txt cg-cap" data-act="tour-next"><span data-tour-next>next &rarr;</span></button></div>
+    <div class="cg-tour-bar"><i data-tour-bar></i></div>
+  </div>
+  <a class="cg-live cg-proj-btn dark" data-live target="_blank" rel="noopener" hidden><span data-live-t>View live site</span> <span aria-hidden="true">&nearr;</span></a>
   <p class="cg-copy cg-cap" data-id="copy"></p>
   <button class="cg-flame" data-flame aria-label="Hold to light the lighter" aria-pressed="false" aria-hidden="true" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.2 2.2c.9 3.6 5.6 6.2 5.6 11.6a5.8 5.8 0 0 1-11.6 0c0-3.2 1.8-4.9 3-6.7.3 2 1.2 3.3 2.4 3.8-.6-3.4.3-6.3.6-8.7z"/></svg></button>
 </div>`
@@ -1197,7 +1219,21 @@ export function createScene(container, options = {}) {
     // its keys pressed by a tap, its keyboard lit when the lamp is off
     const laptopBaked = await laptopJob.catch(() => null)
     if (destroyed) return
-    const laptop = createLaptop({ at: [LAYOUT.DESK.laptop[0], ROOM.deskY, LAYOUT.DESK.laptop[2]], yaw: LAYOUT.PLAYER.yaw + LAYOUT.DESK.laptopTurn, projects: portfolio.projects, font: FONT, anisotropy: aniso, baked: laptopBaked?.tex })
+    // (the sites' own screenshots, for the laptop's pages: decoded before it draws them; one that
+    // fails to load leaves its page drawn instead)
+    const siteShots = {}
+    await Promise.all(
+      Object.entries({ bodymap: shotBodymap, 'codebase-tavern': shotTavern, meshh: shotMeshh, blinkscope: shotBlinkscope }).map(async ([id, url]) => {
+        const im = new Image()
+        im.src = url
+        try {
+          await im.decode()
+          siteShots[id] = im
+        } catch {}
+      }),
+    )
+    if (destroyed) return
+    const laptop = createLaptop({ shots: siteShots, at: [LAYOUT.DESK.laptop[0], ROOM.deskY, LAYOUT.DESK.laptop[2]], yaw: LAYOUT.PLAYER.yaw + LAYOUT.DESK.laptopTurn, projects: portfolio.projects, font: FONT, anisotropy: aniso, baked: laptopBaked?.tex })
     scene.add(laptop.group)
     disposables.push(laptop)
     // (behind the loader the lid is shut: it opens as the visitor comes in, handle.enter)
@@ -1552,8 +1588,9 @@ export function createScene(container, options = {}) {
      * time the view goes to it: the lid may have moved since.
      */
     function fitLaptop(tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), tanH = tanV * camera.aspect) {
-      laptop.screenCenter(lapC)
-      laptop.screenNormal(lapN).applyAxisAngle(UP, 0.18)
+      // (the lid as it stands open, even while it is still on its way up)
+      laptop.openScreen(lapC, lapN)
+      lapN.applyAxisAngle(UP, 0.18)
       LAPTOPV.target.copy(lapC)
       LAPTOPV.dist = Math.max((212 + 60) / 2 / tanV, (304 + 70) / 2 / tanH)
       LAPTOPV.pos.copy(lapC).addScaledVector(lapN, LAPTOPV.dist)
@@ -1906,6 +1943,11 @@ export function createScene(container, options = {}) {
         return
       }
       if (e.key !== 'Escape' || grab.held) return
+      if (tour.on) {
+        e.preventDefault()
+        endTour(false)
+        return
+      }
       if (book.isOpen) {
         e.preventDefault()
         book.close()
@@ -2914,6 +2956,82 @@ export function createScene(container, options = {}) {
     const nowT = root.querySelector('.cg-now-t')
     let nowSec = -1
     const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`
+    // (up close on the laptop: a button, front and low, to the site on the tab that is open; its
+    // code, where it has no site)
+    const liveBtn = root.querySelector('[data-live]')
+    const liveText = root.querySelector('[data-live-t]')
+    let liveKey = ''
+    function updateLive() {
+      const p = focus.focused === 'laptop' && !focus.moving && !projOpen ? portfolio.projects[laptop.tab] : null
+      const href = p ? p.live || p.github || '' : ''
+      const key = `${href}|${p && p.live ? 1 : 0}`
+      if (key === liveKey) return
+      liveKey = key
+      liveBtn.hidden = !href
+      if (href) {
+        liveBtn.href = href
+        liveText.textContent = p.live ? 'View live site' : 'View the code'
+      }
+    }
+    // ---- the tour: the camera goes from thing to thing, a line about each; it moves on by itself,
+    // or at "next"; "end tour", Escape or a press on the scene ends it where it is
+    const TOUR = [
+      [null, 'The desk', 'Everything here can be clicked, picked up or switched. A quick look round first.'],
+      ['player', 'The player', 'It runs a tiny OS: my projects, what I built in each of them, and how to reach me. Its keys work.'],
+      ['laptop', 'The laptop', 'The projects\u2019 own sites, a tab each. Click the screen to change tabs; the button under it opens the real one.'],
+      ['monitor', 'The second screen', 'A terminal, every project running on localhost. Pull the USB-C plug at the laptop\u2019s side and it loses its signal.'],
+      ['board', 'The pegboard', 'A few notes, this month with today ringed, and my badge. Tap a note and it lifts.'],
+      ['notebook', 'The visitors\u2019 book', 'Open it and leave a thumbprint. Everyone\u2019s who came before is in there.'],
+      ['plush', 'The plushies', 'Pick one up and throw it. They land where they land.'],
+      ['speakerR', 'The speakers', 'Tap one for music. The lamp has a switch too, and the can opens.'],
+      [null, 'That\u2019s the tour', 'Drag to look around, scroll to zoom. Escape always steps back.'],
+    ]
+    const TOUR_DWELL = 5.2 // (seconds at each, once the camera has arrived)
+    const tourEl = root.querySelector('[data-tour]')
+    const tourK = root.querySelector('[data-tour-k]')
+    const tourT = root.querySelector('[data-tour-t]')
+    const tourBar = root.querySelector('[data-tour-bar]')
+    const tourNextEl = root.querySelector('[data-tour-next]')
+    const tour = { on: false, i: 0, t: 0 }
+    function tourStop(i) {
+      tour.i = i
+      tour.t = 0
+      const [name, k, text] = TOUR[i]
+      tourK.textContent = `${i + 1} / ${TOUR.length}  \u00b7  ${k}`
+      tourT.textContent = text
+      tourNextEl.textContent = i === TOUR.length - 1 ? 'done' : 'next \u2192'
+      tourBar.style.width = '0%'
+      if (projOpen) leaveProject()
+      if (book.isOpen) book.close()
+      if (name) focus.focusOn(name)
+      else focus.back()
+      wake()
+    }
+    function startTour() {
+      if (tour.on) return
+      tour.on = true
+      tourEl.hidden = false
+      root.classList.add('cg-touring')
+      tourStop(0)
+    }
+    /** The tour over: at its end, back home; cut short, the view stays where it is. */
+    function endTour(home = false) {
+      if (!tour.on) return
+      tour.on = false
+      tourEl.hidden = true
+      root.classList.remove('cg-touring')
+      if (home) focus.back()
+      wake()
+    }
+    const tourNext = () => (tour.i < TOUR.length - 1 ? tourStop(tour.i + 1) : endTour(true))
+    function stepTour(dt) {
+      if (!tour.on || focus.moving) return
+      tour.t += dt
+      tourBar.style.width = `${Math.min(100, (tour.t / TOUR_DWELL) * 100).toFixed(1)}%`
+      if (tour.t >= TOUR_DWELL) tourNext()
+    }
+    listen(canvas, 'pointerdown', () => endTour(false), { passive: true })
+    api.tour = { start: startTour, end: endTour, get on() { return tour.on }, get stop() { return tour.i } }
     function updateNow(force = false) {
       const m = audio.music
       const sec = m && audio.audible ? Math.floor(m.time) : -1
@@ -2951,6 +3069,9 @@ export function createScene(container, options = {}) {
       listen(b, 'click', () => {
         if (b.dataset.act === 'reset') resetView()
         else if (b.dataset.act === 'back') focus.back()
+        else if (b.dataset.act === 'tour') startTour()
+        else if (b.dataset.act === 'tour-next') tourNext()
+        else if (b.dataset.act === 'tour-end') endTour(false)
         else if (b.dataset.act === 'os') {
           // (into Pod OS: close on the player if the view is elsewhere; there, the first project takes the focus)
           if (!podView()) focus.focusOn('player')
@@ -3296,6 +3417,8 @@ export function createScene(container, options = {}) {
       const cableBusy = earbudsLive.update(physics.alpha)
       stepOS(dt)
       updateNow()
+      updateLive()
+      stepTour(dt)
       player.update(dt)
       keyAnim = Math.max(0, keyAnim - dt)
       lighterFrame()

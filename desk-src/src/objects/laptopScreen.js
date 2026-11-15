@@ -19,6 +19,8 @@ export const THEMES = {
   bodymap: { dark: false, bg: '#f6f8fb', surface: '#ffffff', ink: '#0f172a', sub: '#4f5d73', faint: '#8a96a8', line: '#e2e8f0', accent: '#e0464e', accentInk: '#ffffff', soft: '#fdebec', chip: '#eef2f7', tag: 'Health · AI', glow: [0.86, 0.88, 0.92] },
   'codebase-tavern': { dark: true, bg: '#1a120d', surface: '#231812', ink: '#f6e7c9', sub: '#cdb08a', faint: '#8d7559', line: '#3b2b20', accent: '#f0a33a', accentInk: '#1a120d', soft: '#3a2614', chip: '#2c1f17', tag: 'Developer tools · AI', glow: [0.15, 0.11, 0.07] },
   'lunar-rover': { dark: true, bg: '#0d1117', surface: '#161b22', ink: '#e6edf3', sub: '#9198a1', faint: '#6e7681', line: '#30363d', accent: '#4493f8', accentInk: '#ffffff', soft: '#1f2a3a', chip: '#121d2f', tag: 'Robotics', glow: [0.07, 0.08, 0.1], green: '#238636' },
+  meshh: { dark: false, bg: '#dedcd6', surface: '#eceae4', ink: '#1c1c1a', sub: '#55534d', faint: '#8b8880', line: '#c9c6be', accent: '#1c1c1a', accentInk: '#f2f0ea', soft: '#d2cfc7', chip: '#d6d3cb', tag: 'Developer tools · AI', glow: [0.8, 0.79, 0.76] },
+  blinkscope: { dark: true, bg: '#05070c', surface: '#0d1118', ink: '#e8edf5', sub: '#98a3b5', faint: '#667085', line: '#1e2632', accent: '#8fb8ff', accentInk: '#05070c', soft: '#111a2a', chip: '#0f1622', tag: 'Astronomy', glow: [0.06, 0.07, 0.1] },
   cropscan: { dark: false, bg: '#f3f7f0', surface: '#ffffff', ink: '#12301e', sub: '#4a6853', faint: '#86a08d', line: '#dbe6d5', accent: '#2f9e55', accentInk: '#ffffff', soft: '#e2f0df', chip: '#e7f0e3', tag: 'Computer vision', glow: [0.84, 0.89, 0.84] },
 }
 const themeOf = (p) => THEMES[p.id] || THEMES.bodymap
@@ -77,7 +79,7 @@ const host = (url) => (url || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
 const isRepo = (p) => p.id === 'lunar-rover' || (!p.live && p.id !== 'cropscan' && !!p.github)
 /** The address the browser shows: the live site, the repository, or (a demo not deployed) the
  * local server it runs on. */
-export const urlOf = (p) => (p.live ? host(p.live) : isRepo(p) ? host(p.github) : 'localhost:5000')
+export const urlOf = (p) => (p.live ? host(p.live) : p.local ? p.local : isRepo(p) ? host(p.github) : 'localhost:5000')
 
 // =================================================================================================
 // the browser's chrome
@@ -1255,7 +1257,26 @@ function repoPage(g, p, T, font) {
  * { h (its height), button ([x, y, w, h], its main button), thumb (the scroll thumb's colour, rgba),
  * glow ([r, g, b]: how much light it gives, linear) }.
  */
-export function drawPage(g, p, font) {
+/** A site's own screenshot as its page (shot: an image, as wide as the page): its light worked out once. */
+function shotPage(g, shot) {
+  const h = Math.min(PAGE.h, (PAGE.w * shot.height) / shot.width)
+  g.drawImage(shot, 0, 0, PAGE.w, (PAGE.w * shot.height) / shot.width)
+  if (!shot._glow) {
+    const c = document.createElement('canvas')
+    c.width = c.height = 8
+    const x = c.getContext('2d', { willReadFrequently: true })
+    x.drawImage(shot, 0, 0, 8, 8)
+    const d = x.getImageData(0, 0, 8, 8).data
+    const m = [0, 0, 0]
+    for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) m[k] += Math.pow(d[i + k] / 255, 2.2) / 64
+    shot._glow = m
+  }
+  const dark = 0.2126 * shot._glow[0] + 0.7152 * shot._glow[1] + 0.0722 * shot._glow[2] < 0.2
+  return { h, button: null, thumb: dark ? [0.9, 0.93, 0.96, 0.32] : [0.06, 0.09, 0.16, 0.3], glow: shot._glow }
+}
+
+export function drawPage(g, p, font, shot) {
+  if (shot) return shotPage(g, shot)
   const T = themeOf(p)
   let out
   if (isRepo(p)) out = repoPage(g, p, T, font)

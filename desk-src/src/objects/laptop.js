@@ -68,7 +68,7 @@ const BOX = /* glsl */ `
  * The laptop at `at` (world, on the desk at its height), turned `yaw`. projects: portfolio.ts's;
  * font: a loaded CSS family for the screen and the keys.
  */
-export function createLaptop({ at, yaw, projects, font, anisotropy = 4, baked }) {
+export function createLaptop({ at, yaw, projects, font, anisotropy = 4, baked, shots = {} }) {
   const L = LAPTOP
   const TOP = L.base
   const group = new THREE.Group()
@@ -575,7 +575,9 @@ export function createLaptop({ at, yaw, projects, font, anisotropy = 4, baked })
     tabs = drawChrome(cg, projects, tab, font)
     const pg = pageC.getContext('2d')
     pg.setTransform(PAGE.texW / PAGE.w, 0, 0, PAGE.texW / PAGE.w, 0, 0)
-    page = drawPage(pg, projects[tab], font)
+    pg.clearRect(0, 0, PAGE.w, PAGE.h)
+    // (a site with a screenshot shows it; the others are drawn)
+    page = drawPage(pg, projects[tab], font, shots[projects[tab].id])
     chromeTex.needsUpdate = true
     pageTex.needsUpdate = true
     D.uPageH.value = page.h
@@ -806,6 +808,19 @@ export function createLaptop({ at, yaw, projects, font, anisotropy = 4, baked })
     /** The display's middle (world) and the way it faces (world): they follow the lid. */
     screenCenter: (out) => out.set(0, LID.face - 0.05, LID.s1 - DISP.y - DISP.h / 2).applyMatrix4(lid.matrixWorld),
     screenNormal: (out) => out.set(0, -1, 0).transformDirection(lid.matrixWorld),
+    /**
+     * The display's middle and the way it faces with the lid fully open, whatever the lid is doing
+     * now (a view framed on the lid half way up looked at the desk's underside).
+     */
+    openScreen(center, normal) {
+      const was = lid.rotation.x
+      lid.rotation.x = -L.open
+      lid.updateMatrixWorld(true)
+      center.set(0, LID.face - 0.05, LID.s1 - DISP.y - DISP.h / 2).applyMatrix4(lid.matrixWorld)
+      normal.set(0, -1, 0).transformDirection(lid.matrixWorld)
+      lid.rotation.x = was
+      lid.updateMatrixWorld(true)
+    },
     /** Its footprint on the desk, in its own frame: half width, half depth (mm), and the open lid's
      * reach behind the base. */
     footprint: { hw: L.w / 2, hd: L.d / 2, back: lidReach() + 1 },

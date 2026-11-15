@@ -172,6 +172,11 @@ round-footed stands. The monitor sits lower; a tap on the USB-C plug at the lapt
 out (the monitor shows "No signal") or puts it back. The desk mat is wider and printed: contour
 a koi pond under cherry blossom, drawn in code (`MAT_COLORS.koi` in `src/objects/deskMat.js`; `ink` is a contour-map print).
 
+The laptop's tabs show the sites' own screenshots where a project has one (`src/assets/sites/<id>.webp`,
+2048 px square; `scene.js` loads them by project id; a project without one has its page drawn).
+Up close on the laptop a button at the bottom opens the open tab's live site, or its code. "tour"
+(top right) takes the camera from thing to thing with a line about each (`TOUR` in `scene.js`).
+
 ## The camera
 
 - A glide (`src/core/focus.js`) runs on the target and the camera's angle and distance round it:

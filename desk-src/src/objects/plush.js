@@ -31,85 +31,103 @@ function faceCanvas([x0, y0, w, h], draw) {
   return c
 }
 
-/** The ghost's face: two slanted red eyes and a grin of teeth from cheek to cheek, satin-stitched. */
+/** The ghost's face: two red eyes under heavy slanting brows, a wide grin of square teeth, satin-stitched. */
 function ghostFace(g) {
-  const thread = '#1d1626'
+  const thread = '#17121d'
   for (const s of [-1, 1]) {
     g.save()
     g.scale(s, 1)
-    // the eye: its top edge slanting down to the middle, its lower edge round
+    // the eye: flat along its slanting brow, round below
     g.beginPath()
-    g.moveTo(9, 82)
-    g.lineTo(50, 107)
-    g.quadraticCurveTo(57, 80, 32, 74)
-    g.quadraticCurveTo(17, 74, 9, 82)
+    g.moveTo(9, 104)
+    g.lineTo(45, 123)
+    g.quadraticCurveTo(52, 104, 34, 97)
+    g.quadraticCurveTo(18, 95, 9, 104)
     g.closePath()
-    g.fillStyle = '#d42a3c'
+    g.fillStyle = '#e23a2e'
     g.fill()
-    g.lineWidth = 1.9
+    g.lineWidth = 1.8
     g.strokeStyle = thread
     g.stroke()
-    // the pupil, and a stitch of light in it
+    // the brow: a heavy line over it, down to the middle
+    g.lineWidth = 4.2
+    g.beginPath()
+    g.moveTo(6.5, 102.5)
+    g.lineTo(48, 125)
+    g.stroke()
+    // the pupil, and a stitch of light beside it
     g.fillStyle = thread
     g.beginPath()
-    g.ellipse(29, 85.5, 3.1, 5.2, 0.35, 0, Math.PI * 2)
+    g.ellipse(24, 105.5, 2.6, 5, 0.3, 0, Math.PI * 2)
     g.fill()
     g.fillStyle = '#fbf6ee'
     g.beginPath()
-    g.arc(36, 93, 1.9, 0, Math.PI * 2)
+    g.ellipse(29.5, 108, 1.5, 2.4, 0.3, 0, Math.PI * 2)
     g.fill()
     g.restore()
   }
-  // the grin: a crescent of teeth, corner to corner
+  // the grin: its top edge nearly straight and turned up at the corners, its lower a deep curve
   const grin = () => {
     g.beginPath()
-    g.moveTo(-49, 64)
-    g.quadraticCurveTo(0, 54, 49, 64)
-    g.quadraticCurveTo(0, 22, -49, 64)
+    g.moveTo(-50, 88)
+    g.quadraticCurveTo(0, 76, 50, 88)
+    g.quadraticCurveTo(46, 60, 0, 56)
+    g.quadraticCurveTo(-46, 60, -50, 88)
     g.closePath()
   }
   grin()
-  g.fillStyle = '#f4f0e6'
+  g.fillStyle = '#f6f3ec'
   g.fill()
   g.save()
   grin()
   g.clip()
   g.strokeStyle = thread
-  g.lineWidth = 1.1
-  for (const x of [-33, -16.5, 0, 16.5, 33]) {
+  g.lineWidth = 1.5
+  for (const x of [-35, -21, -7, 7, 21, 35]) {
     g.beginPath()
-    g.moveTo(x, 20)
-    g.lineTo(x, 70)
+    g.moveTo(x, 50)
+    g.lineTo(x, 92)
     g.stroke()
   }
   g.restore()
   grin()
-  g.lineWidth = 1.9
+  g.lineWidth = 2.6
   g.strokeStyle = thread
   g.stroke()
 }
 
-/** The duck's face: two round white eyes set wide, a dot in each. */
+/** The duck's face: two big round white eyes set wide, a small dot in each. */
 function duckFace(g) {
   for (const s of [-1, 1]) {
     g.beginPath()
-    g.ellipse(s * 24, 123, 10.6, 11.4, 0, 0, Math.PI * 2)
-    g.fillStyle = '#fbf8f0'
+    g.ellipse(s * 36, 124, 15.5, 16.5, 0, 0, Math.PI * 2)
+    g.fillStyle = '#f7f6f9'
     g.fill()
-    g.lineWidth = 1.4
-    g.strokeStyle = '#2a2420'
+    g.lineWidth = 1.2
+    g.strokeStyle = '#b9bccb'
     g.stroke()
     g.fillStyle = '#17130f'
     g.beginPath()
-    g.arc(s * 24, 123, 2.2, 0, Math.PI * 2)
+    g.arc(s * 33.5, 123, 2.5, 0, Math.PI * 2)
     g.fill()
+  }
+}
+/** On its bill: two short slanting nostrils. */
+function duckBillFace(g) {
+  g.strokeStyle = '#2a2420'
+  g.lineWidth = 1.6
+  for (const s of [-1, 1]) {
+    g.beginPath()
+    g.moveTo(s * 9, 107.5)
+    g.lineTo(s * 14, 106)
+    g.stroke()
   }
 }
 
 const FACES = { ghost: ghostFace, duck: duckFace }
 const CLOTH = {
-  ghost: { body: [0x7257b8, 0xc9b6f5] },
-  duck: { body: [0xf6c63c, 0xffedaa], bill: [0xf4e4b8, 0xfff8e2], feet: [0xf4e4b8, 0xfff8e2] },
+  ghost: { body: [0x8469cf, 0xd6c8fa] },
+  duck: { body: [0xffcf1f, 0xfff0a8], bill: [0xf7ecc4, 0xfffbe8], feet: [0xf7ecc4, 0xfffbe8] },
 }
 
 /**
@@ -153,7 +171,7 @@ function cloth(color, sheen, face, seam) {
             thread = fc.a * smoothstep(0.02, 0.2, vPlushFront);
             threadCol = fc.rgb;
           }` : ''}
-          float seam = ${seam ? '(1.0 - smoothstep(0.5, 1.5, abs(vPlushP.x))) * (1.0 - smoothstep(-0.05, 0.25, vPlushFront))' : '0.0'};
+          float seam = ${seam ? '(1.0 - smoothstep(0.3, 1.0, abs(vPlushP.x))) * (1.0 - thread)' : '0.0'};
           if (vShell > 0.01) {
             // a strand lives up to its own height, thinner towards its tip; embroidery and seams
             // lie low in the pile; too small to see, the lower layers are simply whole
@@ -167,7 +185,7 @@ function cloth(color, sheen, face, seam) {
           float tone = mix(0.58, 1.1, vShell) * (0.9 + 0.2 * strand * (1.0 - fine));
           diffuseColor.rgb *= mix(tone, 0.9, fine * 0.6);
           diffuseColor.rgb = mix(diffuseColor.rgb, threadCol * (0.9 + 0.2 * strand), thread);
-          diffuseColor.rgb *= 1.0 - 0.5 * seam;
+          diffuseColor.rgb *= 1.0 - 0.2 * seam;
         }`,
       )
   }
@@ -211,6 +229,12 @@ export function createPlush({ which, parts, at, yaw = 0, anisotropy = 4, sdf, fl
   const faceMap = new THREE.CanvasTexture(faceCanvas(P.face, FACES[which]))
   faceMap.colorSpace = THREE.SRGBColorSpace
   faceMap.anisotropy = anisotropy
+  let billMap = null
+  if (P.billFace) {
+    billMap = new THREE.CanvasTexture(faceCanvas(P.billFace, duckBillFace))
+    billMap.colorSpace = THREE.SRGBColorSpace
+    billMap.anisotropy = anisotropy
+  }
   // (what casts the shadow and takes the ray: the cloth itself, once, drawing nothing)
   const proxyMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false })
   const shellAttr = new THREE.InstancedBufferAttribute(new Float32Array(Array.from({ length: SHELLS }, (_, i) => i / (SHELLS - 1))), 1)
@@ -230,7 +254,7 @@ export function createPlush({ which, parts, at, yaw = 0, anisotropy = 4, sdf, fl
     g.boundingSphere.radius += PILE
     geometries.push(g)
     const [color, sheen] = CLOTH[which][p.name]
-    const m = cloth(color, sheen, p.name === 'body' ? { map: faceMap, rect: P.face } : null, p.name === 'body')
+    const m = cloth(color, sheen, p.name === 'body' ? { map: faceMap, rect: P.face } : p.name === 'bill' && billMap ? { map: billMap, rect: P.billFace } : null, p.name !== 'feet')
     materials.push(m)
     const fur = new THREE.InstancedMesh(g, m, SHELLS)
     for (let i = 0; i < SHELLS; i++) fur.setMatrixAt(i, one)
@@ -250,12 +274,16 @@ export function createPlush({ which, parts, at, yaw = 0, anisotropy = 4, sdf, fl
     soft.add(proxy)
   }
   if (which === 'duck') {
-    // three strands of hair: black felt, the middle one up, the others leaning out
-    const strand = (pts) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))), 10, 1.8, 6, false)
+    // three strands of hair: thick black felt with round ends, the middle one tallest, the others leaning out
+    const strand = (pts) => {
+      const v = pts.map((p) => new THREE.Vector3(...p))
+      const tip = new THREE.SphereGeometry(4.6, 12, 8).translate(v[2].x, v[2].y, v[2].z)
+      return mergeGeometries([new THREE.TubeGeometry(new THREE.CatmullRomCurve3(v), 12, 4.6, 10, false), tip.toNonIndexed ? tip : tip].map((q) => (q.index ? q.toNonIndexed() : q)))
+    }
     const strands = [
-      strand([[0, 157, 0], [0.5, 176, -1.5], [2.2, 193, -4.5]]),
-      strand([[-4, 157, 0], [-12, 172, -1.5], [-24, 183, -3.5]]),
-      strand([[4, 157, 0], [12.5, 172, -1.5], [23, 184, -3.5]]),
+      strand([[2, 166, 0], [4, 190, -1], [3, 212, -3]]),
+      strand([[-8, 166, 0], [-17, 184, -1], [-22, 200, -2]]),
+      strand([[11, 165, 0], [22, 180, -1], [34, 190, -2]]),
     ]
     const g = mergeGeometries(strands)
     for (const s of strands) s.dispose()
@@ -448,6 +476,7 @@ export function createPlush({ which, parts, at, yaw = 0, anisotropy = 4, sdf, fl
       proxyMat.dispose()
       shadeMat.dispose()
       faceMap.dispose()
+      billMap?.dispose()
     },
   }
   return api

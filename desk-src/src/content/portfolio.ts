@@ -19,6 +19,8 @@ export interface Project {
   challenges: string[]
   github?: string
   live?: string
+  /** Where it runs when it is only run locally, e.g. 'localhost:4317' (the laptop's address bar shows it). */
+  local?: string
 }
 
 export interface Portfolio {
@@ -82,6 +84,42 @@ export const portfolio: Portfolio = {
       ],
       github: 'https://github.com/m1ssmee/codebase-tavern',
       live: 'https://codebase-tavern.vercel.app',
+    },
+    {
+      id: 'meshh',
+      name: 'Meshh',
+      oneLiner: 'Run a team of Claude Code agents from one screen: a lead plans the work, specialists build it in parallel, and you review every change.',
+      stack: ['React', 'Vite', 'Node.js', 'Express', 'WebSocket', 'Claude Code'],
+      year: 2026,
+      screenshots: [],
+      whatItIs:
+        'A local web app on top of Claude Code. Describe what you want: a lead agent reads the project and proposes a plan, specialist agents build it in parallel, and you get one combined diff to accept or discard.',
+      whatIBuilt:
+        'The local server that drives the agents, the plan, approve, build and review flow, the editor for agents, skills and access, and a showcase build that simulates the agents in the browser.',
+      challenges: [
+        'Safe by default: each run works in its own git worktree, and nothing changes in your files until you accept the diff.',
+        'Agents, skills and guidelines are saved as plain Claude Code files, so the same setup works without Meshh.',
+      ],
+      github: 'https://github.com/m1ssmee/Meshh',
+      local: 'localhost:4317',
+    },
+    {
+      id: 'blinkscope',
+      name: 'Blinkscope',
+      oneLiner: 'Enter a sky position and blink real SPHEREx infrared images of it across time: whatever jumps between plates is moving.',
+      stack: ['Next.js', 'TypeScript', 'FITS', 'WCS', 'Vitest'],
+      year: 2026,
+      screenshots: [],
+      whatItIs:
+        'A blink comparator for SPHEREx, built for the NASA Space Apps 2026 challenge "Planet X and SPHEREx". Enter a sky position: the viewer finds every SPHEREx exposure of it, aligns them and plays them, so anything that moves or changes stands out.',
+      whatIBuilt:
+        'A viewer that asks IRSA which images cover a position, reads them in the browser, resamples each north-up onto a shared grid and plays them as plates, with lookups by name and a Gaia overlay.',
+      challenges: [
+        'The browser reads each FITS image\'s header and only a strip of its rows from the public bucket, with HTTP Range requests.',
+        'Each strip is resampled onto one grid, the sky\'s median removed, and exposures stacked per survey pass.',
+      ],
+      github: 'https://github.com/m1ssmee/NASAProject',
+      live: 'https://blinkscope.vercel.app',
     },
     {
       id: 'lunar-rover',
