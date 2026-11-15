@@ -31,6 +31,8 @@ import { keyLayout, WELL, PAD } from './objects/laptopGeo.js'
 import { createCan, CAN } from './objects/can.js'
 import { createLamp, LAMP } from './objects/lamp.js'
 import { createStudio, STUDIO } from './objects/studio.js'
+import { createMasks, MASK_STAND } from './objects/masks.js'
+import { createPortraits } from './objects/portraits.js'
 import { createMonitor, createHdmiLink, MONITOR } from './objects/monitor.js'
 import caveatUrl from './assets/caveat.woff2?url'
 import { createVisitorsBook } from './visitors/book.js'
@@ -350,6 +352,7 @@ export function createScene(container, options = {}) {
     const trayJob = job({ type: 'tray', h: Q.trayH }, 17)
     const lighterJob = job({ type: 'lighter', h: Q.lighterH }, 3)
     const curlJob = job({ type: 'curl' }, 1)
+    const maskJobs = ['one', 'two'].map((which) => job({ type: 'mask', which }, 5))
     // (the laptop's bead-blast and its deck's wear, from its keys' layout)
     const laptopJob = job({ type: 'laptop', keys: keyLayout(), well: WELL, pad: PAD, deck: [LAPTOP.w, LAPTOP.d] }, 0.4)
 
@@ -1316,6 +1319,25 @@ export function createScene(container, options = {}) {
     })
     scene.add(can.group, can.puddle, can.drops, ...can.extras)
 
+    // ---- the two marble faces (objects/masks.js), on their plinth right of the can
+    const maskMeshes = await Promise.all(maskJobs)
+    if (destroyed) return
+    const facing0 = (turn) => Math.atan2(-LAYOUT.FWD[0] * Math.cos(turn) + LAYOUT.RIGHT[0] * Math.sin(turn), -LAYOUT.FWD[2] * Math.cos(turn) + LAYOUT.RIGHT[2] * Math.sin(turn))
+    const masks = createMasks({ meshes: { one: maskMeshes[0].mesh, two: maskMeshes[1].mesh }, at: new THREE.Vector3(LAYOUT.DESK.masks[0], ROOM.deskY, LAYOUT.DESK.masks[2]), yaw: facing0(LAYOUT.DESK.masksTurn) })
+    scene.add(masks.group)
+    for (const m of masks.materials) withEmber(m)
+    addObstacle(masks.group.matrixWorld, [MASK_STAND.plinth[0] / 2, 60, MASK_STAND.plinth[2] / 2], [0, 60, 0], 2)
+    step('marble faces (worker)')
+
+    // ---- the pictures on the wall (objects/portraits.js): three, framed; they blink, and one does
+    // worse. They move by the clock; not under automation (a test's pictures must hold still)
+    // unless the address asks for it (?art)
+    const portraits = createPortraits({ fwd: LAYOUT.FWD, right: LAYOUT.RIGHT, wallV: ROOM.wallV - ROOM.panel.gap, anisotropy: aniso })
+    scene.add(portraits.group)
+    for (const m of portraits.materials) withEmber(m)
+    let artOn = !navigator.webdriver || new URLSearchParams(location.search).has('art')
+    api.art = { get on() { return artOn }, set on(v) { artOn = !!v }, play: (kind) => portraits.play(kind, performance.now() / 1000) }
+
     // ---- beside the desk (objects/studio.js): a studio monitor on a stand at each end, a steel
     // bin right of the right one. A tap closes in on a speaker; a tap there turns the sound on or off
     const facing = (turn) => Math.atan2(-LAYOUT.FWD[0] * Math.cos(turn) + LAYOUT.RIGHT[0] * Math.sin(turn), -LAYOUT.FWD[2] * Math.cos(turn) + LAYOUT.RIGHT[2] * Math.sin(turn))
@@ -1729,6 +1751,7 @@ export function createScene(container, options = {}) {
       azPull: 1,
     })
     const frontV = new THREE.Vector3()
+    const artPos = new THREE.Vector3()
     const playerDof = (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld)
     const focusTargets = {
       ashtray: down((o) => o.set(4, 22, 2), 72),
@@ -1762,6 +1785,32 @@ export function createScene(container, options = {}) {
           },
         ]),
       ),
+      // (a picture: square on, all of its frame in view)
+      ...Object.fromEntries(
+        portraits.items.map((it) => [
+          `art-${it.kind}`,
+          {
+            view: () => {
+              const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
+              const dist = Math.max((it.size[1] + 70) / 2 / tanV, (it.size[0] + 70) / 2 / (tanV * camera.aspect))
+              return { target: it.center, pos: artPos.copy(it.center).addScaledVector(it.normal, dist) }
+            },
+            dof: (o) => o.copy(it.center),
+            deep: 1.5,
+          },
+        ]),
+      ),
+      // (the marble faces: from the chair's side, level with them)
+      masks: {
+        center: (o) => o.copy(masks.center),
+        radius: 165,
+        el: THREE.MathUtils.degToRad(7),
+        azPull: 1,
+        get az() {
+          return HOME.az - 0.16
+        },
+        deep: 2,
+      },
       laptop: { view: () => fitLaptop(), dof: (o) => laptop.screenCenter(o), deep: 1.6 },
       monitor: { view: () => fitMonitor(), dof: (o) => monitor.screenCenter(o), deep: 1.6 },
       // (the lamp: from the chair's side, a little above, its foot to its head in the picture)
@@ -1780,6 +1829,8 @@ export function createScene(container, options = {}) {
     focusMeshes.earbuds = earbudsLive.item.meshes
     focusMeshes.notebook = notebook.meshes
     focusMeshes.can = can.meshes
+    focusMeshes.masks = masks.meshes
+    for (const it of portraits.items) focusMeshes[`art-${it.kind}`] = it.meshes
     focusMeshes.speakerL = studio.speakers[0].meshes
     focusMeshes.speakerR = studio.speakers[1].meshes
     focusMeshes.laptop = laptop.meshes
@@ -1803,6 +1854,7 @@ export function createScene(container, options = {}) {
         root.classList.toggle('cg-close', !!name && name !== 'player' && name !== 'all')
         frameCache.valid = false
         if (!name) orbited = false
+        if (name === 'art-coal') api.art.play('coal')
         // (closer on the player: its screen wakes, even if it was switched off)
         if (name === 'player' && os) {
           osOff = false
@@ -2154,6 +2206,8 @@ export function createScene(container, options = {}) {
     const seatPts = seats.map((s) => new THREE.Vector3(s.dir[0] * (TRAY.bowlTop + 2.3), s.y + CIG.radius + 0.05, s.dir[2] * (TRAY.bowlTop + 2.3)))
     // (a tap on an object from afar, or from another object's close-up, brings the camera to it, and
     // only to it; once there, taps are the object's own: a flick, the remote's button)
+    const artItems = portraits.items.map((it) => ({ kind: it.kind, meshes: it.meshes, fixed: true, canGrab: () => true, onTap: () => api.art.play(it.kind) }))
+    const masksItem = { meshes: masks.meshes, fixed: true, canGrab: () => true, onTap: () => {} }
     const monitorItem = { meshes: [...monitor.meshes, ...hdmi.meshes], fixed: true, canGrab: () => true, onTap: () => {} }
     const speakerItems = []
     const grab = createGrab({
@@ -2172,7 +2226,7 @@ export function createScene(container, options = {}) {
           return true
         }
         // (the lamp's head and switch are its own at once: a tap switches it, from anywhere)
-        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : hit.item === monitorItem ? 'monitor' : hit.item === speakerItems[0] ? 'speakerL' : hit.item === speakerItems[1] ? 'speakerR' : hit.item === lampItem ? 'lamp' : cigItems.includes(hit.item) ? 'ashtray' : null
+        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : hit.item === monitorItem ? 'monitor' : hit.item === masksItem ? 'masks' : artItems.includes(hit.item) ? `art-${hit.item.kind}` : hit.item === speakerItems[0] ? 'speakerL' : hit.item === speakerItems[1] ? 'speakerR' : hit.item === lampItem ? 'lamp' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
         if (projOpen) leaveProject()
         focus.focusOn(name)
@@ -2366,6 +2420,8 @@ export function createScene(container, options = {}) {
       },
     }
     grab.add(canItem)
+    grab.add(masksItem)
+    for (const it of artItems) grab.add(it)
     // the second screen and its cable: only looked at; the USB-C plug at the laptop's side: a tap
     // pulls it out or puts it back, from anywhere
     grab.add(monitorItem)
@@ -2891,6 +2947,8 @@ export function createScene(container, options = {}) {
       ['monitor', 'The second screen', 'A terminal, every project running on localhost. Pull the USB-C plug at the laptop\u2019s side and it loses its signal.'],
       ['board', 'The pegboard', 'A few notes, this month with today ringed, and my badge. Tap a note and it lifts.'],
       ['notebook', 'The visitors\u2019 book', 'Open it and leave a thumbprint. Everyone\u2019s who came before is in there.'],
+      ['art-coal', 'The pictures', 'Three on the wall. Two of them blink. This one does worse, every so often.'],
+      ['masks', 'Two faces', 'Cut in marble, one turned up and one turned down. They are only to look at.'],
       ['speakerR', 'The speakers', 'Tap one for music. The lamp has a switch too, and the can opens.'],
       [null, 'That\u2019s the tour', 'Drag to look around, scroll to zoom. Escape always steps back.'],
     ]
@@ -3289,6 +3347,9 @@ export function createScene(container, options = {}) {
       const badgeBusy = badge.update(dt)
       const canBusy = can.update(dt)
       if (canBusy) shadowDirty = true
+      // the pictures: painted again when one's state changes (by the clock)
+      // (not before the scene has started: its first frames must come to rest)
+      const artBusy = artOn && loopReady && !dbgFlags.freeze && portraits.update(performance.now() / 1000)
       const linkBusy = hdmi.update(dt)
       const monBusy = monitor.update(dt)
       if (linkBusy) shadowDirty = true
@@ -3411,7 +3472,7 @@ export function createScene(container, options = {}) {
       if (dragging) shadowDirty = true
       // (the lamp switched changes the whole picture: drawn whole while its light eases, then the
       // cache baked again; so does the laptop while anything of it moves)
-      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || linkBusy || monBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
+      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || artBusy || linkBusy || monBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
       // (the cache is baked once the view has been still for an eighth of a second: a slow zoom or
@@ -3707,7 +3768,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, studio, monitor, hdmi, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, masks, portraits, studio, monitor, hdmi, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },

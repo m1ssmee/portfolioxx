@@ -11,6 +11,7 @@ import { collisionData } from '../objects/earbudsRig.js'
 import { bakeAll, curlVolume } from './bake.js'
 import { bakeRoom, roomTransfer } from '../objects/roomTex.js'
 import { beadPixels, wearPixels } from '../objects/laptopTex.js'
+import { maskMesh } from '../objects/masksGeo.js'
 
 // (each mesh made lighter, core/decimate.js: only where that moves its surface by less than three
 // thousandths of a millimetre, under a tenth of a pixel in the closest view, and leaves every
@@ -53,6 +54,10 @@ self.onmessage = (e) => {
     // (the laptop's bead-blast and its deck's wear, from its key layout: objects/laptopTex.js)
     const t = { bead: beadPixels(128), wear: wearPixels(m.keys, m.well, m.pad, m.deck) }
     self.postMessage({ id: m.id, tex: t }, [t.bead.px.buffer, t.wear.px.buffer])
+  } else if (m.type === 'mask') {
+    // (one of the two marble faces: objects/masksGeo.js)
+    const r = maskMesh(meshSDF, m.which)
+    self.postMessage({ id: m.id, mesh: r }, [...meshTransfer(r), r.cave.buffer])
   } else if (m.type === 'bake') {
     const t = bakeAll()
     const transfer = []

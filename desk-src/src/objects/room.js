@@ -22,7 +22,7 @@ import { noteCanvas, calendarCanvas, postcardCanvas, ticketCanvas, sketchCanvas,
 export const ROOM = {
   deskY: -3,
   wallV: -470, // (the desk's back edge; the panelling's face is panel.gap behind it)
-  deskFront: 460,
+  deskFront: 276, // (its front edge: a hand in front of the mat, no further)
   deskHalf: 1700, // (the wall's half width: its ends never in the picture)
   // the desk itself: its two ends (its left and right, across the picture), 1.32 m of it, on two
   // black steel end frames; the floor 730 mm below its top; the skirting along the wall

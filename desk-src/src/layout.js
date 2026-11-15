@@ -50,6 +50,10 @@ export const DESK = {
   // the way it was pushed where the desk is clear (a tap on its middle: straight back, past the
   // laptop's corner), else the nearest clear way to it (can.js)
   can: deskAt(190, -135),
+  // the two marble faces on their plinth: on the bare desk right of the can, near the wall, turned
+  // a little towards the chair (turn: from facing the chair, towards the right of the picture)
+  masks: deskAt(412, -262),
+  masksTurn: -0.22,
   // beside the desk, on the floor (the desk runs from u = -760 to 560: objects/room.js): a studio
   // monitor on a stand at each end, 35 mm off it and near the wall, turned in towards the chair
   // (turn: from facing the chair, towards the right of the picture); a bin right of the right stand
