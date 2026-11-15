@@ -13,7 +13,7 @@ export const MONITOR = {
   w: 346, // (portrait: the glass 336 x 597 inside a 5 mm border)
   h: 612,
   glass: [336, 597],
-  bottom: 96, // (its lower edge above the desk)
+  bottom: 44, // (its lower edge above the desk: low on its stand)
   R: 1500, // (the curve's radius)
   z0: 18, // (the glass's middle, in front of the foot's middle)
   foot: [230, 172, 10],
@@ -153,6 +153,37 @@ export function drawTerminal(c, projects) {
   })
 }
 
+/** What it shows with nothing plugged in: its own small box, on black. */
+export function drawNoSignal(c) {
+  const g = c.getContext('2d')
+  const W = c.width
+  const H = c.height
+  g.fillStyle = '#020305'
+  g.fillRect(0, 0, W, H)
+  const bw = 520
+  const bh = 210
+  const x = (W - bw) / 2
+  const y = H * 0.42 - bh / 2
+  g.fillStyle = '#12161c'
+  g.strokeStyle = '#3a4350'
+  g.lineWidth = 3
+  g.beginPath()
+  g.roundRect(x, y, bw, bh, 14)
+  g.fill()
+  g.stroke()
+  g.textAlign = 'center'
+  g.fillStyle = '#8d99a8'
+  g.font = "500 30px Inter, -apple-system, 'Segoe UI', Arial, sans-serif"
+  g.fillText('HDMI 1', W / 2, y + 70)
+  g.fillStyle = '#eef2f6'
+  g.font = "600 52px Inter, -apple-system, 'Segoe UI', Arial, sans-serif"
+  g.fillText('No signal', W / 2, y + 140)
+  g.fillStyle = '#5d6877'
+  g.font = "400 24px Inter, -apple-system, 'Segoe UI', Arial, sans-serif"
+  g.fillText('Check the cable and the input source', W / 2, y + bh + 54)
+  g.textAlign = 'left'
+}
+
 /**
  * The monitor. at: under the middle of its foot (world, on the desk); yaw: the way it faces.
  * Returns { group, meshes, materials, glow(on), screenCenter(out), screenNormal(out),
@@ -175,6 +206,13 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
   const map = new THREE.CanvasTexture(canvas)
   map.colorSpace = THREE.SRGBColorSpace
   map.anisotropy = anisotropy
+  const lost = document.createElement('canvas')
+  lost.width = 1080
+  lost.height = 1920
+  drawNoSignal(lost)
+  const lostMap = new THREE.CanvasTexture(lost)
+  lostMap.colorSpace = THREE.SRGBColorSpace
+  lostMap.anisotropy = anisotropy
   // (a matt panel: it shows its own picture, and little of the room in it)
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.92, roughness: 0.46, specularIntensity: 0.14, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })
   glass.customProgramCacheKey = () => 'monitor.glass'
@@ -212,13 +250,38 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
     'stand',
   )
   group.updateMatrixWorld(true)
+  let lit = true
+  let signal = true
+  let blank = 0
+  const show = () => (glass.emissiveIntensity = lit && blank <= 0 ? 0.92 : 0)
   return {
     group,
     meshes,
     materials: [shell, metal, glass],
     /** Its picture lit or dark (dark in the ember's own frame: the light is counted once). */
     glow(on) {
-      glass.emissiveIntensity = on ? 0.92 : 0
+      lit = on
+      show()
+    },
+    /** A signal on its input, or none: the picture goes black for a moment, then the terminal or its "No signal". */
+    setSignal(on) {
+      if (on === signal) return
+      signal = on
+      blank = on ? 0.9 : 0.35
+      show()
+    },
+    get signal() {
+      return signal
+    },
+    /** Each frame: the blank moment running out (returns true while it lasts). */
+    update(dt) {
+      if (blank <= 0) return false
+      blank -= dt
+      if (blank <= 0) {
+        glass.emissiveMap = signal ? map : lostMap
+        show()
+      }
+      return true
     },
     screenCenter: (out) => out.set(0, CY, M.z0).applyMatrix4(group.matrixWorld),
     screenNormal: (out) => out.set(0, 0, 1).transformDirection(group.matrixWorld),
@@ -238,6 +301,7 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
       for (const g of geometries) g.dispose()
       for (const m of [shell, metal, glass]) m.dispose()
       map.dispose()
+      lostMap.dispose()
     },
   }
 }
@@ -246,9 +310,12 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
  * The link to the laptop. port: the laptop's USB-C port (world); out: the way out of it (world,
  * level); deskY; run: the HDMI cable's way over the desk after the adapter (world points, their
  * heights ignored); up: the points up the monitor's neck (monitor.cableUp()).
- * Returns { group, meshes, materials, dispose() }.
+ * The USB-C plug comes out: toggle() pulls it and lays it on the desk beside the laptop, or puts it
+ * back; onChange(plugged) as it leaves the port, or once it is home again.
+ * Returns { group, meshes (what stays put), plugMeshes (the plug and its tail), materials,
+ *   plugged, toggle(), plug(), update(dt) -> still moving, dispose() }.
  */
-export function createHdmiLink({ port, out, fwd, deskY, run, up }) {
+export function createHdmiLink({ port, out, fwd, deskY, run, up, onChange }) {
   const group = new THREE.Group()
   group.name = 'hdmi'
   const alu = new THREE.MeshStandardMaterial({ color: 0x8e9197, roughness: 0.36, metalness: 0.9 })
@@ -265,26 +332,21 @@ export function createHdmiLink({ port, out, fwd, deskY, run, up }) {
     g.translate(c.x, c.y, c.z)
     parts[to].push(g)
   }
-  const tube = (pts, r, to) => parts[to].push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Math.max(16, pts.length * 14), r, 8, false))
-  // the USB-C plug: its shell out of the port
+  const curve = (pts) => new THREE.CatmullRomCurve3(pts, false, 'centripetal')
   const py = port.y
   const P = (d, y = py) => new THREE.Vector3(port.x + o.x * d, y, port.z + o.z * d)
-  box(12.4, 6.2, 19, P(11.5), o, 'alu')
-  box(8.2, 2.4, 6, P(0), o, 'alu')
   // the adapter's block, on the desk: out from the port and towards the chair, lying along `axis`
   const axis = new THREE.Vector3().copy(o).multiplyScalar(0.72).addScaledVector(fwd, -0.69).normalize()
   const by = deskY + 5.4
   const B = P(34, by).addScaledVector(axis, 58)
   const bEnd = (s) => new THREE.Vector3().copy(B).addScaledVector(axis, s)
   box(24, 10.8, 56, B, axis, 'alu')
-  // its tail from the plug
-  tube([P(20.5), P(30), P(40, by + 0.5).addScaledVector(axis, 10), bEnd(-40), bEnd(-27)], 2.1, 'black')
-  // the HDMI plug in its other end, its strain relief, the cable
+  // the HDMI plug in its far end, its strain relief, the cable
   box(21, 10.2, 30, bEnd(28 + 14), axis, 'black')
   box(14, 8.6, 12, bEnd(28 + 35), axis, 'black')
   const cy = deskY + 3.4
   const lift = (p, y = cy) => new THREE.Vector3(p.x, y, p.z)
-  tube([bEnd(28 + 38).setY(by), bEnd(28 + 56).setY(by - 1), bEnd(28 + 80).setY(cy), ...run.map((p) => lift(p)), ...up], 3.3, 'black')
+  parts.black.push(new THREE.TubeGeometry(curve([bEnd(28 + 38).setY(by), bEnd(28 + 56).setY(by - 1), bEnd(28 + 80).setY(cy), ...run.map((p) => lift(p)), ...up]), 220, 3.3, 8, false))
   const meshes = []
   const materials = { alu, black }
   const geometries = []
@@ -298,14 +360,72 @@ export function createHdmiLink({ port, out, fwd, deskY, run, up }) {
     group.add(m)
     meshes.push(m)
   }
-  return {
+  // ---- the USB-C plug (its shell, its tongue) and the tail to the block: they move
+  const plugGeo = mergeGeometries([new THREE.BoxGeometry(12.4, 6.2, 19), new THREE.BoxGeometry(8.2, 2.4, 6.4).translate(0, 0, -12.4)])
+  geometries.push(plugGeo)
+  const plugMesh = new THREE.Mesh(plugGeo, alu)
+  plugMesh.name = 'hdmi.usbc'
+  plugMesh.castShadow = true
+  const tail = new THREE.Mesh(new THREE.BufferGeometry(), black)
+  tail.name = 'hdmi.tail'
+  tail.castShadow = true
+  group.add(plugMesh, tail)
+  const yaw0 = yawOf(o)
+  const rear = new THREE.Vector3()
+  const dir = new THREE.Vector3()
+  let t = 0 // (0: in the port; 1: out, on the desk)
+  let to = 0
+  /** The plug and its tail at t: drawn out of the port, then swung a little and laid on the desk. */
+  function place() {
+    const pull = Math.min(1, t / 0.45)
+    const drop = Math.max(0, (t - 0.3) / 0.7)
+    const e1 = pull * pull * (3 - 2 * pull)
+    const e2 = drop * drop * (3 - 2 * drop)
+    const yaw = yaw0 + 0.55 * e2
+    dir.set(Math.sin(yaw), 0, Math.cos(yaw))
+    plugMesh.position.copy(P(11.5 + 30 * e1 + 6 * e2)).addScaledVector(fwd, -16 * e2)
+    plugMesh.position.y = py + (deskY + 3.15 - py) * e2
+    plugMesh.rotation.y = yaw
+    plugMesh.updateMatrixWorld(true)
+    rear.copy(plugMesh.position).addScaledVector(dir, 9.5)
+    const mid = new THREE.Vector3().copy(rear).addScaledVector(dir, 12)
+    const g = new THREE.TubeGeometry(curve([rear.clone(), mid, bEnd(-44).setY(by + 0.4), bEnd(-27)]), 28, 2.1, 8, false)
+    tail.geometry.dispose()
+    tail.geometry = g
+  }
+  place()
+  group.updateMatrixWorld(true)
+  const api = {
     group,
     meshes,
+    plugMeshes: [plugMesh, tail],
     materials: [alu, black],
+    get plugged() {
+      return to === 0
+    },
+    toggle() {
+      to = to ? 0 : 1
+      // (out of the port at once; home only when it is back in)
+      if (to === 1) onChange?.(false)
+    },
+    plug() {
+      if (to === 0) return
+      to = 0
+    },
+    update(dt) {
+      if (t === to) return false
+      const was = t
+      t = to > t ? Math.min(to, t + dt / 0.5) : Math.max(to, t - dt / 0.5)
+      place()
+      if (to === 0 && t === 0 && was > 0) onChange?.(true)
+      return true
+    },
     dispose() {
       for (const g of geometries) g.dispose()
+      tail.geometry.dispose()
       alu.dispose()
       black.dispose()
     },
   }
+  return api
 }

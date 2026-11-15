@@ -165,6 +165,13 @@ the physics and the cable's mesh both read it.
   HDMI cable round the front of the monitor's foot and up its neck. The lamp moved to the desk's
   left end to clear it.
 
+Since then: the plush toys are bigger and drawn as cloth with a pile (a few shells of the same mesh,
+`src/objects/plush.js`); they can be picked up, carried and thrown (`core/body.js`; one that falls
+off the desk drops back onto its place). The speakers have pale cones, trim rings, foam pads and
+round-footed stands. The monitor sits lower; a tap on the USB-C plug at the laptop's side pulls it
+out (the monitor shows "No signal") or puts it back. The desk mat is wider and printed: contour
+lines and a low sun on ink blue (`MAT_COLORS.ink` in `src/objects/deskMat.js`).
+
 ## The camera
 
 - A glide (`src/core/focus.js`) runs on the target and the camera's angle and distance round it:

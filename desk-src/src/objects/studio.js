@@ -8,8 +8,8 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 export const STUDIO = {
-  speaker: { w: 200, h: 312, d: 250, r: 13, woofer: [0, 112, 60], tweeter: [0, 243, 13], port: [0, 27, 122, 13] },
-  stand: { foot: 290, footH: 9, col: 58, top: [215, 235], topH: 6, pad: 5 },
+  speaker: { w: 206, h: 318, d: 250, r: 30, woofer: [0, 112, 60], tweeter: [0, 243, 13], port: [0, 27, 122, 13] },
+  stand: { foot: 300, footH: 14, col: 46, top: [215, 235], topH: 6, pad: 34 },
   bin: { r: 104, h: 272, lid: 20 },
 }
 
@@ -68,21 +68,23 @@ export function createStudio({ floorY, top, left, right, yawL, yawR, bin, binYaw
   const group = new THREE.Group()
   group.name = 'studio'
   const geometries = []
-  const cabinet = new THREE.MeshStandardMaterial({ color: 0x3d3d41, roughness: 0.66, metalness: 0 })
+  const cabinet = new THREE.MeshStandardMaterial({ color: 0x45464b, roughness: 0.62, metalness: 0 })
   const rubber = new THREE.MeshStandardMaterial({ color: 0x29292c, roughness: 0.46 })
-  const cone = new THREE.MeshStandardMaterial({ color: 0x7b7d84, roughness: 0.34, metalness: 0.3 })
-  const dome = new THREE.MeshStandardMaterial({ color: 0x80828a, roughness: 0.5 })
+  const cone = new THREE.MeshStandardMaterial({ color: 0xe4e3df, roughness: 0.5, metalness: 0.05 })
+  const dome = new THREE.MeshStandardMaterial({ color: 0x202023, roughness: 0.42 })
+  const trim = new THREE.MeshStandardMaterial({ color: 0xa9acb2, roughness: 0.34, metalness: 0.85 })
+  const foam = new THREE.MeshStandardMaterial({ color: 0x4a4b4f, roughness: 1 })
   const hole = new THREE.MeshBasicMaterial({ color: 0x040404 })
   // (the drivers' dishes are open surfaces, seen from their hollow side)
   const guide = cabinet.clone()
-  for (const m of [rubber, cone, dome, guide]) m.side = THREE.DoubleSide
+  for (const m of [rubber, cone, dome, guide, trim]) m.side = THREE.DoubleSide
   const steel = new THREE.MeshStandardMaterial({ color: 0x303033, roughness: 0.42, metalness: 0.35 })
   const stainless = new THREE.MeshStandardMaterial({ color: 0xcdd0d4, roughness: 0.3, metalness: 1 })
   const plastic = new THREE.MeshStandardMaterial({ color: 0x151516, roughness: 0.5 })
   const light = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.97, 0.9).multiplyScalar(2.4) })
   const shade = new THREE.MeshBasicMaterial({ color: 0x000000, map: shadeTexture(), transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: -2 })
-  const lit = [cabinet, rubber, cone, dome, steel, stainless, plastic, guide]
-  const keys = ['cabinet', 'rubber', 'cone', 'dome', 'steel', 'stainless', 'plastic', 'guide']
+  const lit = [cabinet, rubber, cone, dome, steel, stainless, plastic, guide, trim, foam]
+  const keys = ['cabinet', 'rubber', 'cone', 'dome', 'steel', 'stainless', 'plastic', 'guide', 'trim', 'foam']
   lit.forEach((m, i) => (m.customProgramCacheKey = () => `studio.${keys[i]}`))
   const materials = [...lit, hole, light, shade]
   const mk = (g, m, name, parent) => {
@@ -102,11 +104,28 @@ export function createStudio({ floorY, top, left, right, yawL, yawR, bin, binYaw
   const standH = top - floorY
   const colH = standH - T.footH - T.topH
   const standGeo = merged([
-    slab(T.foot, T.foot, T.footH, 14, 1.5),
-    new THREE.BoxGeometry(T.col, colH, T.col).translate(0, T.footH + colH / 2, 0),
-    slab(T.top[0], T.top[1], T.topH, 8, 1).translate(0, standH - T.topH, 0),
+    // (a heavy round foot, its edge eased, rising to a collar round the column)
+    lathe(
+      [
+        [0, 0],
+        [T.foot / 2 - 3, 0],
+        [T.foot / 2, 3],
+        [T.foot / 2, T.footH - 4],
+        [T.foot / 2 - 4, T.footH],
+        [T.col / 2 + 22, T.footH + 1.5],
+        [T.col / 2 + 9, T.footH + 9],
+        [T.col / 2 + 4, T.footH + 30],
+        [T.col / 2, T.footH + 34],
+      ],
+      56,
+    ),
+    new THREE.CylinderGeometry(T.col / 2, T.col / 2, colH, 32).translate(0, T.footH + colH / 2, 0),
+    // (a collar under the plate, the plate)
+    new THREE.CylinderGeometry(T.col / 2 + 16, T.col / 2 + 3, 26, 32).translate(0, standH - T.topH - 13, 0),
+    slab(T.top[0], T.top[1], T.topH, 10, 1).translate(0, standH - T.topH, 0),
   ])
-  const padGeo = merged([-1, 1].flatMap((sx) => [-1, 1].map((sz) => new THREE.CylinderGeometry(11, 11, T.pad, 20).translate(sx * (T.top[0] / 2 - 26), standH + T.pad / 2, sz * (T.top[1] / 2 - 28)))))
+  // (the pad the speaker stands on: a slab of grey acoustic foam, a little smaller than the plate)
+  const padGeo = new THREE.BoxGeometry(T.top[0] - 14, T.pad, T.top[1] - 10, 1, 1, 1).translate(0, standH + T.pad / 2, 0)
   const baseY = standH + T.pad
   const zf = S.d / 2 // (the baffle)
   const [wx, wy, wr] = S.woofer
@@ -195,9 +214,22 @@ export function createStudio({ floorY, top, left, right, yawL, yawR, bin, binYaw
   ])
   // (the baffle is cut by nothing: the drivers' dishes are drawn over a black disc sunk behind it,
   // through the depth test: the rings hide where they meet)
+  const ring = (r0, r1, x, y) =>
+    onBaffle(
+      lathe([
+        [r0, 0.1],
+        [r0 + 1.2, 1.5],
+        [r1 - 1.2, 1.5],
+        [r1, 0.1],
+      ]),
+      x,
+      y,
+      zf,
+    )
+  const trimGeo = merged([ring(wr + 12.6, wr + 19, wx, baseY + wy), ring(tr + 26.6, tr + 31, tx, baseY + ty)])
   const ledGeo = new THREE.CircleGeometry(1.7, 16).translate(S.w / 2 - 22, baseY + py + 1, zf + 0.15)
   const shadeGeo = new THREE.PlaneGeometry(T.foot * 1.9, T.foot * 1.9).rotateX(-Math.PI / 2).translate(0, 0.6, 0)
-  for (const g of [standGeo, padGeo, cabGeo, surroundGeo, coneGeo, capGeo, guideGeo, domeGeo, holeGeo, ledGeo, shadeGeo]) geometries.push(g)
+  for (const g of [trimGeo, standGeo, padGeo, cabGeo, surroundGeo, coneGeo, capGeo, guideGeo, domeGeo, holeGeo, ledGeo, shadeGeo]) geometries.push(g)
 
   const leds = []
   const speakers = [
@@ -210,7 +242,8 @@ export function createStudio({ floorY, top, left, right, yawL, yawR, bin, binYaw
     g.rotation.y = yaw
     const meshes = [
       [standGeo, steel, 'stand'],
-      [padGeo, rubber, 'pads'],
+      [padGeo, foam, 'pad'],
+      [trimGeo, trim, 'trim'],
       [cabGeo, cabinet, 'cabinet'],
       [surroundGeo, rubber, 'surround'],
       [coneGeo, cone, 'cone'],

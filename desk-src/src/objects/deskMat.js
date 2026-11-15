@@ -11,9 +11,9 @@ export const MAT = {
   // its extent in the view's axes (mm): from far off the picture's left to between the ashtray and
   // the notebook, a hand's width above and below the objects
   u0: -700,
-  u1: 86,
+  u1: 112, // (a hand short of the notebook)
   v0: -125, // (in front of the laptop, which stands on the bare desk)
-  v1: 168,
+  v1: 224, // (a wide pad now: 812 x 349 mm)
   r: 16, // (the corners' radius)
   edge: 3.4, // (the rolled edge's width, mm)
   tile: 64, // (mm the felt's texture covers before it repeats)
@@ -26,6 +26,9 @@ export const MAT_COLORS = {
   rust: { felt: 0x9a5640, thread: 0x7a412f, sheen: 0xe2a58c },
   oat: { felt: 0xc9bea9, thread: 0xa99d86, sheen: 0xf2ece0 },
   heather: { felt: 0xa3a5a8, thread: 0x7f8287, sheen: 0xe6e8ec },
+  // (the printed pad: a deep ink blue, a map's contour lines on it: `print` their colour, `sun` the
+  // disc's)
+  ink: { felt: 0x39415c, thread: 0x232838, sheen: 0x8f9cc4, print: '#7fe0d2', sun: '#ff8a4c' },
 }
 
 /** A seeded random (the felt is the same every time). */
@@ -170,6 +173,95 @@ function outline(m, perCorner = 14) {
  * The mat. colors: one of MAT_COLORS. Returns { group, meshes, materials (for the ember's light),
  * setColors(c), dispose() }.
  */
+/**
+ * The pad's print (W x H px over the whole pad): a map's contour lines, every fifth one heavier,
+ * a low sun cut by horizontal slits, a small legend in a corner. Transparent where the felt shows.
+ */
+function printCanvas(W, H, c) {
+  const cv = document.createElement('canvas')
+  cv.width = W
+  cv.height = H
+  const g = cv.getContext('2d')
+  // the land: a few octaves of smooth noise, a ridge running across it
+  const N = 64
+  const lat = new Float32Array(N * N)
+  const r = rng(4242)
+  for (let i = 0; i < N * N; i++) lat[i] = r()
+  const smooth = (t) => t * t * (3 - 2 * t)
+  const noise = (x, y) => {
+    const xi = Math.floor(x)
+    const yi = Math.floor(y)
+    const fx = smooth(x - xi)
+    const fy = smooth(y - yi)
+    const at = (a, b) => lat[((b % N) + N) % N * N + (((a % N) + N) % N)]
+    return (at(xi, yi) * (1 - fx) + at(xi + 1, yi) * fx) * (1 - fy) + (at(xi, yi + 1) * (1 - fx) + at(xi + 1, yi + 1) * fx) * fy
+  }
+  const K = 15 // (contour levels)
+  const lev = new Int16Array(W * H)
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const u = (x / W) * 4.6
+      const v = (y / W) * 4.6
+      let h = noise(u, v) * 0.56 + noise(u * 2.1 + 9, v * 2.1 + 3) * 0.27 + noise(u * 4.3 + 1, v * 4.3 + 7) * 0.12
+      h += 0.16 * Math.sin(u * 0.9 + v * 0.5)
+      lev[y * W + x] = Math.floor(h * K)
+    }
+  const img = g.createImageData(W, H)
+  const col = [parseInt(c.print.slice(1, 3), 16), parseInt(c.print.slice(3, 5), 16), parseInt(c.print.slice(5, 7), 16)]
+  for (let y = 1; y < H - 2; y++)
+    for (let x = 1; x < W - 2; x++) {
+      const l = lev[y * W + x]
+      // (a line where the level changes; a heavier one at every fifth)
+      const edge = l !== lev[y * W + x + 1] || l !== lev[(y + 1) * W + x]
+      const major = Math.max(l, lev[y * W + x + 1], lev[(y + 1) * W + x]) % 5 === 0
+      const wide = major && (l !== lev[y * W + x + 2] || l !== lev[(y + 2) * W + x] || l !== lev[y * W + x - 1] || l !== lev[(y - 1) * W + x])
+      if (!edge && !wide) continue
+      const o = (y * W + x) * 4
+      img.data[o] = col[0]
+      img.data[o + 1] = col[1]
+      img.data[o + 2] = col[2]
+      img.data[o + 3] = edge && major ? 235 : wide ? 190 : 120
+    }
+  g.putImageData(img, 0, 0)
+  // the sun, low on the left: a disc, cut by slits that widen towards its foot
+  const sx = W * 0.2
+  const sy = H * 0.5
+  const sr = H * 0.27
+  g.save()
+  g.globalCompositeOperation = 'destination-out'
+  g.beginPath()
+  g.arc(sx, sy, sr * 1.16, 0, Math.PI * 2)
+  g.fill()
+  g.restore()
+  g.save()
+  g.beginPath()
+  g.arc(sx, sy, sr, 0, Math.PI * 2)
+  g.clip()
+  const sun = g.createLinearGradient(0, sy - sr, 0, sy + sr)
+  sun.addColorStop(0, '#ffd27a')
+  sun.addColorStop(0.55, c.sun)
+  sun.addColorStop(1, '#f0527a')
+  g.fillStyle = sun
+  g.fillRect(sx - sr, sy - sr, 2 * sr, 2 * sr)
+  g.globalCompositeOperation = 'destination-out'
+  for (let k = 0; k < 7; k++) {
+    const t = k / 6
+    const yy = sy + sr * (0.06 + 0.86 * t)
+    g.fillRect(sx - sr, yy, 2 * sr, sr * (0.022 + 0.062 * t))
+  }
+  g.restore()
+  // the legend
+  g.fillStyle = c.print
+  g.globalAlpha = 0.85
+  g.font = `600 ${Math.round(H * 0.026)}px ui-monospace, Menlo, Consolas, monospace`
+  g.fillText('LATE NIGHT DESK', W * 0.035, H * 0.905)
+  g.globalAlpha = 0.55
+  g.font = `400 ${Math.round(H * 0.02)}px ui-monospace, Menlo, Consolas, monospace`
+  g.fillText('CONTOUR INTERVAL 5 M  ·  SHEET 26', W * 0.035, H * 0.94)
+  g.globalAlpha = 1
+  return cv
+}
+
 export function createDeskMat({ fwd, right, colors = MAT_COLORS.slate, anisotropy = 4 }) {
   const m = MAT
   const group = new THREE.Group()
@@ -227,7 +319,33 @@ export function createDeskMat({ fwd, right, colors = MAT_COLORS.slate, anisotrop
     metalness: 0,
     envMapIntensity: 0.85,
   })
-  feltMat.customProgramCacheKey = () => 'deskMat.felt'
+  // (the print, where the pad has one: laid over the felt by the pad's own extent, the felt's weave
+  // still showing through it)
+  let printTex = null
+  if (colors.print) {
+    printTex = new THREE.CanvasTexture(printCanvas(2048, Math.round((2048 * (m.v1 - m.v0)) / (m.u1 - m.u0)), colors))
+    printTex.colorSpace = THREE.SRGBColorSpace
+    printTex.anisotropy = anisotropy
+    const pu = { tPrint: { value: printTex }, uPrint: { value: new THREE.Vector4(m.u0, m.v0, 1 / (m.u1 - m.u0), 1 / (m.v1 - m.v0)) } }
+    feltMat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, pu)
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform vec4 uPrint;\nvarying vec2 vPrintUv;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPrintUv = vec2((position.x - uPrint.x) * uPrint.z, 1.0 - (position.z - uPrint.y) * uPrint.w);')
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform sampler2D tPrint;\nvarying vec2 vPrintUv;')
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+          {
+            vec4 pr = texture2D(tPrint, vPrintUv);
+            float weave = dot(texture2D(map, vMapUv).rgb, vec3(0.3333));
+            diffuseColor.rgb = mix(diffuseColor.rgb, pr.rgb * (0.55 + 0.6 * weave), pr.a * 0.9);
+          }`,
+        )
+    }
+  }
+  feltMat.customProgramCacheKey = () => (colors.print ? 'deskMat.print' : 'deskMat.felt')
 
   // ---- the rolled edge: a profile swept round the outline, from inside the felt's top, over a
   // slight roll, down the side to the desk

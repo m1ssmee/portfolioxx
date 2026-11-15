@@ -52,10 +52,10 @@ export const DESK = {
   can: deskAt(190, -135),
   // the plush toys, on the bare desk right of the can: the duck in front, the ghost behind it and
   // further right, both turned a little towards the middle of the desk (turn: from facing the chair)
-  plushDuck: deskAt(300, -112),
-  plushDuckTurn: -0.32,
-  plushGhost: deskAt(392, -218),
-  plushGhostTurn: -0.2,
+  plushDuck: deskAt(332, -122),
+  plushDuckTurn: -0.3,
+  plushGhost: deskAt(442, -238),
+  plushGhostTurn: -0.22,
   // beside the desk, on the floor (the desk runs from u = -760 to 560: objects/room.js): a studio
   // monitor on a stand at each end, 35 mm off it and near the wall, turned in towards the chair
   // (turn: from facing the chair, towards the right of the picture); a bin right of the right stand
@@ -63,7 +63,7 @@ export const DESK = {
   speakerLTurn: 0.42,
   speakerR: deskAt(700, -318),
   speakerRTurn: -0.42,
-  speakerTop: 950, // (the stands' top plates, above the floor)
+  speakerTop: 905, // (the stands' top plates, above the floor)
   bin: deskAt(962, -330),
   // the lamp: its foot at the back left, just behind the mat (33 mm off it, 92 mm in radius); its
   // head's pivot (325 mm up: low enough for the elbow to stand above it), out over the mat's corner

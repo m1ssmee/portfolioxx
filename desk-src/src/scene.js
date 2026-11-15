@@ -55,7 +55,7 @@ installEmberLight()
 // resolution, upsampled by depth, and the bloom's mip chain from half resolution: side by side with
 // full-resolution buffers they are indistinguishable; see the report.)
 // the desk mat's colour (objects/deskMat.js: slate, sage, rust or oat)
-const MAT_COLOR = 'sage'
+const MAT_COLOR = 'ink'
 const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.4, bloomScale: 0.5, shadow: 2048, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
 /** The canvas at full sharpness: CSS size x devicePixelRatio, capped at 2 only on 3x screens. */
 // (the canvas at the screen's own pixels, up to 2 a CSS pixel: stretched, thin seams break into
@@ -1286,14 +1286,47 @@ export function createScene(container, options = {}) {
     // tap closes in on them; a tap there pokes one: it squashes and wobbles back
     const plushParts = await Promise.all(plushJobs)
     if (destroyed) return
+    // (what a thrown toy meets: all the can does, and the desk as a slab with the floor under it)
+    const DKB = ROOM.desk
+    const deskHalfB = [(DKB.u1 - DKB.u0) / 2, ROOM.deskThick / 2, (ROOM.deskFront - ROOM.wallV) / 2]
+    const plushField = (x, y, z) => {
+      const u = x * LAYOUT.RIGHT[0] + z * LAYOUT.RIGHT[2]
+      const v = -(x * LAYOUT.FWD[0] + z * LAYOUT.FWD[2])
+      return Math.min(obstacleSdf(x, y, z), rbox(u - (DKB.u0 + DKB.u1) / 2, y - (ROOM.deskY - ROOM.deskThick / 2), v - (ROOM.deskFront + ROOM.wallV) / 2, deskHalfB, 2))
+    }
+    const plushSdf = (x, y, z, g) => {
+      const d = plushField(x, y, z)
+      const e = 0.5
+      g[0] = plushField(x + e, y, z) - d
+      g[1] = plushField(x, y + e, z) - d
+      g[2] = plushField(x, y, z + e) - d
+      const l = Math.hypot(g[0], g[1], g[2]) || 1
+      g[0] /= l
+      g[1] /= l
+      g[2] /= l
+      return d
+    }
+    const overDesk = (x, z) => {
+      const u = x * LAYOUT.RIGHT[0] + z * LAYOUT.RIGHT[2]
+      const v = -(x * LAYOUT.FWD[0] + z * LAYOUT.FWD[2])
+      return u > DKB.u0 && u < DKB.u1 && v > ROOM.wallV && v < ROOM.deskFront
+    }
     const plushies = ['ghost', 'duck'].map((which, i) => {
       const at = which === 'ghost' ? LAYOUT.DESK.plushGhost : LAYOUT.DESK.plushDuck
       const turn = which === 'ghost' ? LAYOUT.DESK.plushGhostTurn : LAYOUT.DESK.plushDuckTurn
-      const p = createPlush({ which, parts: plushParts[i].parts, at: new THREE.Vector3(at[0], ROOM.deskY, at[2]), yaw: LAYOUT.PLAYER.yaw + turn, anisotropy: aniso })
-      scene.add(p.group)
+      const p = createPlush({
+        which,
+        parts: plushParts[i].parts,
+        at: new THREE.Vector3(at[0], ROOM.deskY, at[2]),
+        yaw: LAYOUT.PLAYER.yaw + turn,
+        anisotropy: aniso,
+        sdf: plushSdf,
+        floorY: ROOM.floorY,
+        surfaceY: (x, z) => (overDesk(x, z) ? ROOM.deskY : ROOM.floorY),
+        onLand: (k) => audio.plush?.(k),
+      })
+      scene.add(p.group, p.shade)
       for (const m of p.materials) withEmber(m)
-      // (what falls there meets it: a rounded box about it)
-      addObstacle(p.group.matrixWorld, [p.radius * 0.8, p.top / 2, p.radius * 0.8], [0, p.top / 2, 0], p.radius * 0.5)
       return p
     })
     step('plush toys (worker)')
@@ -1328,6 +1361,12 @@ export function createScene(container, options = {}) {
       deskY: ROOM.deskY,
       run: LAYOUT.DESK.hdmiRun.map((p) => new THREE.Vector3(...p)),
       up: monitor.cableUp(),
+      // (pulled out, the monitor loses its picture; back in, it finds it again)
+      onChange: (plugged) => {
+        monitor.setSignal(plugged)
+        audio.tick()
+        frameCache.valid = false
+      },
     })
     scene.add(hdmi.group)
     for (const m of hdmi.materials) withEmber(m)
@@ -1425,8 +1464,8 @@ export function createScene(container, options = {}) {
     const BD = ROOM.board
     const footUv = uvOf(lampFoot)
     const SEAT_WIDE = [
-      [-375, 135, 0],
-      [290, 165, 0],
+      [-375, MAT.v1 + 8, 0],
+      [290, MAT.v1 + 8, 0],
       [footUv[0] - LAMP.footR, footUv[1], 0],
       uvOf(lamp.elbow),
       [BD.u - BD.w / 2 - 10, ROOM.wallV, BD.y0 + BD.h],
@@ -1773,7 +1812,7 @@ export function createScene(container, options = {}) {
     focusMeshes.speakerL = studio.speakers[0].meshes
     focusMeshes.speakerR = studio.speakers[1].meshes
     focusMeshes.laptop = laptop.meshes
-    focusMeshes.monitor = [...monitor.meshes, ...hdmi.meshes]
+    focusMeshes.monitor = [...monitor.meshes, ...hdmi.meshes, ...hdmi.plugMeshes]
     focusMeshes.lamp = [...lamp.meshes, ...lamp.switchMeshes]
     // (the badge hangs on the board: a tap on it is a tap on the board)
     focusMeshes.board = [...room.boardMeshes, ...badge.meshes]
@@ -2352,23 +2391,42 @@ export function createScene(container, options = {}) {
       },
     }
     grab.add(canItem)
-    // the second screen and its cable: only looked at
+    // the second screen and its cable: only looked at; the USB-C plug at the laptop's side: a tap
+    // pulls it out or puts it back, from anywhere
     grab.add(monitorItem)
+    grab.add({
+      meshes: hdmi.plugMeshes,
+      fixed: true,
+      canGrab: () => true,
+      onTap: () => {
+        hdmi.toggle()
+        shadowDirty = true
+        wake()
+      },
+    })
     // the speakers: a tap on one (up close) is the sound's switch
     for (const sp of studio.speakers) {
       const it = { meshes: sp.meshes, fixed: true, canGrab: () => true, onTap: () => root.querySelector('[data-act="sound"]').click() }
       speakerItems.push(it)
       grab.add(it)
     }
-    // the plush toys: only poked (a drag on one turns the camera)
+    // the plush toys: picked up, carried and thrown (they land where they land; reset, or a fall
+    // off the desk, puts one back); a tap pokes one
     for (const p of plushies) {
       const it = {
         meshes: p.meshes,
-        fixed: true,
         canGrab: () => true,
+        pick: (hit, ray) => {
+          p.pick(hit, ray)
+          shadowDirty = true
+        },
+        aim: (ray) => p.aim(ray),
+        twist: (rad) => p.twist(rad),
+        release: () => p.release(),
+        home: () => p.home(),
+        cancel: () => p.cancel(),
         onTap: () => {
           p.poke()
-          audio.plush?.()
           shadowDirty = true
           wake()
         },
@@ -2874,6 +2932,8 @@ export function createScene(container, options = {}) {
       // (the can stood up, full and sealed again; the lamp on and aimed as it was; the laptop open
       // on its first tab, at the top of the page, its keyboard dark)
       can.reset()
+      hdmi.plug()
+      for (const p of plushies) p.home()
       setLamp(true)
       lamp.aimAt(LAMP_AIM0)
       laptop.setTab(0)
@@ -3201,6 +3261,9 @@ export function createScene(container, options = {}) {
       const badgeBusy = badge.update(dt)
       const canBusy = can.update(dt)
       if (canBusy) shadowDirty = true
+      const linkBusy = hdmi.update(dt)
+      const monBusy = monitor.update(dt)
+      if (linkBusy) shadowDirty = true
       let plushBusy = false
       for (const p of plushies) if (p.update(dt)) plushBusy = true
       if (plushBusy) shadowDirty = true
@@ -3321,7 +3384,7 @@ export function createScene(container, options = {}) {
       if (dragging) shadowDirty = true
       // (the lamp switched changes the whole picture: drawn whole while its light eases, then the
       // cache baked again; so does the laptop while anything of it moves)
-      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || plushBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
+      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || plushBusy || linkBusy || monBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
       // (the cache is baked once the view has been still for an eighth of a second: a slow zoom or
