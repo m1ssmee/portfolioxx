@@ -152,10 +152,6 @@ the physics and the cable's mesh both read it.
 - The wall is plain warm white; on it a white steel pegboard (`src/objects/room.js`: the holes are
   drawn in its shader), what is pinned on it unchanged. The desk is a real one now: 1.32 m wide,
   on two black steel end frames, over an oak floor, a skirting along the wall.
-- `src/objects/plush.js`, `plushGeo.js`: two plush toys right of the can, a purple ghost and a
-  yellow duck. Their shapes are distance fields meshed in the worker; their faces are drawn on a
-  canvas and laid on from the front. A tap closes in; a tap there pokes one (it squashes and
-  wobbles back).
 - `src/objects/studio.js`: a studio monitor on a floor stand at each end of the desk, turned in
   towards the chair (a tap closes in; a tap there is the sound's switch), and a small stainless
   steel pedal bin right of the right stand.
@@ -165,9 +161,7 @@ the physics and the cable's mesh both read it.
   HDMI cable round the front of the monitor's foot and up its neck. The lamp moved to the desk's
   left end to clear it.
 
-Since then: the plush toys are bigger and drawn as cloth with a pile (a few shells of the same mesh,
-`src/objects/plush.js`); they can be picked up, carried and thrown (`core/body.js`; one that falls
-off the desk drops back onto its place). The speakers have pale cones, trim rings, foam pads and
+Since then: the speakers have pale cones, trim rings, foam pads and
 round-footed stands. The monitor sits lower; a tap on the USB-C plug at the laptop's side pulls it
 out (the monitor shows "No signal") or puts it back. The desk mat is wider and printed: contour
 a koi pond under cherry blossom, drawn in code (`MAT_COLORS.koi` in `src/objects/deskMat.js`; `ink` is a contour-map print).

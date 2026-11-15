@@ -30,7 +30,6 @@ import shotBlinkscope from './assets/sites/blinkscope.webp?url'
 import { keyLayout, WELL, PAD } from './objects/laptopGeo.js'
 import { createCan, CAN } from './objects/can.js'
 import { createLamp, LAMP } from './objects/lamp.js'
-import { createPlush } from './objects/plush.js'
 import { createStudio, STUDIO } from './objects/studio.js'
 import { createMonitor, createHdmiLink, MONITOR } from './objects/monitor.js'
 import caveatUrl from './assets/caveat.woff2?url'
@@ -351,7 +350,6 @@ export function createScene(container, options = {}) {
     const trayJob = job({ type: 'tray', h: Q.trayH }, 17)
     const lighterJob = job({ type: 'lighter', h: Q.lighterH }, 3)
     const curlJob = job({ type: 'curl' }, 1)
-    const plushJobs = ['ghost', 'duck'].map((which) => job({ type: 'plush', which }, 1.5))
     // (the laptop's bead-blast and its deck's wear, from its keys' layout)
     const laptopJob = job({ type: 'laptop', keys: keyLayout(), well: WELL, pad: PAD, deck: [LAPTOP.w, LAPTOP.d] }, 0.4)
 
@@ -1318,55 +1316,6 @@ export function createScene(container, options = {}) {
     })
     scene.add(can.group, can.puddle, can.drops, ...can.extras)
 
-    // ---- the plush toys (objects/plush.js): a purple ghost and a yellow duck, right of the can. A
-    // tap closes in on them; a tap there pokes one: it squashes and wobbles back
-    const plushParts = await Promise.all(plushJobs)
-    if (destroyed) return
-    // (what a thrown toy meets: all the can does, and the desk as a slab with the floor under it)
-    const DKB = ROOM.desk
-    const deskHalfB = [(DKB.u1 - DKB.u0) / 2, ROOM.deskThick / 2, (ROOM.deskFront - ROOM.wallV) / 2]
-    const plushField = (x, y, z) => {
-      const u = x * LAYOUT.RIGHT[0] + z * LAYOUT.RIGHT[2]
-      const v = -(x * LAYOUT.FWD[0] + z * LAYOUT.FWD[2])
-      return Math.min(obstacleSdf(x, y, z), rbox(u - (DKB.u0 + DKB.u1) / 2, y - (ROOM.deskY - ROOM.deskThick / 2), v - (ROOM.deskFront + ROOM.wallV) / 2, deskHalfB, 2))
-    }
-    const plushSdf = (x, y, z, g) => {
-      const d = plushField(x, y, z)
-      const e = 0.5
-      g[0] = plushField(x + e, y, z) - d
-      g[1] = plushField(x, y + e, z) - d
-      g[2] = plushField(x, y, z + e) - d
-      const l = Math.hypot(g[0], g[1], g[2]) || 1
-      g[0] /= l
-      g[1] /= l
-      g[2] /= l
-      return d
-    }
-    const overDesk = (x, z) => {
-      const u = x * LAYOUT.RIGHT[0] + z * LAYOUT.RIGHT[2]
-      const v = -(x * LAYOUT.FWD[0] + z * LAYOUT.FWD[2])
-      return u > DKB.u0 && u < DKB.u1 && v > ROOM.wallV && v < ROOM.deskFront
-    }
-    const plushies = ['ghost', 'duck'].map((which, i) => {
-      const at = which === 'ghost' ? LAYOUT.DESK.plushGhost : LAYOUT.DESK.plushDuck
-      const turn = which === 'ghost' ? LAYOUT.DESK.plushGhostTurn : LAYOUT.DESK.plushDuckTurn
-      const p = createPlush({
-        which,
-        parts: plushParts[i].parts,
-        at: new THREE.Vector3(at[0], ROOM.deskY, at[2]),
-        yaw: LAYOUT.PLAYER.yaw + turn,
-        anisotropy: aniso,
-        sdf: plushSdf,
-        floorY: ROOM.floorY,
-        surfaceY: (x, z) => (overDesk(x, z) ? ROOM.deskY : ROOM.floorY),
-        onLand: (k) => audio.plush?.(k),
-      })
-      scene.add(p.group, p.shade)
-      for (const m of p.materials) withEmber(m)
-      return p
-    })
-    step('plush toys (worker)')
-
     // ---- beside the desk (objects/studio.js): a studio monitor on a stand at each end, a steel
     // bin right of the right one. A tap closes in on a speaker; a tap there turns the sound on or off
     const facing = (turn) => Math.atan2(-LAYOUT.FWD[0] * Math.cos(turn) + LAYOUT.RIGHT[0] * Math.sin(turn), -LAYOUT.FWD[2] * Math.cos(turn) + LAYOUT.RIGHT[2] * Math.sin(turn))
@@ -1516,8 +1465,6 @@ export function createScene(container, options = {}) {
     const SEAT_TALL = [
       [-210, 130, 0],
       [230, 150, 0],
-      // (the duck, whole)
-      [354, -112, 40],
       [-140, ROOM.wallV, BD.y0 + BD.h],
       [BD.u + BD.w / 2 - 60, ROOM.wallV, BD.y0 + BD.h],
     ]
@@ -1781,8 +1728,7 @@ export function createScene(container, options = {}) {
       },
       azPull: 1,
     })
-    const plushV = new THREE.Vector3()
-    const plushV2 = new THREE.Vector3()
+    const frontV = new THREE.Vector3()
     const playerDof = (o) => o.set(0, GY, (GZ0 + GZ1) / 2).applyMatrix4(player.group.matrixWorld)
     const focusTargets = {
       ashtray: down((o) => o.set(4, 22, 2), 72),
@@ -1809,24 +1755,13 @@ export function createScene(container, options = {}) {
             el: THREE.MathUtils.degToRad(9),
             azPull: 1,
             get az() {
-              sp.front(plushV)
-              return Math.atan2(plushV.x, plushV.z)
+              sp.front(frontV)
+              return Math.atan2(frontV.x, frontV.z)
             },
             deep: 2,
           },
         ]),
       ),
-      // (the plush toys: both, from the chair's side and low, their faces to the camera)
-      plush: {
-        center: (o) => o.copy(plushies[0].center(plushV)).add(plushies[1].center(plushV2)).multiplyScalar(0.5),
-        radius: 135,
-        el: THREE.MathUtils.degToRad(16),
-        azPull: 1,
-        get az() {
-          return HOME.az - 0.12
-        },
-        deep: 2,
-      },
       laptop: { view: () => fitLaptop(), dof: (o) => laptop.screenCenter(o), deep: 1.6 },
       monitor: { view: () => fitMonitor(), dof: (o) => monitor.screenCenter(o), deep: 1.6 },
       // (the lamp: from the chair's side, a little above, its foot to its head in the picture)
@@ -1845,7 +1780,6 @@ export function createScene(container, options = {}) {
     focusMeshes.earbuds = earbudsLive.item.meshes
     focusMeshes.notebook = notebook.meshes
     focusMeshes.can = can.meshes
-    focusMeshes.plush = plushies.flatMap((p) => p.meshes)
     focusMeshes.speakerL = studio.speakers[0].meshes
     focusMeshes.speakerR = studio.speakers[1].meshes
     focusMeshes.laptop = laptop.meshes
@@ -2220,7 +2154,6 @@ export function createScene(container, options = {}) {
     const seatPts = seats.map((s) => new THREE.Vector3(s.dir[0] * (TRAY.bowlTop + 2.3), s.y + CIG.radius + 0.05, s.dir[2] * (TRAY.bowlTop + 2.3)))
     // (a tap on an object from afar, or from another object's close-up, brings the camera to it, and
     // only to it; once there, taps are the object's own: a flick, the remote's button)
-    const plushItems = []
     const monitorItem = { meshes: [...monitor.meshes, ...hdmi.meshes], fixed: true, canGrab: () => true, onTap: () => {} }
     const speakerItems = []
     const grab = createGrab({
@@ -2239,7 +2172,7 @@ export function createScene(container, options = {}) {
           return true
         }
         // (the lamp's head and switch are its own at once: a tap switches it, from anywhere)
-        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : hit.item === monitorItem ? 'monitor' : plushItems.includes(hit.item) ? 'plush' : hit.item === speakerItems[0] ? 'speakerL' : hit.item === speakerItems[1] ? 'speakerR' : hit.item === lampItem ? 'lamp' : cigItems.includes(hit.item) ? 'ashtray' : null
+        const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : hit.item === monitorItem ? 'monitor' : hit.item === speakerItems[0] ? 'speakerL' : hit.item === speakerItems[1] ? 'speakerR' : hit.item === lampItem ? 'lamp' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
         if (projOpen) leaveProject()
         focus.focusOn(name)
@@ -2450,30 +2383,6 @@ export function createScene(container, options = {}) {
     for (const sp of studio.speakers) {
       const it = { meshes: sp.meshes, fixed: true, canGrab: () => true, onTap: () => root.querySelector('[data-act="sound"]').click() }
       speakerItems.push(it)
-      grab.add(it)
-    }
-    // the plush toys: picked up, carried and thrown (they land where they land; reset, or a fall
-    // off the desk, puts one back); a tap pokes one
-    for (const p of plushies) {
-      const it = {
-        meshes: p.meshes,
-        canGrab: () => true,
-        pick: (hit, ray) => {
-          p.pick(hit, ray)
-          shadowDirty = true
-        },
-        aim: (ray) => p.aim(ray),
-        twist: (rad) => p.twist(rad),
-        release: () => p.release(),
-        home: () => p.home(),
-        cancel: () => p.cancel(),
-        onTap: () => {
-          p.poke()
-          shadowDirty = true
-          wake()
-        },
-      }
-      plushItems.push(it)
       grab.add(it)
     }
     // the lamp: a tap on its head or its switch turns it on or off, from anywhere (the room's light
@@ -2982,7 +2891,6 @@ export function createScene(container, options = {}) {
       ['monitor', 'The second screen', 'A terminal, every project running on localhost. Pull the USB-C plug at the laptop\u2019s side and it loses its signal.'],
       ['board', 'The pegboard', 'A few notes, this month with today ringed, and my badge. Tap a note and it lifts.'],
       ['notebook', 'The visitors\u2019 book', 'Open it and leave a thumbprint. Everyone\u2019s who came before is in there.'],
-      ['plush', 'The plushies', 'Pick one up and throw it. They land where they land.'],
       ['speakerR', 'The speakers', 'Tap one for music. The lamp has a switch too, and the can opens.'],
       [null, 'That\u2019s the tour', 'Drag to look around, scroll to zoom. Escape always steps back.'],
     ]
@@ -3051,7 +2959,6 @@ export function createScene(container, options = {}) {
       // on its first tab, at the top of the page, its keyboard dark)
       can.reset()
       hdmi.plug()
-      for (const p of plushies) p.home()
       setLamp(true)
       lamp.aimAt(LAMP_AIM0)
       laptop.setTab(0)
@@ -3385,9 +3292,6 @@ export function createScene(container, options = {}) {
       const linkBusy = hdmi.update(dt)
       const monBusy = monitor.update(dt)
       if (linkBusy) shadowDirty = true
-      let plushBusy = false
-      for (const p of plushies) if (p.update(dt)) plushBusy = true
-      if (plushBusy) shadowDirty = true
       // the lamp: its head re-aimed, its glow easing (the key light on its bulb, along its shade, and
       // as bright: setMode); its shadow drawn again only when the head moved
       const lampBusy = lamp.update(dt)
@@ -3503,11 +3407,11 @@ export function createScene(container, options = {}) {
       camMoved = false
       // (the cigarette or the lighter carried, gliding or falling, or the flame burning: drawn whole,
       // the shadows drawn again every frame)
-      const dragging = carried || lighterBusy || cableBusy || badgeBusy || canBusy || plushBusy || lampMoved || lidBusy || roomBusy
+      const dragging = carried || lighterBusy || cableBusy || badgeBusy || canBusy || lampMoved || lidBusy || roomBusy
       if (dragging) shadowDirty = true
       // (the lamp switched changes the whole picture: drawn whole while its light eases, then the
       // cache baked again; so does the laptop while anything of it moves)
-      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || plushBusy || linkBusy || monBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
+      const changing = carried || lighterBusy || cableBusy || badgeBusy || canBusy || linkBusy || monBusy || lampBusy || lapBusy || roomBusy || keyAnim > 0 || camChanged || focus.moving || flakesAwake > 0 || cigs.some(cigSwapping) || !dbgFlags.cache
       // (the cache is baked once the scene has been still for a few frames: a slow drag with pauses
       // does not bake at every pause)
       // (the cache is baked once the view has been still for an eighth of a second: a slow zoom or
@@ -3803,7 +3707,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, plushies, studio, monitor, hdmi, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, studio, monitor, hdmi, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },
