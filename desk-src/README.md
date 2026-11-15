@@ -170,7 +170,7 @@ Since then: the plush toys are bigger and drawn as cloth with a pile (a few shel
 off the desk drops back onto its place). The speakers have pale cones, trim rings, foam pads and
 round-footed stands. The monitor sits lower; a tap on the USB-C plug at the laptop's side pulls it
 out (the monitor shows "No signal") or puts it back. The desk mat is wider and printed: contour
-lines and a low sun on ink blue (`MAT_COLORS.ink` in `src/objects/deskMat.js`).
+a koi pond under cherry blossom, drawn in code (`MAT_COLORS.koi` in `src/objects/deskMat.js`; `ink` is a contour-map print).
 
 ## The camera
 

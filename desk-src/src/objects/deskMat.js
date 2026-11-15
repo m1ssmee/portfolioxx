@@ -29,6 +29,8 @@ export const MAT_COLORS = {
   // (the printed pad: a deep ink blue, a map's contour lines on it: `print` their colour, `sun` the
   // disc's)
   ink: { felt: 0x39415c, thread: 0x232838, sheen: 0x8f9cc4, print: '#7fe0d2', sun: '#ff8a4c' },
+  // (a printed pad: a koi pond under cherry blossom, drawn by koiCanvas below)
+  koi: { felt: 0x62c3c4, thread: 0x2c8794, sheen: 0xc8f2ec, art: 'koi' },
 }
 
 /** A seeded random (the felt is the same every time). */
@@ -262,6 +264,268 @@ function printCanvas(W, H, c) {
   return cv
 }
 
+/**
+ * The pad's picture, "koi" (W x H px over the whole pad, its top edge the pad's far one): a pond
+ * seen from above. Teal water, lighter towards the near edge; the soft dark shapes of trees
+ * mirrored in it; two koi circling, one white with coral patches, one dark with red, rings on
+ * the water where the white one has just turned; cherry branches reaching in from two corners,
+ * their petals fallen on the water. Drawn here, stroke by stroke: no picture is loaded.
+ */
+function koiCanvas(W, H) {
+  const cv = document.createElement('canvas')
+  cv.width = W
+  cv.height = H
+  const g = cv.getContext('2d')
+  const r = rng(90210)
+  const R = (a, b) => a + (b - a) * r()
+  const u = H / 880 // (the drawing's unit: it was laid out 880 px tall)
+  // ---- the water
+  const water = g.createLinearGradient(W * 0.75, 0, W * 0.3, H)
+  water.addColorStop(0, '#2f93a8')
+  water.addColorStop(0.45, '#56bfc2')
+  water.addColorStop(1, '#aee9dc')
+  g.fillStyle = water
+  g.fillRect(0, 0, W, H)
+  // the trees' reflections: clusters of soft round shapes, darker than the water
+  const canopy = (cx, cy, n, spread, rad, col) => {
+    g.fillStyle = col
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2
+      const d = Math.sqrt(r()) * spread
+      g.beginPath()
+      g.ellipse(cx + Math.cos(a) * d * 1.5, cy + Math.sin(a) * d, R(0.5, 1) * rad, R(0.4, 0.8) * rad, R(0, 3), 0, Math.PI * 2)
+      g.fill()
+    }
+  }
+  canopy(W * 0.34, H * 0.2, 60, 150 * u, 46 * u, 'rgba(24,110,128,0.2)')
+  canopy(W * 0.62, H * 0.3, 70, 170 * u, 50 * u, 'rgba(24,110,128,0.17)')
+  canopy(W * 0.9, H * 0.14, 50, 130 * u, 44 * u, 'rgba(20,98,122,0.24)')
+  canopy(W * 0.78, H * 0.78, 60, 150 * u, 46 * u, 'rgba(52,150,150,0.2)')
+  canopy(W * 0.08, H * 0.3, 40, 110 * u, 40 * u, 'rgba(24,110,128,0.16)')
+  // light on the water: a few pale streaks
+  g.strokeStyle = 'rgba(255,255,255,0.16)'
+  g.lineCap = 'round'
+  for (let i = 0; i < 46; i++) {
+    const x = R(0, W)
+    const y = R(0, H)
+    g.lineWidth = R(1.5, 4) * u
+    g.beginPath()
+    g.moveTo(x, y)
+    g.lineTo(x + R(30, 110) * u, y + R(-4, 4) * u)
+    g.stroke()
+  }
+
+  // ---- a koi along a spine (a cubic curve, head first), `len` long and `wide` across
+  const cubic = (p, t) => {
+    const m = 1 - t
+    return [m * m * m * p[0] + 3 * m * m * t * p[2] + 3 * m * t * t * p[4] + t * t * t * p[6], m * m * m * p[1] + 3 * m * m * t * p[3] + 3 * m * t * t * p[5] + t * t * t * p[7]]
+  }
+  const PROFILE = [0, 0.02, 0.05, 0.56, 0.12, 0.86, 0.26, 1, 0.45, 0.9, 0.64, 0.56, 0.8, 0.24, 0.88, 0.15]
+  const widthAt = (t) => {
+    for (let i = 2; i < PROFILE.length; i += 2) if (t <= PROFILE[i]) return PROFILE[i - 1] + ((PROFILE[i + 1] - PROFILE[i - 1]) * (t - PROFILE[i - 2])) / (PROFILE[i] - PROFILE[i - 2])
+    return 0.15
+  }
+  function koi(spine, wide, pal, patches) {
+    const N = 40
+    const L = []
+    const Rr = []
+    const mid = []
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * 0.88
+      const p = cubic(spine, t)
+      const q = cubic(spine, t + 0.01)
+      let nx = -(q[1] - p[1])
+      let ny = q[0] - p[0]
+      const l = Math.hypot(nx, ny) || 1
+      nx /= l
+      ny /= l
+      const w = widthAt(t) * wide
+      L.push([p[0] + nx * w, p[1] + ny * w])
+      Rr.push([p[0] - nx * w, p[1] - ny * w])
+      mid.push([p[0], p[1], nx, ny])
+    }
+    const body = () => {
+      g.beginPath()
+      g.moveTo(L[0][0], L[0][1])
+      for (const p of L) g.lineTo(p[0], p[1])
+      for (let i = N; i >= 0; i--) g.lineTo(Rr[i][0], Rr[i][1])
+      g.closePath()
+    }
+    // its shade on the pond's floor, a little off it
+    g.save()
+    g.translate(14 * u, 18 * u)
+    body()
+    g.fillStyle = 'rgba(16,84,104,0.22)'
+    g.fill()
+    g.restore()
+    // the tail: two long veils from the tail's root, swept the way the body bends
+    const e = mid[N]
+    const dx = e[0] - mid[N - 4][0]
+    const dy = e[1] - mid[N - 4][1]
+    const dl = Math.hypot(dx, dy) || 1
+    const tx = dx / dl
+    const ty = dy / dl
+    for (const s of [-1, 1]) {
+      g.beginPath()
+      g.moveTo(e[0], e[1])
+      g.bezierCurveTo(e[0] + tx * wide * 1.4 + e[2] * s * wide * 0.5, e[1] + ty * wide * 1.4 + e[3] * s * wide * 0.5, e[0] + tx * wide * 2.6 + e[2] * s * wide * 1.5, e[1] + ty * wide * 2.6 + e[3] * s * wide * 1.5, e[0] + tx * wide * 3.3 + e[2] * s * wide * 1.2, e[1] + ty * wide * 3.3 + e[3] * s * wide * 1.2)
+      g.bezierCurveTo(e[0] + tx * wide * 2.4 + e[2] * s * wide * 0.3, e[1] + ty * wide * 2.4 + e[3] * s * wide * 0.3, e[0] + tx * wide * 1.2, e[1] + ty * wide * 1.2, e[0], e[1])
+      g.fillStyle = pal.fin
+      g.fill()
+    }
+    // the breast fins, spread
+    const f = mid[Math.round(N * 0.3)]
+    for (const s of [-1, 1]) {
+      g.save()
+      g.translate(f[0] + f[2] * s * wide * 0.95, f[1] + f[3] * s * wide * 0.95)
+      g.rotate(Math.atan2(f[3] * s, f[2] * s) + s * 0.75)
+      g.beginPath()
+      g.ellipse(wide * 0.55, 0, wide * 0.78, wide * 0.36, 0, 0, Math.PI * 2)
+      g.fillStyle = pal.fin
+      g.fill()
+      g.restore()
+    }
+    body()
+    g.fillStyle = pal.body
+    g.fill()
+    // its markings, kept inside it
+    g.save()
+    body()
+    g.clip()
+    for (const [t, off, rad, col] of patches) {
+      const m = mid[Math.round((t / 0.88) * N)]
+      g.fillStyle = col
+      for (let k = 0; k < 5; k++) {
+        g.beginPath()
+        g.ellipse(m[0] + m[2] * off * wide + R(-0.3, 0.3) * rad * wide, m[1] + m[3] * off * wide + R(-0.3, 0.3) * rad * wide, R(0.6, 1) * rad * wide, R(0.5, 0.9) * rad * wide, R(0, 3), 0, Math.PI * 2)
+        g.fill()
+      }
+    }
+    // a soft line of light down its back
+    g.strokeStyle = pal.back
+    g.lineWidth = wide * 0.16
+    g.beginPath()
+    for (let i = 3; i < N - 2; i++) (i === 3 ? g.moveTo : g.lineTo).call(g, mid[i][0], mid[i][1])
+    g.stroke()
+    g.restore()
+    // eyes, and the two whiskers
+    const h = mid[3]
+    g.fillStyle = pal.eye
+    for (const s of [-1, 1]) {
+      g.beginPath()
+      g.arc(h[0] + h[2] * s * wide * 0.5, h[1] + h[3] * s * wide * 0.5, wide * 0.085, 0, Math.PI * 2)
+      g.fill()
+    }
+    const n0 = mid[0]
+    const hx = n0[0] - mid[2][0]
+    const hy = n0[1] - mid[2][1]
+    const hl = Math.hypot(hx, hy) || 1
+    g.strokeStyle = pal.body
+    g.lineWidth = Math.max(1.2, wide * 0.045)
+    for (const s of [-1, 1]) {
+      g.beginPath()
+      g.moveTo(n0[0] + n0[2] * s * wide * 0.22, n0[1] + n0[3] * s * wide * 0.22)
+      g.quadraticCurveTo(n0[0] + (hx / hl) * wide * 0.5 + n0[2] * s * wide * 0.5, n0[1] + (hy / hl) * wide * 0.5 + n0[3] * s * wide * 0.5, n0[0] + (hx / hl) * wide * 0.25 + n0[2] * s * wide * 0.95, n0[1] + (hy / hl) * wide * 0.25 + n0[3] * s * wide * 0.95)
+      g.stroke()
+    }
+  }
+  // the rings where the white one turned
+  const ringAt = [W * 0.335, H * 0.4]
+  g.strokeStyle = 'rgba(255,255,255,0.5)'
+  for (let k = 0; k < 6; k++) {
+    g.lineWidth = (3.2 - k * 0.4) * u
+    const rad = (70 + k * 34) * u
+    for (let a = 0; a < 3; a++) {
+      const a0 = R(0, Math.PI * 2)
+      g.beginPath()
+      g.ellipse(ringAt[0], ringAt[1], rad * 1.15, rad * 0.86, 0.2, a0, a0 + R(0.5, 1.5))
+      g.stroke()
+    }
+  }
+  // the white koi: turning, head down and to the left
+  koi([W * 0.325, H * 0.56, W * 0.33, H * 0.36, W * 0.4, H * 0.2, W * 0.5, H * 0.26].map((v) => v), 40 * u, { body: '#fdf5ec', fin: 'rgba(255,250,244,0.78)', back: 'rgba(255,255,255,0.55)', eye: '#3a2a30' }, [
+    [0.1, 0.2, 0.55, '#f28a9a'],
+    [0.3, -0.3, 0.6, '#ee6f86'],
+    [0.5, 0.25, 0.5, '#f28a9a'],
+    [0.7, -0.1, 0.4, '#ee6f86'],
+  ])
+  // the dark one, smaller, further left, swimming the other way
+  koi([W * 0.225, H * 0.6, W * 0.2, H * 0.44, W * 0.15, H * 0.34, W * 0.105, H * 0.2], 31 * u, { body: '#2c3554', fin: 'rgba(44,53,84,0.72)', back: 'rgba(120,140,190,0.4)', eye: '#10131f' }, [
+    [0.14, 0.1, 0.5, '#ef4d67'],
+    [0.4, -0.2, 0.55, '#ef4d67'],
+    [0.62, 0.2, 0.4, '#f0707f'],
+  ])
+
+  // ---- cherry: branches from the near left corner and the far right one, blossoms along them
+  const blossom = (x, y, rad, rot) => {
+    for (let k = 0; k < 5; k++) {
+      const a = rot + (k / 5) * Math.PI * 2
+      g.save()
+      g.translate(x + Math.cos(a) * rad * 0.55, y + Math.sin(a) * rad * 0.55)
+      g.rotate(a)
+      const pg = g.createRadialGradient(-rad * 0.4, 0, 0, 0, 0, rad * 0.75)
+      pg.addColorStop(0, '#f3a0bd')
+      pg.addColorStop(1, '#fde6ee')
+      g.fillStyle = pg
+      g.beginPath()
+      g.ellipse(0, 0, rad * 0.62, rad * 0.46, 0, 0, Math.PI * 2)
+      g.fill()
+      g.restore()
+    }
+    g.fillStyle = '#e8648e'
+    g.beginPath()
+    g.arc(x, y, rad * 0.17, 0, Math.PI * 2)
+    g.fill()
+    g.fillStyle = '#ffd98a'
+    for (let k = 0; k < 6; k++) {
+      const a = rot + k * 1.05
+      g.beginPath()
+      g.arc(x + Math.cos(a) * rad * 0.3, y + Math.sin(a) * rad * 0.3, rad * 0.045, 0, Math.PI * 2)
+      g.fill()
+    }
+  }
+  function branch(x, y, ang, len, wide, depth) {
+    const x1 = x + Math.cos(ang) * len
+    const y1 = y + Math.sin(ang) * len
+    const bend = R(-0.3, 0.3)
+    g.strokeStyle = depth > 1 ? '#6b3f5a' : '#8a5673'
+    g.lineWidth = wide
+    g.beginPath()
+    g.moveTo(x, y)
+    g.quadraticCurveTo(x + Math.cos(ang + bend) * len * 0.5, y + Math.sin(ang + bend) * len * 0.5, x1, y1)
+    g.stroke()
+    if (depth > 0) {
+      branch(x1, y1, ang + R(0.25, 0.6), len * R(0.6, 0.8), wide * 0.62, depth - 1)
+      branch(x1, y1, ang - R(0.25, 0.6), len * R(0.55, 0.78), wide * 0.62, depth - 1)
+    }
+    const n = depth > 1 ? 1 : 3
+    for (let i = 0; i < n; i++) {
+      const t = R(0.35, 1)
+      blossoms.push([x + (x1 - x) * t + R(-14, 14) * u, y + (y1 - y) * t + R(-14, 14) * u, R(20, 36) * u * (depth > 1 ? 1.15 : 1), R(0, 6)])
+    }
+  }
+  let blossoms = []
+  branch(-10 * u, H + 10 * u, -0.5, 230 * u, 11 * u, 3)
+  branch(W * 0.52, H + 24 * u, -1.5, 120 * u, 7 * u, 1)
+  branch(W + 10 * u, -10 * u, 2.55, 220 * u, 10 * u, 3)
+  branch(W * 0.8, -20 * u, 1.75, 150 * u, 8 * u, 2)
+  for (const b of blossoms) blossom(...b)
+  // petals fallen on the water
+  for (let i = 0; i < 120; i++) {
+    const x = R(0, W)
+    const y = R(0, H)
+    g.save()
+    g.translate(x, y)
+    g.rotate(R(0, 6))
+    g.fillStyle = r() < 0.5 ? 'rgba(253,220,232,0.9)' : 'rgba(246,170,198,0.85)'
+    g.beginPath()
+    g.ellipse(0, 0, R(5, 11) * u, R(2.5, 5) * u, 0, 0, Math.PI * 2)
+    g.fill()
+    g.restore()
+  }
+  return cv
+}
+
 export function createDeskMat({ fwd, right, colors = MAT_COLORS.slate, anisotropy = 4 }) {
   const m = MAT
   const group = new THREE.Group()
@@ -322,8 +586,9 @@ export function createDeskMat({ fwd, right, colors = MAT_COLORS.slate, anisotrop
   // (the print, where the pad has one: laid over the felt by the pad's own extent, the felt's weave
   // still showing through it)
   let printTex = null
-  if (colors.print) {
-    printTex = new THREE.CanvasTexture(printCanvas(2048, Math.round((2048 * (m.v1 - m.v0)) / (m.u1 - m.u0)), colors))
+  if (colors.print || colors.art) {
+    const PH = Math.round((2048 * (m.v1 - m.v0)) / (m.u1 - m.u0))
+    printTex = new THREE.CanvasTexture(colors.art === 'koi' ? koiCanvas(2048, PH) : printCanvas(2048, PH, colors))
     printTex.colorSpace = THREE.SRGBColorSpace
     printTex.anisotropy = anisotropy
     const pu = { tPrint: { value: printTex }, uPrint: { value: new THREE.Vector4(m.u0, m.v0, 1 / (m.u1 - m.u0), 1 / (m.v1 - m.v0)) } }
@@ -340,12 +605,12 @@ export function createDeskMat({ fwd, right, colors = MAT_COLORS.slate, anisotrop
           {
             vec4 pr = texture2D(tPrint, vPrintUv);
             float weave = dot(texture2D(map, vMapUv).rgb, vec3(0.3333));
-            diffuseColor.rgb = mix(diffuseColor.rgb, pr.rgb * (0.55 + 0.6 * weave), pr.a * 0.9);
+            diffuseColor.rgb = mix(diffuseColor.rgb, pr.rgb * (0.55 + 0.6 * weave), pr.a * 0.94);
           }`,
         )
     }
   }
-  feltMat.customProgramCacheKey = () => (colors.print ? 'deskMat.print' : 'deskMat.felt')
+  feltMat.customProgramCacheKey = () => (colors.print || colors.art ? 'deskMat.print' : 'deskMat.felt')
 
   // ---- the rolled edge: a profile swept round the outline, from inside the felt's top, over a
   // slight roll, down the side to the desk

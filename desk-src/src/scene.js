@@ -54,8 +54,8 @@ installEmberLight()
 // One quality: the reference look, on every device. (Internal effect buffers: the smoke at half
 // resolution, upsampled by depth, and the bloom's mip chain from half resolution: side by side with
 // full-resolution buffers they are indistinguishable; see the report.)
-// the desk mat's colour (objects/deskMat.js: slate, sage, rust or oat)
-const MAT_COLOR = 'ink'
+// the desk mat (objects/deskMat.js: slate, sage, rust, oat, heather; printed: ink, koi)
+const MAT_COLOR = 'koi'
 const Q = { strands: 10, segments: 160, haze: 1800, smokeSteps: 10, smokeScale: 0.4, bloomScale: 0.5, shadow: 2048, msaa: 4, trayH: 0.6, segs: 64, lighterH: 0.5 }
 /** The canvas at full sharpness: CSS size x devicePixelRatio, capped at 2 only on 3x screens. */
 // (the canvas at the screen's own pixels, up to 2 a CSS pixel: stretched, thin seams break into
@@ -280,7 +280,7 @@ export function createScene(container, options = {}) {
     const canvas = renderer.domElement
     canvas.className = 'cg-canvas'
     canvas.setAttribute('role', 'img')
-    canvas.setAttribute('aria-label', 'A desk at dusk against a plain warm white wall, lit by a cream and brass desk lamp: a white music player with wired earbuds plugged in on a sage felt mat, a stoneware ashtray with a lit cigarette and a lighter, a graphite laptop open on a browser with a tab for each project, a can of "late.", a notebook, and on the wall a white pegboard with sticky notes, a calendar, a postcard and an ID badge.')
+    canvas.setAttribute('aria-label', 'A desk at dusk against a plain warm white wall, lit by a cream and brass desk lamp: a white music player with wired earbuds plugged in on a desk mat printed with a koi pond, a stoneware ashtray with a lit cigarette and a lighter, a graphite laptop open on a browser with a tab for each project, a can of "late.", a notebook, and on the wall a white pegboard with sticky notes, a calendar, a postcard and an ID badge.')
     stageEl.appendChild(canvas)
 
     // ---- the workers: every mesh and texture built off this thread, side by side (up to three:
