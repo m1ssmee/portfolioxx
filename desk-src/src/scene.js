@@ -74,6 +74,7 @@ const CSS = `
 .cg-root{--ink:#f1efe9;--label:#c9c4ba;--rule:rgba(241,239,233,.36);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;overflow:clip;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .cg-poster{position:absolute;left:50%;top:0;height:100%;width:auto;min-width:100%;max-width:none;object-fit:cover;transform:translateX(-50%);pointer-events:none}
 .cg-stage{position:absolute;inset:0;opacity:0;transition:opacity .8s ease}
+.cg-stage::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 78% 78% at 50% 52%,transparent 52%,rgba(8,6,4,.42) 100%)}
 .cg-ready .cg-stage{opacity:1}
 .cg-reveal .cg-stage{transition:opacity 1.2s cubic-bezier(.3,0,.2,1)}
 .cg-reveal .cg-ui{transition:opacity 1s ease .9s}
@@ -101,18 +102,7 @@ const CSS = `
 .cg-keys{position:absolute;right:max(24px,env(safe-area-inset-right));bottom:max(94px,calc(env(safe-area-inset-bottom) + 76px));margin:0;padding:0;list-style:none;display:flex;flex-direction:column;align-items:flex-end;gap:10px;color:var(--label);pointer-events:none}
 .cg-keys{transition:opacity .4s}
 .cg-close .cg-keys{opacity:0}
-.cg-veil{position:absolute;inset:0;visibility:hidden;cursor:pointer;transition:visibility 0s .6s}
-.cg-projecting .cg-veil{visibility:visible;transition:none}
-.cg-projecting .cg-keys,.cg-projecting .cg-copy{opacity:0;pointer-events:none}
 .cg-keys,.cg-copy{transition:opacity .4s}
-.cg-proj{position:absolute;z-index:3;right:max(5vw,28px);top:50%;box-sizing:border-box;width:min(500px,42vw);max-height:min(80vh,720px);overflow:auto;padding:4px 6px 4px 0;color:var(--ink);font:400 14.5px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:0;opacity:0;visibility:hidden;transform:translate(18px,-50%);transition:opacity .3s ease,transform .3s ease,visibility 0s .3s;scrollbar-width:thin}
-.cg-projecting .cg-proj{opacity:1;visibility:visible;transform:translate(0,-50%);transition:opacity .45s ease .2s,transform .55s cubic-bezier(.2,.7,.2,1) .2s}
-.cg-proj .cg-cap{font-size:10.5px}
-.cg-proj-close{margin:0 0 18px -8px}
-.cg-proj-k{margin:0;color:var(--label);font-weight:500}
-.cg-proj-name{margin:10px 0 10px;font:600 34px/1.1 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:-.015em}
-.cg-proj-line{margin:0 0 22px;font-size:17px;line-height:1.45}
-.cg-proj-acts{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 6px}
 .cg-proj-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:999px;font:500 13px/1 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:.01em;text-decoration:none;transition:background .2s,border-color .2s,color .2s}
 .cg-proj-btn.dark{background:var(--ink);color:#1b1a18}
 .cg-proj-btn.dark:hover{background:#ffffff}
@@ -120,13 +110,7 @@ const CSS = `
 .cg-proj-btn.line:hover{border-color:var(--ink)}
 .cg-proj-btn:focus-visible{outline:1.5px solid var(--ink);outline-offset:3px}
 .cg-proj-btn[hidden]{display:none}
-.cg-proj h3{margin:24px 0 6px;color:var(--label);font-weight:500}
-.cg-proj p{margin:0;color:#dcd8d0}
-.cg-proj ul{margin:0;padding-left:18px;color:#dcd8d0}
-.cg-proj li{margin:0 0 6px}
-.cg-proj-tags{display:flex;flex-wrap:wrap;gap:6px}
-.cg-proj-tags span{padding:5px 10px 4px;border:1px solid var(--rule);border-radius:999px;font:500 11px/1 var(--mono);color:var(--ink)}
-@container cg (max-width: 760px){.cg-projecting .cg-now{opacity:0}.cg-now{transition:opacity .4s}.cg-proj{left:0;right:0;top:auto;bottom:0;width:auto;max-height:82%;padding:20px 22px 28px;border-radius:18px 18px 0 0;background:rgba(24,23,22,.93);transform:translateY(28px)}.cg-projecting .cg-proj{transform:none}.cg-proj-name{font-size:28px}}
+.cg-now{transition:opacity .4s}
 @media (max-height:700px){.cg-keys li.cg-fine:nth-child(-n+2){display:none}}
 @media (max-height:500px){.cg-keys{display:none}}
 .cg-keys li{display:flex;align-items:center;gap:9px}
@@ -151,7 +135,14 @@ const CSS = `
 .cg-tour[hidden]{display:none}
 .cg-tour-k{margin:0 0 7px;color:var(--label)}
 .cg-tour-t{margin:0;font:400 14.5px/1.5 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink)}
-.cg-tour-acts{display:flex;gap:6px;justify-content:flex-end;margin-top:8px}
+.cg-tour-acts{display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:8px}
+.cg-tour-dots{display:flex;gap:5px;margin-right:auto;padding-left:1px}
+.cg-tour-dots i{width:5px;height:5px;border-radius:50%;background:rgba(241,239,233,.24);transition:background .3s,transform .3s}
+.cg-tour-dots i.on{background:var(--ink);transform:scale(1.3)}
+.cg-tour button:disabled{opacity:.3;pointer-events:none}
+@keyframes cg-tour-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.cg-tour-in .cg-tour-k,.cg-tour-in .cg-tour-t{animation:cg-tour-in .45s ease both}
+.cg-tour-in .cg-tour-t{animation-delay:.06s}
 .cg-tour-bar{height:2px;margin-top:8px;border-radius:1px;background:rgba(241,239,233,.16);overflow:hidden}
 .cg-tour-bar i{display:block;height:100%;width:0;background:var(--ink)}
 .cg-touring .cg-keys,.cg-touring .cg-live{opacity:0;pointer-events:none}
@@ -166,18 +157,6 @@ const CSS = `
 .cg-root{container:cg/inline-size}
 `
 const UI = `<div class="cg-ui">
-  <div class="cg-veil" data-act="proj-close" aria-hidden="true"></div>
-  <aside class="cg-proj" aria-labelledby="cg-proj-name" hidden>
-    <button class="cg-txt cg-cap cg-proj-close" data-act="proj-close"><span>&larr; back to the projects</span></button>
-    <p class="cg-proj-k cg-cap" data-p="k"></p>
-    <h2 class="cg-proj-name" id="cg-proj-name" data-p="name"></h2>
-    <p class="cg-proj-line" data-p="line"></p>
-    <div class="cg-proj-acts"><a class="cg-proj-btn dark" data-p="live" target="_blank" rel="noopener">Visit the live site <span aria-hidden="true">&nearr;</span></a><a class="cg-proj-btn line" data-p="github" target="_blank" rel="noopener">GitHub <span aria-hidden="true">&nearr;</span></a></div>
-    <h3 class="cg-cap">What it is</h3><p data-p="what"></p>
-    <h3 class="cg-cap">What I built</h3><p data-p="built"></p>
-    <h3 class="cg-cap">Challenges</h3><ul data-p="challenges"></ul>
-    <h3 class="cg-cap">Stack</h3><div class="cg-proj-tags" data-p="stack"></div>
-  </aside>
   <p class="cg-id cg-cap"><span class="cg-id-name" data-id="name"></span><span class="cg-id-role" data-id="role"></span></p>
   <button class="cg-os cg-cap" data-act="os">pick a song</button>
   <div class="cg-tools">
@@ -202,7 +181,7 @@ const UI = `<div class="cg-ui">
   <div class="cg-tour" data-tour hidden role="status" aria-live="polite">
     <p class="cg-tour-k cg-cap" data-tour-k></p>
     <p class="cg-tour-t" data-tour-t></p>
-    <div class="cg-tour-acts"><button class="cg-txt cg-cap" data-act="tour-end"><span>end tour</span></button><button class="cg-txt cg-cap" data-act="tour-next"><span data-tour-next>next &rarr;</span></button></div>
+    <div class="cg-tour-acts"><span class="cg-tour-dots" data-tour-dots aria-hidden="true"></span><button class="cg-txt cg-cap" data-act="tour-end"><span>skip</span></button><button class="cg-txt cg-cap" data-act="tour-prev" aria-label="Previous stop"><span>&larr;</span></button><button class="cg-txt cg-cap" data-act="tour-next"><span data-tour-next>next &rarr;</span></button></div>
     <div class="cg-tour-bar"><i data-tour-bar></i></div>
   </div>
   <a class="cg-live cg-proj-btn dark" data-live target="_blank" rel="noopener" hidden><span data-live-t>View live site</span> <span aria-hidden="true">&nearr;</span></a>
@@ -406,7 +385,7 @@ export function createScene(container, options = {}) {
     step('environment (PMREM)')
     await yieldNow()
     scene.environment = envTex
-    scene.environmentIntensity = 1.0
+    scene.environmentIntensity = 0.6 // (a dark room: what lights it are its pools of light, below)
 
     // ---- where things lie (mm; the ashtray at the origin), in the view's own axes: u to the right
     // of the picture, v down it; the view looks along FWD (layout.js: shared with the cable's
@@ -505,7 +484,7 @@ export function createScene(container, options = {}) {
       handFont: HAND,
       anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
       notes: [
-        { color: '#f4e38c', lines: ["hi, I'm Krish", 'I build AI', 'people can', 'actually use'] },
+        { color: '#f4e38c', lines: ["hi, I'm Krish", 'this is my desk', 'have a look', 'around'] },
         { color: '#c6e6d3', lines: ['rule no. 1:', 'cite sources,', 'never guess', 'the numbers'] },
         { color: '#f6cbb1', lines: ['psst —', 'click things', 'on the desk'] },
       ],
@@ -550,23 +529,32 @@ export function createScene(container, options = {}) {
     key.shadow.blurSamples = 15
     scene.add(key, key.target)
     // the window's last light, from the right, cool
-    const rim = new THREE.DirectionalLight(0x9fb6e8, 0.32)
+    const rim = new THREE.DirectionalLight(0x9fb6e8, 0.26)
     scene.add(rim, rim.target)
     // the dusk sky in the room, and the warm bounce off the desk under it
-    const fill = new THREE.HemisphereLight(0xb4c0dc, 0x9a8470, 1.0)
+    const fill = new THREE.HemisphereLight(0xb4c0dc, 0x9a8470, 0.44)
     scene.add(fill)
     // (the room behind the viewer, lit by the lamp too, gives back a little warm light: the wall and
     // the board face it. A far, soft light from behind and above the chair, without a shadow; the
     // green wall's main light, enough for its grooves and the board's edges to read. It dims with
     // the lamp, to what the dusk alone gives back)
-    const bounce = new THREE.DirectionalLight(0xffe9d4, 0.75)
+    const bounce = new THREE.DirectionalLight(0xffe9d4, 0.36)
     bounce.position.set(...LAYOUT.deskAt(-200, 1600, 900))
     bounce.target.position.set(...LAYOUT.deskAt(-40, -300, 300))
     scene.add(bounce, bounce.target)
     bounce.target.updateMatrixWorld()
     // (three.js lights only what the camera's layers include: these light every layer, the frame
     // cache's region layer too)
-    for (const l of [key, rim, fill, bounce]) l.layers.enableAll()
+    // the room is dark; three pools of light hold it: the lamp's on the desk (the key, above), a warm
+    // spot down the wall onto the shelf, and the monitor's own glow on the desk in front of it
+    // (neither casts a shadow: each is one more light in the lit materials, no more passes)
+    const shelfSpot = new THREE.SpotLight(0xffdcb4, 4.6e5, 0, 0.5, 0.95, 2)
+    const screenGlow = new THREE.SpotLight(0xcfdcff, 5.2e4, 0, 1.15, 1, 2)
+    shelfSpot.position.set(...LAYOUT.deskAt(ROOM.board.u, -110, ROOM.board.y0 + 640))
+    shelfSpot.target.position.copy(room.boardCenter)
+    scene.add(shelfSpot, shelfSpot.target, screenGlow, screenGlow.target)
+    shelfSpot.target.updateMatrixWorld()
+    for (const l of [key, rim, fill, bounce, shelfSpot, screenGlow]) l.layers.enableAll()
     // (the ember's own light is a term in the lit materials: core/emberlight.js; so is the lighter's
     // flame, except below it, where a spotlight pointing down carries it with a shadow: dark, never
     // drawn, until the flame is lit)
@@ -620,8 +608,6 @@ export function createScene(container, options = {}) {
     // (stage 'os'); up close, the OS's own page laid exactly over the glass instead (stepOS)
     let os = null
     let osUp = false // (the page is the screen now)
-    let projOpen = null // (a project open beside the player: its id)
-    let podSlide = false // (the camera sliding between two views of the player: its page stays up, following it)
     let osAlpha = 0 // (the page's opacity: it fades in over the texture, and out)
     let glare = 1 // (the glass's reflections: 1 across the desk, 0 up close on a lit screen)
     let screenBusy = false // (the glass's pixels change this frame: the page painted, its light easing)
@@ -1241,7 +1227,7 @@ export function createScene(container, options = {}) {
     // (the laptop's browser: the portfolio and the GitHub profile, nothing else; the monitor shows
     // the projects' sites, those that have one)
     const lapTabs = [
-      { id: 'home', name: 'Portfolio', home: true, local: 'localhost:5173', year: '', stack: [], content: portfolio },
+      { id: 'home', name: 'Portfolio', home: true, local: 'localhost:5173', year: '', stack: [], content: portfolio, shots: siteShots },
       { id: 'github', name: 'GitHub', githubTab: true, local: `github.com/${githubUser(portfolio)}`, year: '', stack: [], content: portfolio },
     ]
     const monTabs = portfolio.projects.filter(isSite)
@@ -1353,6 +1339,11 @@ export function createScene(container, options = {}) {
     // (it opens on Blinkscope; else the first site)
     const MON_FIRST = Math.max(0, monTabs.findIndex((t) => t.id === 'blinkscope'))
     monitor.showTab(MON_FIRST)
+    // (its glow: from the middle of its glass, out and down onto the desk in front of it)
+    monitor.screenCenter(screenGlow.position)
+    monitor.screenNormal(screenGlow.target.position).multiplyScalar(320).add(screenGlow.position)
+    screenGlow.target.position.y -= 300
+    screenGlow.target.updateMatrixWorld()
     scene.add(monitor.group)
     for (const m of monitor.materials) withEmber(m)
     addObstacle(monitor.group.matrixWorld, [monitor.clamp.hw, 40, monitor.clamp.hd], [monitor.clamp.x, 40, monitor.clamp.z], 3)
@@ -1379,7 +1370,6 @@ export function createScene(container, options = {}) {
     cleanups.push(() => book.dispose())
     function openBook() {
       bookPending = false
-      if (projOpen) leaveProject()
       book.open()
       wake()
     }
@@ -1451,8 +1441,6 @@ export function createScene(container, options = {}) {
     root.querySelector('[data-act="all"]').hidden = true
     // (a project open: the player moved to the left third, the project told on the right; on a narrow
     // screen it stays where it is, under the sheet)
-    const PROJ = { target: new THREE.Vector3(), pos: new THREE.Vector3() }
-    const narrowUI = () => canvas.clientWidth <= 760
     const viewFrom = (V, up, el) => {
       V.pos.copy(up).multiplyScalar(-Math.cos(el) * V.dist).add(V.target)
       V.pos.y += Math.sin(el) * V.dist
@@ -1579,10 +1567,6 @@ export function createScene(container, options = {}) {
       BOARDV.dist = Math.max((room.boardSize[1] + 70) / 2 / tanV, (camera.aspect < 0.9 ? 575 : room.boardSize[0] + 70) / 2 / tanH)
       viewFrom(BOARDV, FWD, BOARD_EL)
       fitLaptop(tanV, tanH)
-      // the project view: the player's, slid so its middle is at 27% of the picture's width
-      const shift = narrowUI() ? 0 : (0.5 - 0.27) * 2 * PLAYERV.dist * tanH
-      PROJ.target.copy(PLAYERV.target).addScaledVector(RIGHT, shift)
-      PROJ.pos.copy(PLAYERV.pos).addScaledVector(RIGHT, shift)
     }
     fitHome()
     {
@@ -1608,7 +1592,7 @@ export function createScene(container, options = {}) {
      * behind the wall, nor under the desk.
      */
     function limitOrbit(name) {
-      const V = !name || name === 'all' ? HOME : name === 'player' || name === 'project' ? PLAYERV : name === 'board' ? BOARDV : name === 'laptop' ? LAPTOPV : name === 'monitor' ? MONV : null
+      const V = !name || name === 'all' ? HOME : name === 'player' ? PLAYERV : name === 'board' ? BOARDV : name === 'laptop' ? LAPTOPV : name === 'monitor' ? MONV : null
       if (V) {
         const polar = Math.PI / 2 - V.el
         const home = V === HOME
@@ -1663,7 +1647,7 @@ export function createScene(container, options = {}) {
       controls._sphericalDelta?.set(0, 0, 0)
       controls._panOffset?.set(0, 0, 0)
       if ('_scale' in controls) controls._scale = 1
-      controls.enabled = name !== 'project'
+      controls.enabled = true
       controls.update()
     }
     limitOrbit(null)
@@ -1690,7 +1674,7 @@ export function createScene(container, options = {}) {
       canvas,
       'wheel',
       (e) => {
-        if (grab.held || projOpen || focus.moving) return
+        if (grab.held || focus.moving) return
         e.preventDefault()
         e.stopImmediatePropagation()
         // (up close on the laptop, over its display, the wheel or two fingers on a trackpad scroll its
@@ -1757,7 +1741,6 @@ export function createScene(container, options = {}) {
       // (home: the whole desk, seated)
       all: { view: () => HOME, deep: 3.4 },
       // (a project open: the player to the left, still in focus)
-      project: { view: () => PROJ, dof: playerDof, deep: 2.4 },
       earbuds: down((o) => earbudsLive.focusCenter(o), 64),
       notebook: down((o) => notebook.center(o), 120),
       // (the can: room round it for its fall and the puddle)
@@ -1814,7 +1797,7 @@ export function createScene(container, options = {}) {
       onStart: freeOrbit,
       onEnd: settleOrbit,
       onChange: (name) => {
-        backBtn.hidden = !name || name === 'all' || name === 'project'
+        backBtn.hidden = !name || name === 'all'
         // (home is the whole desk: nothing further to step back to)
         allBtn.hidden = true
         // (up close on something else, the view is the object's: the key hints step aside)
@@ -1894,6 +1877,13 @@ export function createScene(container, options = {}) {
         e.preventDefault()
         return
       }
+      // (the tour: the arrows step through it)
+      if (tour.on && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        e.preventDefault()
+        if (e.key === 'ArrowRight') tourNext()
+        else tourPrev()
+        return
+      }
       if (e.key !== 'Escape' || grab.held) return
       if (tour.on) {
         e.preventDefault()
@@ -1905,11 +1895,6 @@ export function createScene(container, options = {}) {
         book.close()
         return
       }
-      if (projOpen) {
-        e.preventDefault()
-        leaveProject()
-        return
-      }
       if (osUp && os.back()) {
         e.preventDefault()
         e.stopPropagation()
@@ -1919,13 +1904,13 @@ export function createScene(container, options = {}) {
     }, { capture: true })
     const backBtn = root.querySelector('[data-act="back"]')
     const allBtn = root.querySelector('[data-act="all"]')
-    /** Is the view on the player (close on it, or a project open): Pod OS is live there. */
-    const podView = () => focus.focused === 'player' || focus.focused === 'project'
+    /** Is the view on the player: Pod OS is live there. */
+    const podView = () => focus.focused === 'player'
 
     // ---- the frame, cached (core/frame.js): what does not move is drawn once and re-used; each
     // frame draws the smoke, the ember's few millimetres and one composite pass
     const EMBER_CD = 180 // (the ember's light at full glow, candela)
-    const LIGHTS = { key: key.intensity, rim: rim.intensity, fill: fill.intensity, bounce: bounce.intensity, env: scene.environmentIntensity }
+    const LIGHTS = { key: key.intensity, rim: rim.intensity, fill: fill.intensity, bounce: bounce.intensity, env: scene.environmentIntensity, shelf: shelfSpot.intensity, glow: screenGlow.intensity }
     let emberNow = 0 // (the ember's light this frame)
     /**
      * The lights as the lamp's glow has them (`only`: the ember's frame, all dark): the key as bright
@@ -1952,6 +1937,9 @@ export function createScene(container, options = {}) {
       studio.setPower(!only)
       rim.intensity = only ? 0 : LIGHTS.rim
       fill.intensity = only ? 0 : LIGHTS.fill
+      shelfSpot.intensity = only ? 0 : LIGHTS.shelf
+      // (the monitor lights the desk only while it has a picture)
+      screenGlow.intensity = only || !monitor.signal ? 0 : LIGHTS.glow
       lampLights(only)
       setEmberLight(emberWorld, camera, mode === 'static' ? 0 : only ? 1 : emberNow / EMBER_CD, EMBER_CD)
     }
@@ -2018,10 +2006,10 @@ export function createScene(container, options = {}) {
       camera.updateProjectionMatrix()
       // (the home view follows the screen's shape; the camera with it, if it is there)
       const f = focus.focused
-      const framed = !f || f === 'all' || f === 'player' || f === 'project' || f === 'board' || f === 'laptop' || f === 'monitor'
+      const framed = !f || f === 'all' || f === 'player' || f === 'board' || f === 'laptop' || f === 'monitor'
       fitHome()
       if (framed && !orbited && !focus.moving) {
-        const V = f === 'player' ? PLAYERV : f === 'project' ? PROJ : f === 'board' ? BOARDV : f === 'laptop' ? LAPTOPV : f === 'monitor' ? fitMonitor() : HOME
+        const V = f === 'player' ? PLAYERV : f === 'board' ? BOARDV : f === 'laptop' ? LAPTOPV : f === 'monitor' ? fitMonitor() : HOME
         controls.target.copy(V.target)
         camera.position.copy(V.pos)
         controls.update()
@@ -2195,7 +2183,6 @@ export function createScene(container, options = {}) {
         // (the notebook: closed in on, then opened)
         if (hit.item === notebookItem) {
           if (focus.focused === 'notebook' && !focus.moving) return false
-          if (projOpen) leaveProject()
           focus.focusOn('notebook')
           bookPending = true
           return true
@@ -2203,7 +2190,6 @@ export function createScene(container, options = {}) {
         // (the lamp's head and switch are its own at once: a tap switches it, from anywhere)
         const name = hit.item === earbudsLive.item ? 'earbuds' : hit.item === lighterItem ? 'lighter' : hit.item === boardItem ? 'board' : hit.item === laptopItem ? 'laptop' : hit.item === canItem ? 'can' : hit.item === monitorItem ? 'monitor' : hit.item === speakerItems[0] ? 'speakerL' : hit.item === speakerItems[1] ? 'speakerR' : hit.item === lampItem ? 'lamp' : cigItems.includes(hit.item) ? 'ashtray' : null
         if (!name || focus.focused === name || focus.moving) return false
-        if (projOpen) leaveProject()
         focus.focusOn(name)
         return true
       },
@@ -2257,9 +2243,9 @@ export function createScene(container, options = {}) {
       onTap: () => {},
     }
     grab.add(lighterItem)
-    // the board (and the badge hung on it): tapped from afar, the camera comes to it; tapped there,
-    // what is pinned up moves (room.items: a note peels up, the calendar turns to next month, the
-    // clip and the ticket swing; the badge swings on its pin); a drag turns the camera
+    // the shelf (and the badge hung under it): tapped from afar, the camera comes to it; tapped
+    // there, things move (room.items: a note peels up, the calendar turns to next month; the badge
+    // swings on its hook); a drag turns the camera
     const badgeM0 = badge.group.matrix.clone()
     const swingM = new THREE.Matrix4()
     const swingT = new THREE.Matrix4()
@@ -2283,7 +2269,7 @@ export function createScene(container, options = {}) {
           const it = room.items.find((x) => x.meshes.includes(hit.object))
           if (!it) return
           it.tap(hit)
-          audio.rustle(it.name === 'calendar' ? 1 : it.name === 'clip' ? 0.35 : 0.7)
+          audio.rustle(it.name === 'calendar' ? 1 : 0.7)
         }
         wake()
       },
@@ -2635,6 +2621,12 @@ export function createScene(container, options = {}) {
         if (!e.repeat) setLamp(!lamp.on)
         return
       }
+      // (up close on the monitor: the arrows go through its sites)
+      if (focus.focused === 'monitor' && !focus.moving && !grab.held && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault()
+        if (monitor.showTab((monitor.tab + (e.key === 'ArrowRight' ? 1 : monTabs.length - 1)) % monTabs.length)) lapAnswer('tab')
+        return
+      }
       if (focus.focused !== 'laptop' || focus.moving || osUp || grab.held) return
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault()
@@ -2693,130 +2685,22 @@ export function createScene(container, options = {}) {
       for (const q of cigs) if (q.group.visible && boxOver(cigBounds, q.group.matrixWorld)) return true
       return false
     }
-    // ---- a project open (Pod OS on a project's page): the player slides to the left, the rest of
-    // the still life blurs behind a veil with a hole the player's shape, and the project is told on
-    // the right, with the way to its live site (on a narrow screen: a sheet over the blurred scene)
-    const projEl = root.querySelector('.cg-proj')
-    const veilEl = root.querySelector('.cg-veil')
-    const pf = (k) => projEl.querySelector(`[data-p="${k}"]`)
-    let projHideT = 0
-    const two = (n) => String(n).padStart(2, '0')
-    function openProject(id) {
-      const i = portfolio.projects.findIndex((q) => q.id === id)
-      const p = portfolio.projects[i]
-      if (!p) return
-      projOpen = id
-      clearTimeout(projHideT)
-      pf('k').textContent = `Project ${two(i + 1)} / ${two(portfolio.projects.length)} · ${p.year}`
-      pf('name').textContent = p.name
-      pf('line').textContent = p.oneLiner
-      const live = pf('live')
-      const gh = pf('github')
-      live.hidden = !p.live
-      if (p.live) live.href = p.live
-      gh.hidden = !p.github
-      if (p.github) gh.href = p.github
-      // (no live site: the code is the way in)
-      gh.className = `cg-proj-btn ${p.live ? 'line' : 'dark'}`
-      gh.firstChild.textContent = p.live ? 'GitHub ' : 'View the code on GitHub '
-      pf('what').textContent = p.whatItIs
-      pf('built').textContent = p.whatIBuilt
-      pf('challenges').replaceChildren(...p.challenges.map((c) => Object.assign(document.createElement('li'), { textContent: c })))
-      pf('stack').replaceChildren(...p.stack.map((t) => Object.assign(document.createElement('span'), { textContent: t })))
-      projEl.scrollTop = 0
-      projEl.hidden = false
-      root.classList.add('cg-projecting')
-      if (focus.focused !== 'project') {
-        podSlide = podView()
-        focus.focusOn('project')
-      }
-      wake()
-    }
-    api.openProject = (id) => openProject(id) // (debug: tests)
-    function closeProject() {
-      if (!projOpen) return
-      projOpen = null
-      root.classList.remove('cg-projecting')
-      projHideT = setTimeout(() => {
-        if (!projOpen) projEl.hidden = true
-      }, 450)
-      if (focus.focused === 'project') {
-        podSlide = true
-        focus.focusOn('player')
-      }
-      wake()
-    }
-    /** The panel's own back, the veil, Escape: Pod OS back to its list, and the panel closes. */
-    function leaveProject() {
-      if (os && os.view.startsWith('project:')) os.back()
-      closeProject()
-    }
-    const veilP = new THREE.Vector3()
-    let veilClip = null
-    // the frost over the scene (drawn by the frame's present pass: core/frame.js): its strength
-    // eased over 0.6 s, the hole round the player (none on a narrow screen: the sheet covers it;
-    // none for the book), its tint (denser to the right for a project's text; even for the book)
+    // the frost over the scene while the visitors' book is open (drawn by the frame's present pass:
+    // core/frame.js): its strength eased over 0.6 s, its tint even
     let veilT = 0
     const VEIL = { k: 0, holeOn: 0, hole: new THREE.Vector4(), r: 0, feather: 30, tintA: new THREE.Vector3() }
-    const TINT_PROJECT = new THREE.Vector3(0.22, 0.5, 0.78)
     const TINT_BOOK = new THREE.Vector3(0.55, 0.55, 0.55)
     function stepVeil(dt) {
-      const want = projOpen || book.isOpen ? 1 : 0
+      const want = book.isOpen ? 1 : 0
       const was = veilT
       veilT = want ? Math.min(1, veilT + dt / 0.6) : Math.max(0, veilT - dt / 0.6)
       VEIL.k = veilT * veilT * (3 - 2 * veilT)
-      if (want) VEIL.tintA.copy(book.isOpen ? TINT_BOOK : TINT_PROJECT)
-      VEIL.holeOn = projOpen && !book.isOpen && !narrowUI() ? 1 : 0
-      VEIL.feather = FEATHER * renderer.getPixelRatio()
+      if (want) VEIL.tintA.copy(TINT_BOOK)
       return veilT !== was
-    }
-    // (the veil's hole: a soft-edged rounded rectangle round the player, as a mask image (its
-    // feather all outside the player), and the player's own outline as a clip, so the player's
-    // keys and page still take clicks through it)
-    const FEATHER = 30 // (px, CSS: the hole's soft edge)
-    function stepProject() {
-      const v = os.view
-      const id = v.startsWith('project:') ? v.slice(8) : null
-      // (the view gone elsewhere, the whole still life or a close-up: the project closes with it)
-      if (projOpen && !podView()) return leaveProject()
-      if (id && id !== projOpen && podView()) openProject(id)
-      else if (!id && projOpen) closeProject()
-      if (!projOpen) return
-      // the veil's hole: round the player as the camera sees it now (none on a narrow screen: the
-      // sheet covers it)
-      let clip = ''
-      if (!narrowUI()) {
-        const w = canvas.clientWidth
-        const h = canvas.clientHeight
-        const PH = LAYOUT.PLAYER.half
-        let x0 = Infinity
-        let y0 = Infinity
-        let x1 = -Infinity
-        let y1 = -Infinity
-        camera.updateMatrixWorld()
-        // (its face's four corners: from nearly straight above, its outline)
-        for (let i = 0; i < 4; i++) {
-          veilP.set(i & 1 ? PH[0] : -PH[0], 2 * PH[1], i & 2 ? PH[2] : -PH[2]).applyMatrix4(player.group.matrixWorld).project(camera)
-          const sx = ((veilP.x + 1) / 2) * w
-          const sy = ((1 - veilP.y) / 2) * h
-          x0 = Math.min(x0, sx)
-          x1 = Math.max(x1, sx)
-          y0 = Math.min(y0, sy)
-          y1 = Math.max(y1, sy)
-        }
-        const r = (x1 - x0) * 0.13
-        VEIL.hole.set(x0 / w, 1 - y1 / h, x1 / w, 1 - y0 / h)
-        VEIL.r = r * renderer.getPixelRatio()
-        const f = (n) => n.toFixed(1)
-        clip = `path(evenodd, "M0 0H${w}V${h}H0Z M${f(x0 + r)} ${f(y0)}H${f(x1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1)} ${f(y0 + r)}V${f(y1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1 - r)} ${f(y1)}H${f(x0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0)} ${f(y1 - r)}V${f(y0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0 + r)} ${f(y0)}Z")`
-      }
-      if (clip !== veilClip) veilEl.style.clipPath = veilClip = clip
     }
     function stepOS(dt) {
       if (!os) return
       screenBusy = false
-      if (podSlide && !focus.moving) podSlide = false
-      stepProject()
       if (os.power === 'asleep') {
         if (!osOff) os.wake()
       }
@@ -2825,7 +2709,7 @@ export function createScene(container, options = {}) {
       // (up close on a lit screen, the glass's reflections fade as the glide closes in, as a screen's
       // coating takes them: the page laid over it then shows exactly what it shows; across the desk
       // the glass reflects the room)
-      const gw = podView() && (!focus.moving || podSlide) && os.power !== 'asleep' ? 0 : 1
+      const gw = podView() && !focus.moving && os.power !== 'asleep' ? 0 : 1
       if (glare !== gw) {
         const g2 = glare + (gw - glare) * (1 - Math.exp(-dt * (reduceMotion ? 30 : 8)))
         glare = Math.abs(gw - g2) < 0.01 ? gw : g2
@@ -2838,7 +2722,7 @@ export function createScene(container, options = {}) {
       // the page shows), while the camera looks onto the glass and nothing covers it or is carried
       // (and not while a zoom runs: the page, scaled every frame, would be rasterized again by the
       // browser at each new scale; the glass shows its texture meanwhile)
-      let want = podView() && (!focus.moving || podSlide) && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom && !zoom.on && performance.now() >= gestureUntil
+      let want = podView() && !focus.moving && os.level >= 1 && glare === 0 && !grab.held && visible && !!dbgFlags.osDom && !zoom.on && performance.now() >= gestureUntil
       if (want) {
         camera.updateMatrixWorld()
         osCam.copy(camera.position).applyMatrix4(playerInv)
@@ -2960,8 +2844,14 @@ export function createScene(container, options = {}) {
     const siteNrm = new THREE.Vector3()
     const siteRay = new THREE.Vector3()
     let siteClip = ''
+    const siteC0 = new THREE.Vector3()
+    const siteC2 = new THREE.Vector3()
+    const siteCam = new THREE.Matrix4()
+    const siteProj = new THREE.Matrix4()
+    let siteW0 = 0
+    let siteH0 = 0
     function updateSite() {
-      const on = projOpen ? null : focus.focused === 'laptop' ? laptop : focus.focused === 'monitor' && monitor.signal ? monitor : null
+      const on = focus.focused === 'laptop' ? laptop : focus.focused === 'monitor' && monitor.signal ? monitor : null
       const p = on === laptop ? lapTabs[laptop.tab] : on === monitor ? monTabs[monitor.tab] : null
       // (the laptop: the portfolio or the GitHub tab, pages of this site; the monitor: a live site)
       const url = !p ? '' : p.home ? 'home' : p.githubTab ? 'github' : p.live || ''
@@ -2982,7 +2872,7 @@ export function createScene(container, options = {}) {
         siteFrame.title = url === 'home' ? `${portfolio.name}: portfolio` : url === 'github' ? `${portfolio.name}: GitHub` : url ? `${p.name}: live site` : 'Live site'
         if (url === 'home' || url === 'github') {
           siteFrame.removeAttribute('src')
-          siteFrame.srcdoc = url === 'home' ? homePageHtml || (homePageHtml = homeHtml(portfolio)) : githubPageHtml || (githubPageHtml = githubHtml(portfolio, opts.fontUrl))
+          siteFrame.srcdoc = url === 'home' ? homePageHtml || (homePageHtml = homeHtml(portfolio, opts.fontUrl, { bodymap: shotBodymap, 'codebase-tavern': shotTavern, meshh: shotMeshh, blinkscope: shotBlinkscope })) : githubPageHtml || (githubPageHtml = githubHtml(portfolio, opts.fontUrl))
         } else {
           siteFrame.removeAttribute('srcdoc')
           siteFrame.src = url || 'about:blank'
@@ -2996,10 +2886,19 @@ export function createScene(container, options = {}) {
         wake()
       }
       if (!show) return
-      // (the corners on the page, as the camera sees them; then the projective map from the
-      // iframe's own rectangle onto them, as a CSS matrix)
+      // (nothing to fit again while the camera, the screen and the canvas are as they were: a still
+      // view costs the page nothing)
       camera.updateMatrixWorld()
       siteOn.pageCorners(siteQ)
+      if (siteXf && siteCam.equals(camera.matrixWorld) && siteProj.equals(camera.projectionMatrix) && siteW0 === canvas.clientWidth && siteH0 === canvas.clientHeight && siteC0.equals(siteQ[0]) && siteC2.equals(siteQ[2])) return
+      siteC0.copy(siteQ[0])
+      siteC2.copy(siteQ[2])
+      siteCam.copy(camera.matrixWorld)
+      siteProj.copy(camera.projectionMatrix)
+      siteW0 = canvas.clientWidth
+      siteH0 = canvas.clientHeight
+      // (the corners on the page, as the camera sees them; then the projective map from the
+      // iframe's own rectangle onto them, as a CSS matrix)
       const r = root.getBoundingClientRect()
       const c = canvas.getBoundingClientRect()
       for (let i = 0; i < 4; i++) {
@@ -3042,7 +2941,7 @@ export function createScene(container, options = {}) {
       }
     }
     function updateLive() {
-      const still = !focus.moving && !projOpen
+      const still = !focus.moving
       // (the laptop: the GitHub tab, the profile; the monitor: the site live, or its code)
       const lp = still && focus.focused === 'laptop' ? lapTabs[laptop.tab] : null
       const mp = still && focus.focused === 'monitor' ? monTabs[monitor.tab] : null
@@ -3060,31 +2959,43 @@ export function createScene(container, options = {}) {
     // ---- the tour: the camera goes from thing to thing, a line about each; it moves on by itself,
     // or at "next"; "end tour", Escape or a press on the scene ends it where it is
     const TOUR = [
-      [null, 'The desk', 'Everything here can be clicked, picked up or switched. A quick look round first.'],
-      ['player', 'The player', 'Four songs on it. Pick one, plug the earbuds in, and its keys play, pause and skip.'],
-      ['laptop', 'The laptop', 'The portfolio: every project written up, and my GitHub in the next tab.'],
-      ['monitor', 'The second screen', 'The sites themselves, live: a tab each. Pull the USB-C plug at the laptop\u2019s side and it loses its signal.'],
-      ['board', 'The pegboard', 'A few notes, this month with today ringed, and my badge. Tap a note and it lifts.'],
-      ['notebook', 'The visitors\u2019 book', 'Open it and leave a thumbprint. Everyone\u2019s who came before is in there.'],
-      ['speakerR', 'The speakers', 'Tap one for music. The lamp has a switch too, and the can opens.'],
-      [null, 'That\u2019s the tour', 'Drag to look around, scroll to zoom. Escape always steps back.'],
+      [null, 'Welcome', 'This is my desk. A quick look round, about half a minute. Click anywhere to stop and explore.'],
+      ['laptop', 'The laptop', 'My portfolio. Every project is a tile: open one to read what it is and how I built it. My GitHub is the next tab.'],
+      ['monitor', 'The monitor', 'The projects themselves, running live. Switch between them with the tabs along its top.'],
+      ['player', 'The player', 'Four songs on it. Pick one and it plays through the earbuds.'],
+      ['board', 'The shelf', 'This month with today ringed, a few notes, and my badge on its hook. Tap things here: they move.'],
+      ['notebook', 'The visitors\u2019 book', 'Open it and leave a thumbprint beside everyone who came before.'],
+      [null, 'Your turn', 'Drag to look around, scroll to zoom, double-click anything to get closer. Escape steps back.'],
     ]
-    const TOUR_DWELL = 5.2 // (seconds at each, once the camera has arrived)
+    const TOUR_DWELL = 4.8 // (seconds at each, once the camera has arrived)
     const tourEl = root.querySelector('[data-tour]')
     const tourK = root.querySelector('[data-tour-k]')
     const tourT = root.querySelector('[data-tour-t]')
     const tourBar = root.querySelector('[data-tour-bar]')
     const tourNextEl = root.querySelector('[data-tour-next]')
-    const tour = { on: false, i: 0, t: 0 }
+    const tourPrevEl = root.querySelector('[data-act="tour-prev"]')
+    const tourDots = root.querySelector('[data-tour-dots]')
+    tourDots.innerHTML = TOUR.map(() => '<i></i>').join('')
+    // (held while the pointer is on its card, or the keyboard's focus in it: time to read)
+    const tour = { on: false, i: 0, t: 0, held: false }
+    listen(tourEl, 'pointerenter', () => (tour.held = true))
+    listen(tourEl, 'pointerleave', () => (tour.held = false))
+    listen(tourEl, 'focusin', () => (tour.held = true))
+    listen(tourEl, 'focusout', () => (tour.held = false))
     function tourStop(i) {
       tour.i = i
       tour.t = 0
       const [name, k, text] = TOUR[i]
-      tourK.textContent = `${i + 1} / ${TOUR.length}  \u00b7  ${k}`
+      tourK.textContent = k
       tourT.textContent = text
       tourNextEl.textContent = i === TOUR.length - 1 ? 'done' : 'next \u2192'
+      tourPrevEl.disabled = i === 0
+      ;[...tourDots.children].forEach((d, j) => d.classList.toggle('on', j === i))
+      // (the words change with a short fade)
+      tourEl.classList.remove('cg-tour-in')
+      void tourEl.offsetWidth
+      tourEl.classList.add('cg-tour-in')
       tourBar.style.width = '0%'
-      if (projOpen) leaveProject()
       if (book.isOpen) book.close()
       if (name) focus.focusOn(name)
       else focus.back()
@@ -3092,7 +3003,9 @@ export function createScene(container, options = {}) {
     }
     function startTour() {
       if (tour.on) return
+      tourAuto = false
       tour.on = true
+      tour.held = false
       tourEl.hidden = false
       root.classList.add('cg-touring')
       tourStop(0)
@@ -3107,13 +3020,26 @@ export function createScene(container, options = {}) {
       wake()
     }
     const tourNext = () => (tour.i < TOUR.length - 1 ? tourStop(tour.i + 1) : endTour(true))
+    const tourPrev = () => tour.i > 0 && tourStop(tour.i - 1)
+    // (the tour is how the desk introduces itself: it starts by itself a moment after the visitor
+    // arrives, unless they have already touched something; not for a visitor who asked for less
+    // motion, not under automation unless the address asks for it (?tour), never with ?notour)
+    const tourQ = new URLSearchParams(location.search)
+    let tourAuto = !tourQ.has('notour') && !reduceMotion && (!navigator.webdriver || tourQ.has('tour'))
+    function autoTour(after) {
+      if (!tourAuto) return
+      setTimeout(() => {
+        if (tourAuto && !destroyed && !focus.focused && !grab.held && !book.isOpen) startTour()
+        tourAuto = false
+      }, after)
+    }
     function stepTour(dt) {
-      if (!tour.on || focus.moving) return
+      if (!tour.on || focus.moving || tour.held) return
       tour.t += dt
       tourBar.style.width = `${Math.min(100, (tour.t / TOUR_DWELL) * 100).toFixed(1)}%`
       if (tour.t >= TOUR_DWELL) tourNext()
     }
-    listen(canvas, 'pointerdown', () => endTour(false), { passive: true })
+    listen(canvas, 'pointerdown', () => ((tourAuto = false), endTour(false)), { passive: true })
     api.tour = { start: startTour, end: endTour, get on() { return tour.on }, get stop() { return tour.i } }
     function updateNow(force = false) {
       const m = audio.music
@@ -3154,13 +3080,13 @@ export function createScene(container, options = {}) {
         else if (b.dataset.act === 'back') focus.back()
         else if (b.dataset.act === 'tour') startTour()
         else if (b.dataset.act === 'tour-next') tourNext()
+        else if (b.dataset.act === 'tour-prev') tourPrev()
         else if (b.dataset.act === 'tour-end') endTour(false)
         else if (b.dataset.act === 'os') {
           // (into Pod OS: close on the player if the view is elsewhere; there, the song playing takes the focus)
           if (!podView()) focus.focusOn('player')
           else if (osUp) os.focusFirst()
         } else if (b.dataset.act === 'all') focus.focusOn('all')
-        else if (b.dataset.act === 'proj-close') leaveProject()
         else if (b.dataset.act === 'sound') setSound(b.getAttribute('aria-pressed') !== 'true')
         wake()
       })
@@ -3338,8 +3264,8 @@ export function createScene(container, options = {}) {
     const overGap = () => 1000 / (1000 / pace.refresh + ABOVE)
     /** The least time between frames now: 0 while live (the pace's own), 30 or 48 when calm. */
     function calmGap(now) {
-      const calm = !focus.moving && !podSlide && !grab.held
-      if ((projOpen || book.isOpen) && calm && !veilMoving) return 48
+      const calm = !focus.moving && !grab.held
+      if (book.isOpen && calm && !veilMoving) return 48
       if (wasStill && calm && now - inputAt > 8000) return 30
       return 0
     }
@@ -3596,7 +3522,7 @@ export function createScene(container, options = {}) {
       // pinch with small pauses goes on drawing whole frames, it does not bake at every pause)
       stillTime = changing ? 0 : stillTime + Math.max(dt, 1 / 240)
       const moving = changing || stillTime < 0.12 || performance.now() < gestureUntil
-      govern(interval, moving && !focus.moving && !podSlide && !projOpen && !book.isOpen)
+      govern(interval, moving && !focus.moving && !book.isOpen)
       wasStill = !moving
       // shadows: drawn again only when the shadow casters changed (the burn moves slowly: every 6 s)
       shadowClock += dt
@@ -3854,6 +3780,8 @@ export function createScene(container, options = {}) {
     loopReady = !opts.hold
     last = performance.now()
     wake()
+    // (no loader in front: the tour a moment after the first frame)
+    if (!opts.hold) autoTour(1800)
 
     /** The reveal (after a loader): the scene fades up from black, the camera pushes in a little, and
      * the laptop's lid opens as the visitor arrives. */
@@ -3877,6 +3805,7 @@ export function createScene(container, options = {}) {
       lastKind = 0
       last = performance.now()
       wake()
+      autoTour(3100)
     }
     /** Where the cigarette's ember is on the screen (CSS px), for the loader's ember to travel to. */
     handle.emberScreen = () => {

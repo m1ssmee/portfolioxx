@@ -44,7 +44,7 @@ function bend(g) {
  * The picture (1920 x 1080): a tab for each project, the open one's page under them (as the
  * laptop draws it: its screenshot, or drawn). Returns the tabs' rectangles ([x0, x1], px).
  */
-export function drawBrowser(c, projects, tab, font, shots, pageC, blank = false) {
+export function drawBrowser(c, projects, tab, font, shots, blank = false) {
   const g = c.getContext('2d')
   const [W, H] = M.tex
   const B = M.bar
@@ -77,6 +77,10 @@ export function drawBrowser(c, projects, tab, font, shots, pageC, blank = false)
     g.fillRect(0, B, W, H - B)
     return rects
   }
+  // (on a canvas of its own, let go as soon as it is copied: 16 MB not kept for a rare redraw)
+  const pageC = document.createElement('canvas')
+  pageC.width = PAGE.texW
+  pageC.height = PAGE.texH
   const pg = pageC.getContext('2d')
   pg.setTransform(PAGE.texW / PAGE.w, 0, 0, PAGE.texW / PAGE.w, 0, 0)
   pg.clearRect(0, 0, PAGE.w, PAGE.h)
@@ -85,6 +89,7 @@ export function drawBrowser(c, projects, tab, font, shots, pageC, blank = false)
   const k = PAGE.texW / PAGE.w
   const srcH = ((H - B) * PAGE.w) / W
   g.drawImage(pageC, 0, 0, PAGE.w * k, srcH * k, 0, B, W, H - B)
+  pageC.width = pageC.height = 0
   return rects
 }
 
@@ -136,15 +141,9 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
   // (the stand: brushed aluminium, its joints and caps black plastic, its base on rubber)
   const metal = new THREE.MeshStandardMaterial({ color: 0xc3c7cc, roughness: 0.3, metalness: 0.92 })
   const black = new THREE.MeshStandardMaterial({ color: 0x18191c, roughness: 0.52 })
-  shell.customProgramCacheKey = () => 'monitor.shell'
-  metal.customProgramCacheKey = () => 'monitor.metal'
-  black.customProgramCacheKey = () => 'monitor.black'
   const canvas = document.createElement('canvas')
   canvas.width = M.tex[0]
   canvas.height = M.tex[1]
-  const pageC = document.createElement('canvas')
-  pageC.width = PAGE.texW
-  pageC.height = PAGE.texH
   const map = new THREE.CanvasTexture(canvas)
   map.colorSpace = THREE.SRGBColorSpace
   map.anisotropy = anisotropy
@@ -157,7 +156,6 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
   lostMap.anisotropy = anisotropy
   // (a matt panel: it shows its own picture, and little of the room in it)
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.92, roughness: 0.46, specularIntensity: 0.14, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })
-  glass.customProgramCacheKey = () => 'monitor.glass'
   const meshes = []
   const add = (g, m, name, cast = true) => {
     geometries.push(g)
@@ -273,7 +271,7 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     showTab(i) {
       if (i === tab) return false
       tab = i
-      tabs = drawBrowser(canvas, projects, tab, font, shots, pageC, dark)
+      tabs = drawBrowser(canvas, projects, tab, font, shots, dark)
       map.needsUpdate = true
       return true
     },
@@ -281,7 +279,7 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     setLive(on) {
       if (on === dark) return false
       dark = on
-      tabs = drawBrowser(canvas, projects, tab, font, shots, pageC, dark)
+      tabs = drawBrowser(canvas, projects, tab, font, shots, dark)
       map.needsUpdate = true
       return true
     },
@@ -372,8 +370,6 @@ export function createHdmiLink({ port, out, fwd, deskY, run, up, onChange }) {
   group.name = 'hdmi'
   const alu = new THREE.MeshStandardMaterial({ color: 0x8e9197, roughness: 0.36, metalness: 0.9 })
   const black = new THREE.MeshStandardMaterial({ color: 0x141415, roughness: 0.6 })
-  alu.customProgramCacheKey = () => 'hdmi.alu'
-  black.customProgramCacheKey = () => 'hdmi.black'
   const o = new THREE.Vector3(out.x, 0, out.z).normalize()
   const yawOf = (d) => Math.atan2(d.x, d.z)
   const parts = { alu: [], black: [] }

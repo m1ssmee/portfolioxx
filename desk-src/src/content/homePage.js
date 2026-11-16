@@ -4,9 +4,9 @@
 //   { desk: 'site', id }  show that project's site on the monitor
 //   { desk: 'key', key }  a key the desk wants (Escape: step back from the laptop)
 // From across the room the screen shows laptopScreen.js's drawings of the same pages.
-//   homeHtml: the portfolio, a plain page: the name, the bio, the links, the projects as a list
-//             (each opens its write-up: what it is, what was built, what was hard, the stack, the
-//             ways in).
+//   homeHtml: the portfolio, a bento grid: who, each project a tile (its screenshot where it has
+//             one), GitHub, the stack; a tile opens the project's write-up (what it is, what was
+//             built, what was hard, the stack, the ways in).
 //   githubHtml: the GitHub profile's repositories (the projects' own, at once; the live list from
 //             GitHub's API when it answers).
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
@@ -19,70 +19,110 @@ export const githubUser = (C) => (C.links.github || '').replace(/\/+$/, '').spli
 const fontFace = (fontUrl) => (fontUrl ? `@font-face{font-family:Inter;src:url(${JSON.stringify(fontUrl)});font-weight:100 900;font-display:block}` : '')
 const ESC_SCRIPT = `document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !window.__back?.()) parent.postMessage({ desk: 'key', key: 'Escape' }, '*') })`
 
-/** The page's serif (system faces: no download), and its numbers' figures. */
-export const SERIF = "'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif"
+/** The tiles' own colours for the projects without a screenshot ([ground, ink]). */
+export const TILE = { 'lunar-rover': ['#1c2640', '#eef1f8'], cropscan: ['#dfeccc', '#1d2a14'] }
+/** The bento grid's measures (px, as the page lays out 1440 wide): shared with laptopScreen.js's drawing. */
+export const BENTO = { max: 1240, pad: 28, gap: 16, rows: [300, 270, 270], r: 26 }
+/** The stack across every project, most used first. */
+export function topStack(C, n = 9) {
+  const count = new Map()
+  for (const p of C.projects) for (const t of p.stack) count.set(t, (count.get(t) || 0) + 1)
+  return [...count.entries()].sort((x, y) => y[1] - x[1]).slice(0, n).map(([t]) => t)
+}
 
-/** The portfolio, one HTML document: a plain page, one column, in the system's serif. */
-export function homeHtml(C) {
+/**
+ * The portfolio, one HTML document: a bento grid. A dark tile says who; each project is a tile,
+ * its screenshot filling it where it has one (shots: { id: url }), its own colour where not; two
+ * small tiles for GitHub and the stack. A project's tile opens its write-up, tiles again.
+ */
+export function homeHtml(C, fontUrl, shots = {}) {
   const P = C.projects
-  const ways = (p) =>
-    [isSite(p) && `<button class="a" data-site="${esc(p.id)}">see it on the monitor</button>`, p.live && `<a href="${esc(p.live)}" target="_blank" rel="noopener">the site</a>`, p.github && `<a href="${esc(p.github)}" target="_blank" rel="noopener">the code</a>`]
-      .filter(Boolean)
-      .join(' · ')
-  const item = (p) => `
-    <li><button class="a name" data-open="${esc(p.id)}">${esc(p.name)}</button> <span class="yr">${esc(p.year)}</span>
-      <p>${esc(p.oneLiner)}</p></li>`
+  const tag = (p) => `${esc(p.year)}${p.live ? ' · <b>Live</b>' : p.local ? ' · Runs locally' : ''}`
+  /** A project's tile: its picture and a label over its foot, or its colour and its words. */
+  const tile = (p, span, h = 1) => {
+    if (!p) return ''
+    const shot = shots[p.id]
+    if (shot)
+      return `<button class="t shot s${span} h${h}" data-open="${esc(p.id)}"><img src="${esc(shot)}" alt="${esc(p.name)}: its front page" decoding="async"><span class="cap"><span class="nm">${esc(p.name)}</span><span class="tg">${tag(p)}</span></span></button>`
+    const [bg, ink] = TILE[p.id] || ['#ffffff', '#16171a']
+    return `<button class="t flat s${span} h${h}" data-open="${esc(p.id)}" style="background:${bg};color:${ink}"><span class="tg">${tag(p)}</span><span class="big">${esc(p.name)}</span><span class="one">${esc(p.oneLiner)}</span><span class="go">Read →</span></button>`
+  }
+  const sites = P.filter(isSite)
+  const rest = P.filter((p) => !isSite(p))
   const detail = (p, i) => `
     <article class="view" data-view="${esc(p.id)}" hidden>
-      <p class="nav"><button class="a" data-back>← all projects</button></p>
-      <h1>${esc(p.name)}</h1>
-      <p class="sub">${esc(p.oneLiner)}</p>
-      <p class="ways">${ways(p)}</p>
-      ${p.whatItIs ? `<h2>What it is</h2><p>${esc(p.whatItIs)}</p>` : ''}
-      ${p.whatIBuilt ? `<h2>What I built</h2><p>${esc(p.whatIBuilt)}</p>` : ''}
-      ${p.challenges.length ? `<h2>What was hard</h2><ul>${p.challenges.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
-      ${p.stack.length ? `<p class="built">Built with ${esc(p.stack.slice(0, -1).join(', '))}${p.stack.length > 1 ? ' and ' : ''}${esc(p.stack[p.stack.length - 1])}. ${esc(p.year)}.</p>` : ''}
-      <p class="nav pn">${i > 0 ? `<button class="a" data-open="${esc(P[i - 1].id)}">← ${esc(P[i - 1].name)}</button>` : '<span></span>'}${i < P.length - 1 ? `<button class="a" data-open="${esc(P[i + 1].id)}">${esc(P[i + 1].name)} →</button>` : ''}</p>
+      <div class="grid">
+        <div class="t white s5 head"><button class="back" data-back>← All work</button><span class="tg">${tag(p)}</span><h1>${esc(p.name)}</h1><p class="one">${esc(p.oneLiner)}</p>
+          <div class="btns">${isSite(p) ? `<button class="btn dark" data-site="${esc(p.id)}">See it on the monitor</button>` : ''}${p.live ? `<a class="btn" href="${esc(p.live)}" target="_blank" rel="noopener">Live site ↗</a>` : ''}${p.github ? `<a class="btn${isSite(p) ? '' : ' dark'}" href="${esc(p.github)}" target="_blank" rel="noopener">Code ↗</a>` : ''}</div></div>
+        ${shots[p.id] ? `<div class="t shot s7 still"><img src="${esc(shots[p.id])}" alt="${esc(p.name)}: its front page"></div>` : `<div class="t flat s7 still" style="background:${(TILE[p.id] || ['#17181b'])[0]};color:${(TILE[p.id] || [0, '#fff'])[1]}"><span class="huge">${esc(p.name)}</span></div>`}
+        ${p.whatItIs ? `<div class="t white s6 txt"><h2>What it is</h2><p>${esc(p.whatItIs)}</p></div>` : ''}
+        ${p.whatIBuilt ? `<div class="t white s6 txt"><h2>What I built</h2><p>${esc(p.whatIBuilt)}</p></div>` : ''}
+        ${p.challenges.map((c, j) => `<div class="t white s${p.challenges.length > 2 ? 4 : 6} txt"><h2>What was hard · ${j + 1}</h2><p>${esc(c)}</p></div>`).join('')}
+        <div class="t lav s8 txt"><h2>Built with</h2><div class="chips">${p.stack.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div></div>
+        <button class="t dark s4 next" data-open="${esc(P[(i + 1) % P.length].id)}"><span class="tg">Next</span><span class="big">${esc(P[(i + 1) % P.length].name)} →</span></button>
+      </div>
     </article>`
-  const links = [C.email && ['email', `mailto:${C.email}`], C.links.github && ['GitHub', C.links.github], C.links.linkedin && ['LinkedIn', C.links.linkedin], C.links.x && ['X', C.links.x]].filter(Boolean)
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(C.name)}</title>
 <style>
+${fontFace(fontUrl)}
 *{box-sizing:border-box;margin:0;padding:0}
-html{background:#faf8f4;color:#1f1e1c;font:400 21px/1.62 ${SERIF};-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-main{max-width:720px;margin:0 auto;padding:84px 32px 96px}
-h1{font-size:36px;line-height:1.2;font-weight:700;letter-spacing:-.005em}
-.role{color:#6f6a62;font-style:italic;margin-top:2px}
-.intro{margin-top:28px}
-h2{font-size:21px;font-weight:700;margin:44px 0 10px}
-a,.a{color:#1f1e1c;text-decoration:underline;text-decoration-color:#b9b2a6;text-underline-offset:3px;text-decoration-thickness:1px;font:inherit;background:none;border:0;cursor:pointer;padding:0}
-a:hover,.a:hover{text-decoration-color:#1f1e1c}
-.links{margin-top:18px;color:#6f6a62}
-ul.work{list-style:none;margin-top:6px}
-ul.work li{padding:16px 0;border-top:1px solid #e7e2d9}
-ul.work li:last-child{border-bottom:1px solid #e7e2d9}
-.name{font-weight:700}
-.yr{color:#8d877d;font-size:17px;margin-left:6px}
-ul.work p{color:#4b4740;margin-top:2px}
-.nav{font-size:18px;color:#6f6a62}
-.view>h1{margin-top:36px}
-.sub{font-style:italic;color:#4b4740;margin-top:6px}
-.ways{margin-top:14px;font-size:18px;color:#6f6a62}
-article ul{padding-left:22px}
-article ul li{margin-top:8px}
-.built{margin-top:40px;color:#6f6a62;font-size:18px}
-.pn{display:flex;justify-content:space-between;margin-top:56px;padding-top:18px;border-top:1px solid #e7e2d9}
-footer{margin-top:72px;color:#8d877d;font-size:16px}
-:focus-visible{outline:2px solid #1f1e1c;outline-offset:3px}
+html{background:#ecebe6;color:#16171a;font:400 16px/1.5 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left}
+a{color:inherit;text-decoration:none}
+main{max-width:${BENTO.max}px;margin:0 auto;padding:${BENTO.pad}px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:${BENTO.gap}px;grid-auto-rows:auto}
+.h0{height:${BENTO.rows[0]}px}.h1{height:${BENTO.rows[1]}px}
+.t{position:relative;display:flex;flex-direction:column;border-radius:${BENTO.r}px;overflow:hidden;padding:26px 28px;min-width:0}
+button.t{transition:transform .2s ease,box-shadow .2s ease}
+button.t:hover{transform:translateY(-3px);box-shadow:0 18px 40px rgba(20,18,12,.16)}
+${[3, 4, 5, 6, 7, 8, 12].map((n) => `.s${n}{grid-column:span ${n}}`).join('')}
+.white{background:#fff}.dark{background:#141517;color:#f3f1ec}.lav{background:#e6e1f7}.mint{background:#d6eede}
+.me h1{font-size:44px;line-height:1.05;letter-spacing:-.035em;font-weight:750;margin-top:auto}
+.me .role{color:#a9a69f;font-size:17px;margin-top:6px}
+.me .bio{color:#d5d2cb;font-size:15.5px;line-height:1.55;margin-top:14px}
+.dotrow{display:flex;align-items:center;gap:9px;font-size:13px;color:#a9a69f}
+.dotrow i{width:9px;height:9px;border-radius:50%;background:#62d28a}
+.shot{padding:0;background:#ddd}
+.shot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+.cap{position:absolute;left:14px;bottom:14px;display:flex;align-items:baseline;gap:10px;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-radius:999px;padding:9px 16px;box-shadow:0 4px 14px rgba(0,0,0,.14);color:#16171a}
+.nm{font-weight:700;font-size:16px;letter-spacing:-.01em}
+.tg{font-size:13px;opacity:.7}.tg b{font-weight:650;color:#1f8a4c;opacity:1}
+.flat .tg b{color:inherit}
+.big{font-size:30px;font-weight:750;letter-spacing:-.03em;line-height:1.1;margin-top:auto}
+.one{font-size:15px;line-height:1.5;opacity:.82;margin-top:8px}
+.go{font-size:14px;font-weight:650;margin-top:14px}
+.gh .big{font-size:26px}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px}
+.chip{font-size:13px;font-weight:550;line-height:1;padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.72)}
+h2{font-size:13px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;opacity:.55;margin-bottom:10px}
+.view[hidden]{display:none}
+.head h1{font-size:46px;line-height:1.04;letter-spacing:-.035em;font-weight:750;margin-top:10px}
+.head .one{font-size:17px}
+.back{font-size:14px;font-weight:650;margin-bottom:auto;padding-bottom:22px;opacity:.7}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.btn{display:inline-flex;align-items:center;height:42px;padding:0 18px;border-radius:999px;border:1px solid #d5d2ca;font-size:14.5px;font-weight:650;background:#fff}
+.btn.dark{background:#141517;color:#fff;border-color:#141517}
+.still{min-height:${BENTO.rows[0] + 60}px}
+.huge{font-size:72px;font-weight:800;letter-spacing:-.05em;line-height:1;margin:auto 0 0}
+.txt p{font-size:16px;line-height:1.62}
+.next{min-height:150px}
+footer{font-size:13px;color:#86837c;padding:22px 6px 6px}
+:focus-visible{outline:3px solid #141517;outline-offset:3px}
 </style></head><body>
 <main>
   <div class="view" data-view="home">
-    <h1>${esc(C.name)}</h1>
-    <p class="role">${esc(C.role.replace(/\s*·\s*builder$/i, ''))}</p>
-    <p class="intro">${esc(C.bio)}</p>
-    <p class="links">${links.map(([t, u]) => `<a href="${esc(u)}"${u.startsWith('mailto') ? '' : ' target="_blank" rel="noopener"'}>${esc(t)}</a>`).join(' · ')}</p>
-    <h2>Projects</h2>
-    <ul class="work">${P.map(item).join('')}</ul>
-    <footer>${new Date().getFullYear()}. The sites run on the monitor behind this laptop.</footer>
+    <div class="grid">
+      <div class="t dark s5 me h0"><span class="dotrow"><i></i>${esc(C.role.replace(/\s*·\s*builder$/i, ''))}</span><h1>${esc(C.name)}</h1><p class="bio">${esc(C.bio)}</p></div>
+      ${tile(sites[0], 7, 0)}
+      ${tile(sites[1], 4)}
+      ${tile(sites[2], 4)}
+      ${C.links.github ? `<a class="t mint s4 gh h1" href="${esc(C.links.github)}" target="_blank" rel="noopener"><span class="tg">GitHub</span><span class="big">${esc(githubUser(C))} ↗</span><span class="one">Everything here is open: the code for each project is a click away.</span></a>` : ''}
+      ${tile(sites[3], 6)}
+      ${tile(rest[0], 3)}
+      ${tile(rest[1], 3)}
+      <div class="t lav s12 txt"><h2>What I build with</h2><div class="chips">${topStack(C, 14).map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div></div>
+    </div>
+    <footer>© ${new Date().getFullYear()} ${esc(C.name)} · the sites themselves run on the monitor behind this laptop</footer>
   </div>
   ${P.map(detail).join('')}
 </main>
@@ -93,9 +133,9 @@ footer{margin-top:72px;color:#8d877d;font-size:16px}
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-open],[data-back],[data-site]')
     if (!t) return
-    if (t.dataset.open) show(t.dataset.open)
+    if (t.dataset.site) parent.postMessage({ desk: 'site', id: t.dataset.site }, '*')
     else if (t.hasAttribute('data-back')) show('home')
-    else if (t.dataset.site) parent.postMessage({ desk: 'site', id: t.dataset.site }, '*')
+    else if (t.dataset.open) show(t.dataset.open)
   })
   ${ESC_SCRIPT}
 </script>

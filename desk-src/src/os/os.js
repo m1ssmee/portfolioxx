@@ -321,12 +321,14 @@ export function createPodOS({ audio, canvas: into = null, wantSound = () => {} }
   })
   el.addEventListener('focusin', dirty)
 
-  // ---- the player's keys: back, select, next item (while the OS is up close and awake)
+  // ---- the player's keys: back, play the song in focus, the next song (while the OS is up close
+  // and awake)
   function key(name) {
     if (st.power === 'asleep') return false
     byKeys(true)
     if (name === 'back') return back()
-    const list = focusables()
+    // (the player's own keys go through the songs: next one, play it)
+    const list = [...el.querySelectorAll('.pos-song')]
     if (!list.length) return true
     const i = list.indexOf(document.activeElement)
     if (name === 'next') {

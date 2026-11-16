@@ -1,23 +1,22 @@
-// The room round the still life: the matte white desk, the wall behind it and, on the wall, a cork
-// board. The wall is an accent wall: vertical tongue-and-groove panelling (V-jointed boards, each its
-// own stretch of brushed eggshell paint and a hair out of line with the next) painted a deep bottle
-// green, capped by a slim oak picture rail, the plaster above it the same green. Its face stands a few
-// millimetres behind the desk's back edge, so the two meet in a dark shadow gap; low on the right a
-// black double socket, a plug in it, its cable running down into the gap.
-// The board: thick natural cork in a bevelled oak frame (mitred, the grain turning at each corner),
-// hung a little off the panelling. On it: the three handwritten sticky notes, a wire-bound calendar
-// of the visitor's own month (today ringed in red marker) hanging from a pin, the pin the ID badge
-// hangs from, a risograph postcard held by washi tape, a ticket stub hanging by its corner, a pencil
-// sketch and a receipt in a brass bulldog clip, spare pins, old pin holes. A tap peels a note's
-// lower edge up and lets it fall, turns the calendar to next month and back, swings what hangs from
-// one pin (room.items, room.update).
+// The room round the still life: the matte white desk, the plain warm white wall behind it and, on
+// the wall, a shelf. The wall's face stands a few millimetres behind the desk's back edge, so the
+// two meet in a dark shadow gap; low on the right a black double socket, a plug in it, its cable
+// running down into the gap.
+// The shelf: an oak plank over the monitor, nothing showing that holds it. On it a snake plant in
+// a clay pot, a few books, a risograph postcard in a thin black frame and a wire-bound calendar of
+// the visitor's own month (today ringed in red marker), both leaning back on the wall; three
+// handwritten sticky notes on its front edge; under its right end a brass hook, the ID badge on
+// it. A tap peels a note's lower edge up and lets it fall, turns the calendar to next month and
+// back, swings the badge (room.items, room.update).
 // Frame: the view's own axes (layout.js): x across the picture (u), z down it (v, towards the
 // viewer), y up; the desk's top at y = ROOM.deskY (the felt mat's top, where everything rests, is
-// y = 0: the mat is that much thick). On the board: x from its left, y from its bottom, z out of it.
+// y = 0: the mat is that much thick). On the shelf: x from its left end, y up from its underside, z out
+// of the wall.
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { bakeRoom } from './roomTex.js'
-import { noteCanvas, calendarCanvas, postcardCanvas, ticketCanvas, sketchCanvas, receiptCanvas, tapeCanvas } from './roomPaper.js'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+import { noteCanvas, calendarCanvas, postcardCanvas } from './roomPaper.js'
 
 export const ROOM = {
   deskY: -3,
@@ -39,38 +38,28 @@ export const ROOM = {
   rail: { y: 790, h: 0, none: true }, // (no rail now: only where the wall's two parts meet)
   // the double socket low on the right: its middle (x, height) and its size (mm)
   socket: { u: 330, y: 86, w: 151, h: 80 },
-  // the cork board: its middle across the picture, its lower edge's height, its size, the oak
-  // frame's face width and depth, how far it hangs off the panelling (mm). On it (x from its left,
-  // y from its bottom; rot anticlockwise): the badge's pin (nothing in the 80 x 140 mm below it),
-  // the notes' middles, the pins the calendar, the bulldog clip and the ticket hang from, the
-  // postcard's middle, spare pins, old pin holes, the ghost of a card long gone
+  // the shelf (the name is the old board's): its middle across the picture, its underside's
+  // height, its length, how high what stands on it reaches above its underside (for the views),
+  // its thickness and depth (mm). On it (x from its left end): the badge's hook under it ([x, y from
+  // its underside]), the notes on its front edge ([x, turn]), where the books start, the plant
+  // ([x, z out of the wall]), the framed postcard's middle, the calendar's
   board: {
     u: 132,
-    y0: 615,
+    y0: 700,
     w: 580,
-    h: 400,
-    frame: 5,
-    depth: 16,
-    off: 5,
-    lip: 0.22, // (how much of a deep frame's shade its folded edge keeps)
-    peg: { pitch: 25, r: 2.5, margin: 9 }, // (the pegboard's holes: their grid, radius, and the plain margin)
-    badge: [322, 344],
+    h: 300,
+    thick: 24,
+    deep: 150,
+    badge: [522, -14],
     notes: [
-      [90, 318, -0.07],
-      [178, 330, 0.05],
-      [240, 245, -0.035],
+      [58, -0.05],
+      [146, 0.04],
+      [236, -0.03],
     ],
-    calendar: [470, 362],
-    clip: [104, 196],
-    ticket: [434, 150],
-    postcard: [300, 118, 0.03],
-    spare: [
-      [521, 114],
-      [503, 64],
-      [250, 356],
-    ],
-    holes: [],
-    ghost: null,
+    plant: [60, 78],
+    books: 138,
+    postcard: 372,
+    calendar: 498,
   },
   // the wall's contact shade: where it is baked (the room's frame: x0, y0, x1, y1) and its texels
   wallAO: { rect: [-1200, -40, 1200, 1160], size: [512, 256] },
@@ -303,7 +292,6 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     paint: dataTex(T.paint, T.paint.px),
     paperN: dataTex(T.paper, T.paper.nrm, { repeat: 3 }),
     wallAO: dataTex(T.wallAO, T.wallAO.px, { wrap: false, red: true }),
-    corkAO: dataTex(T.corkAO, T.corkAO.px, { wrap: false, red: true }),
   }
 
   // ---- the desk: a white slab against the wall, its top at deskY
@@ -504,9 +492,6 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
 
   // the oak rail: a picture ledge on the panelling's top: a cove under its lip, a rounded nose, a
   // flat top running back to the plaster (oak: the frame's)
-  // (the pegboard's steel, powder-coated white; the name is the old frame's)
-  const oakMat = mat(new THREE.MeshStandardMaterial({ color: 0xf1f0ec, roughness: 0.5, metalness: 0, vertexColors: true, envMapIntensity: 0.9 }))
-  oakMat.customProgramCacheKey = () => 'room.steel'
   const rail = new THREE.Group() // (no rail on a plain wall)
   rail.name = 'room.rail'
 
@@ -604,103 +589,120 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   }
   socket.add(...socketMeshes)
 
-  // ---- the board: its parts in its own frame (x from its left, y from its bottom, z out of it,
-  // its back hung `off` off the panelling)
+  // ---- the shelf: its parts in its own frame (x from its left end, y up from its underside, z
+  // out of the wall). An oak plank, nothing holding it up that shows; on it a snake plant in a clay
+  // pot, a few books (the last leaning on the rest), a postcard in a thin black frame and the
+  // calendar, both leaning back on the wall; three sticky notes on its front edge; under its right
+  // end a brass hook in the wall, the badge hanging from it
   const B = R.board
-  const F = B.frame
-  const zc = B.depth - 8 // (the cork's face: 8 mm inside the frame's)
+  const TH = B.thick
+  const D = B.deep
+  const zc = 1 // (the wall's face, a hair off it: where what hangs against the wall lies)
   const board = new THREE.Group()
-  board.position.set(B.u - B.w / 2, B.y0, face + B.off)
+  board.position.set(B.u - B.w / 2, B.y0, face)
   const boardMeshes = []
-
-  // the frame: one profile (a soft outer arris, a flat face, a bevel down to a small lip over the
-  // cork) swept along each side, mitred; a dark seam where the mitres meet, a little dust on top
+  const woodMat = mat(new THREE.MeshStandardMaterial({ map: canvasTex(plankCanvas()), roughness: 0.56, metalness: 0 }))
+  boardMeshes.push(mesh(new RoundedBoxGeometry(B.w + 24, TH, D, 3, 3.5).translate(B.w / 2, TH / 2, D / 2), woodMat, 'room.shelf', { cast: true, takes: true }))
+  const brass = mat(new THREE.MeshStandardMaterial({ color: 0xc6a36a, metalness: 1, roughness: 0.32 }))
+  // the hook the badge hangs from: a peg out of the wall, a ball on its end
   {
-    const D = B.depth
-    // (a folded edge: up the side, a small round, a flat a hair proud of the face)
-    const prof = [
-      [0, 0, 0.7],
-      [0, zc - 1.0, 1],
-      [0.35, zc - 0.2, 1],
-      [1.1, zc + 0.15, 1],
-      [F - 1.3, zc + 0.15, 1],
-      [F - 1.3, zc, 0.9],
-    ]
-    const sideOf = (len, put, turn, off) =>
-      sweep(
-        prof,
-        (p) => [
-          [p[0], 0.5],
-          [p[0] + 0.7, 0.95],
-          [len / 2, 1],
-          [len - p[0] - 0.7, 0.95],
-          [len - p[0], 0.5],
-        ],
-        put,
-        turn,
-        (p, arc, s, o) => o.set(s / 340 + off[0], arc / 42.5 + off[1]),
-      )
-    const W = B.w
-    const H = B.h
-    const sides = [
-      sideOf(W, (a, z, s, o) => o.set(s, a, z), (na, nz, o) => o.set(0, na, nz), [0.12, 0.1]),
-      sideOf(W, (a, z, s, o) => o.set(s, H - a, z), (na, nz, o) => o.set(0, -na, nz), [0.57, 0.45]),
-      sideOf(H, (a, z, s, o) => o.set(a, s, z), (na, nz, o) => o.set(na, 0, nz), [0.33, 0.7]),
-      sideOf(H, (a, z, s, o) => o.set(W - a, s, z), (na, nz, o) => o.set(-na, 0, nz), [0.81, 0.25]),
-    ]
-    const frameGeo = mergeGeometries(sides)
-    for (const s of sides) s.dispose()
-    dust(frameGeo, 0.35)
-    boardMeshes.push(mesh(frameGeo, oakMat, 'room.frame', { cast: true, takes: true }))
+    const [hx, hy] = B.badge
+    const peg = new THREE.CylinderGeometry(1.5, 1.5, 12, 12).rotateX(Math.PI / 2).translate(hx, hy, 6)
+    const ball = new THREE.SphereGeometry(2.7, 16, 12).translate(hx, hy, 12.4)
+    boardMeshes.push(mesh(mergeGeometries([peg, ball]), brass, 'room.hook', { cast: true }))
+    peg.dispose()
+    ball.dispose()
   }
-  // what casts the board's shadow on the wall (hidden behind the cork, facing the lamp)
+  // the books: standing, their spines out; the last one leaning on the others. Cloth covers, the
+  // pages' edge on top, a paler label on each spine
   {
-    const g = new THREE.PlaneGeometry(B.w - 4, B.h - 4)
-    g.translate(B.w / 2, B.h / 2, 2)
-    g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(12).fill(0.4), 3))
-    boardMeshes.push(mesh(g, oakMat, 'room.boardBack', { cast: true }))
+    const page = new THREE.Color(0xe9e2d0)
+    const parts = []
+    const tint = (g, f) => {
+      const n = g.attributes.position.count
+      const c = new Float32Array(n * 3)
+      for (let i = 0; i < n; i++) f(Math.floor(i / 6)).toArray(c, i * 3)
+      g.setAttribute('color', new THREE.BufferAttribute(c, 3))
+      return g
+    }
+    let x = B.books
+    for (const [t, h, d, col, lean = 0] of [
+      [28, 206, 138, 0x2f4a3c],
+      [22, 188, 132, 0xd8d0bd],
+      [34, 218, 140, 0x9c4a31],
+      [18, 176, 128, 0x27344d],
+      [26, 198, 136, 0x1f1f22, 0.17],
+    ]) {
+      const cover = new THREE.Color(col)
+      const label = cover.clone().lerp(new THREE.Color(0xf2ead8), cover.getHSL({}).l > 0.6 ? -0.5 : 0.72)
+      // (leaning: its top left corner against the book before it)
+      const x0 = x + Math.sin(lean) * h
+      const put = (g) => g.rotateZ(lean).translate(x0, TH, 9)
+      // (a box's faces in order: +x, -x, +y, -y, +z, -z; the top one is the pages)
+      parts.push(put(tint(new THREE.BoxGeometry(t, h, d).toNonIndexed().translate(t / 2, h / 2, d / 2), (f) => (f === 2 ? page : cover))))
+      parts.push(put(tint(new THREE.BoxGeometry(t * 0.62, 30, 0.6).toNonIndexed().translate(t / 2, h * 0.74, d + 0.3), () => label)))
+      x = x0 + t / Math.cos(lean) + 0.6
+    }
+    const bookMat = mat(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.74 }))
+    boardMeshes.push(mesh(mergeGeometries(parts), bookMat, 'room.books', { cast: true, takes: true }))
+    for (const g of parts) g.dispose()
   }
-  // the cork: granules in relief, darkened by its contact shade (the frame's lip, the pins, old
-  // holes, the ghost of a card)
-  const corkMat = mat(new THREE.MeshStandardMaterial({ color: 0xf1f0ec, roughness: 0.5, metalness: 0, envMapIntensity: 0.9 }))
+  // the plant: a snake plant, its blades up out of a clay pot, each cupped, tapering to a point,
+  // banded, a yellow line down each edge
   {
-    const corkU = {
-      tContact: { value: tex.corkAO },
-      uContact: { value: new THREE.Vector4(F, F, 1 / (B.w - 2 * F), 1 / (B.h - 2 * F)) },
-      uPeg: { value: new THREE.Vector4(B.w / 2, B.h / 2, B.peg.pitch, B.peg.r) },
-      uPegEdge: { value: new THREE.Vector3(B.w, B.h, B.peg.margin) },
+    const [px, pz] = B.plant
+    const pot = new THREE.LatheGeometry(
+      [
+        [0, 0],
+        [30, 0],
+        [33, 2.5],
+        [41.5, 70],
+        [44, 73],
+        [44, 82],
+        [40, 82],
+        [39, 75],
+        [0, 75],
+      ].map(([r, y]) => new THREE.Vector2(r, y)),
+      40,
+    ).translate(px, TH, pz)
+    boardMeshes.push(mesh(pot, mat(new THREE.MeshStandardMaterial({ color: 0xb46d49, roughness: 0.82 })), 'room.pot', { cast: true, takes: true }))
+    const soil = new THREE.CircleGeometry(39.5, 32).rotateX(-Math.PI / 2).translate(px, TH + 75.4, pz)
+    boardMeshes.push(mesh(soil, mat(new THREE.MeshStandardMaterial({ color: 0x2b231d, roughness: 1 })), 'room.soil'))
+    let seed = 7
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
+    const dark = new THREE.Color(0x27513a)
+    const light = new THREE.Color(0x4f8058)
+    const edge = new THREE.Color(0xc9b964)
+    const c = new THREE.Color()
+    const blades = []
+    for (let k = 0; k < 9; k++) {
+      const H = 112 + rnd() * 78
+      const w = 21 + rnd() * 9
+      const yaw = k * 2.39996 + rnd() * 0.5
+      const lean = 0.04 + rnd() * 0.2 + (k < 3 ? 0 : 0.06)
+      const curl = 0.03 + rnd() * 0.07
+      const g = new THREE.PlaneGeometry(w, H, 4, 12).translate(0, H / 2, 0)
+      const p = g.attributes.position
+      const col = new Float32Array(p.count * 3)
+      const ph = rnd() * 6
+      for (let i = 0; i < p.count; i++) {
+        const s = Math.min(1, Math.max(0, p.getY(i) / H))
+        const u = p.getX(i) / (w / 2)
+        // (narrow at its foot, widest a third up, a point at its tip)
+        const f = (0.55 + 0.45 * Math.min(1, s * 3.2)) * Math.pow(1 - s, 0.42)
+        p.setXYZ(i, p.getX(i) * f, p.getY(i), u * u * 5.5 * f + s * s * H * curl)
+        c.copy(dark).lerp(light, 0.5 + 0.5 * Math.sin(s * 34 + ph + u * 1.5))
+        if (Math.abs(u) > 0.72) c.lerp(edge, 0.85)
+        c.toArray(col, i * 3)
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+      g.rotateX(lean).rotateY(yaw).translate(px + Math.sin(yaw) * 9, TH + 74, pz + Math.cos(yaw) * 9)
+      g.computeVertexNormals()
+      blades.push(g)
     }
-    corkMat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, corkU)
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform vec4 uContact;\nvarying vec2 vContactUv;\nvarying vec2 vPeg;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvContactUv = (transformed.xy - uContact.xy) * uContact.zw;\nvPeg = transformed.xy;')
-      // the holes: round, on a square grid centred on the board, none in the margin; each a dark
-      // well with a soft shade round its rim, its edge a pixel soft, fading out once smaller than one
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform sampler2D tContact;\nuniform vec4 uPeg;\nuniform vec3 uPegEdge;\nvarying vec2 vContactUv;\nvarying vec2 vPeg;')
-        .replace(
-          '#include <map_fragment>',
-          `#include <map_fragment>
-          diffuseColor.rgb *= texture2D(tContact, vContactUv).r;
-          {
-            vec2 pc = (fract((vPeg - uPeg.xy) / uPeg.z) - 0.5) * uPeg.z;
-            float pd = length(pc - vec2(0.0, 0.35));
-            float pw = max(length(fwidth(vPeg)) * 0.7, 1e-4);
-            float inside = step(uPegEdge.z, min(min(vPeg.x, uPegEdge.x - vPeg.x), min(vPeg.y, uPegEdge.y - vPeg.y)));
-            float hole = (1.0 - smoothstep(uPeg.w - pw, uPeg.w + pw, length(pc))) * clamp(uPeg.w / pw, 0.0, 1.0) * inside;
-            float rim = (1.0 - smoothstep(uPeg.w, uPeg.w + 2.4, pd)) * clamp(1.5 / pw, 0.0, 1.0) * inside;
-            diffuseColor.rgb *= (1.0 - 0.10 * rim) * mix(1.0, 0.07, hole);
-          }`,
-        )
-    }
-    corkMat.customProgramCacheKey = () => 'room.peg'
-    const g = new THREE.PlaneGeometry(B.w - 2 * F + 3, B.h - 2 * F + 3)
-    g.translate(B.w / 2, B.h / 2, zc)
-    const p = g.attributes.position
-    const uv = g.attributes.uv
-    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 64, p.getY(i) / 64)
-    boardMeshes.push(mesh(g, corkMat, 'room.cork', { takes: true }))
+    const leafMat = mat(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.5 }))
+    boardMeshes.push(mesh(mergeGeometries(blades), leafMat, 'room.plant', { cast: true, takes: true }))
+    for (const g of blades) g.dispose()
   }
 
   // ---- what is pinned up: paper (its back plain where a curl shows it), each with a soft shadow
@@ -744,8 +746,6 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     parent.add(m)
     return m
   }
-  /** A sheet's top edge's middle, from its middle (x, y), its height and its turn. */
-  const topOf = (x, y, h, rot) => [x - (Math.sin(rot) * h) / 2, y + (Math.cos(rot) * h) / 2]
   const items = []
   const active = new Set()
 
@@ -787,24 +787,18 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     return a
   }
 
-  // the sticky notes: stuck along their glued band, their lower edges curling off the cork, a corner
-  // more than the other; a tap peels one up
+  // the sticky notes: stuck by their glued band to the shelf's front edge, hanging below it, their
+  // lower edges curling out, a corner more than the other; a tap peels one up
   const NOTE = 76
   const BAND = 17
   notes.forEach((n, i) => {
-    const [cx, cy, rot] = B.notes[i % B.notes.length]
+    const [cx, rot] = B.notes[i % B.notes.length]
     const g = sheet(NOTE, NOTE, 6, 14)
     const m = mesh(g, paperMat(canvasTex(noteCanvas(n.color, n.lines, handFont, 11 + i)), n.color, 2), 'room.note', { cast: true, takes: true })
-    const [tx, ty] = topOf(cx, cy, NOTE, rot)
-    m.position.set(tx, ty, zc + 0.9 + 0.15 * i)
+    m.position.set(cx, TH - 3, D + 0.6 + 0.1 * i)
     m.rotation.z = rot
     const tw = [0.28, -0.32, 0.18][i % 3]
-    const sh = shadeOf(board, tx, ty, zc + 0.35, rot, NOTE, NOTE, [1, 1.5, 1.6, 1.5], 0.36, 0.6)
-    const apply = (phi) => {
-      bend(g, (s, x) => (s < BAND ? 0 : (phi * (1 + (tw * x) / (NOTE / 2)) * (s - BAND)) / (NOTE - BAND)))
-      const lift = (phi * (NOTE - BAND)) / 2
-      setShade(sh.geometry, NOTE, NOTE - Math.min(6, lift * 0.2), [1, 1.5 + lift * 0.12, 1.6 + lift * 0.45, 1.5 + lift * 0.12], 0.36 * (1 - Math.min(0.45, lift / 50)), 0.6 + lift * 0.3)
-    }
+    const apply = (phi) => bend(g, (s, x) => (s < BAND ? 0 : (phi * (1 + (tw * x) / (NOTE / 2)) * (s - BAND)) / (NOTE - BAND)))
     const rest = [0.17, 0.12, 0.2][i % 3]
     apply(rest)
     const a = peeler(apply, rest, 0.95)
@@ -813,105 +807,30 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     boardMeshes.push(m)
   })
 
-  // the postcard, taped at its top corners: it curls a little, and lifts a little when tapped
+  // the postcard, in a thin black frame leaning back on the wall
   {
-    const [cx, cy, rot] = B.postcard
-    const W = 148
-    const H = 105
-    const card = new THREE.Group()
-    card.position.set(...topOf(cx, cy, H, rot), zc + 0.8)
-    card.rotation.z = rot
-    const g = sheet(W, H, 8, 10)
-    const m = mesh(g, paperMat(canvasTex(postcardCanvas(font)), 0xf1ece2, 1, { roughness: 0.6 }), 'room.postcard', { cast: true, takes: true })
-    const sh = shadeOf(card, 0, 0, -0.45, 0, W, H, [1, 1.4, 1.8, 1.4], 0.34, 0.8)
-    const apply = (phi) => {
-      bend(g, (s) => (s < 12 ? 0 : (phi * (s - 12)) / (H - 12)))
-      const lift = (phi * (H - 12)) / 2
-      setShade(sh.geometry, W, H, [1, 1.4, 1.8 + lift * 0.4, 1.4], 0.34 * (1 - Math.min(0.4, lift / 60)), 0.8 + lift * 0.3)
-    }
-    apply(0.05)
-    // the tape: two strips across its top corners, down onto the cork beyond the card's edge
-    const tapeTex = canvasTex(tapeCanvas())
-    const tapeMat = mat(new THREE.MeshStandardMaterial({ map: tapeTex, transparent: true, roughness: 0.7, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -10 }))
-    const tapes = [-1, 1].map((sx, k) => {
-      const t = new THREE.PlaneGeometry(15, 52, 2, 14)
-      const p = t.attributes.position
-      const a = sx * (Math.PI / 4 + (k ? 0.1 : -0.06))
-      const ca = Math.cos(a)
-      const sa = Math.sin(a)
-      for (let i = 0; i < p.count; i++) {
-        // (in the card's frame: on it, a hair above it; past its edge, down on the cork)
-        const x = p.getX(i) * ca - p.getY(i) * sa + sx * (W / 2 - 3)
-        const y = p.getX(i) * sa + p.getY(i) * ca - 4
-        const inside = Math.min(W / 2 - Math.abs(x), -y)
-        const k2 = Math.max(0, Math.min(1, (inside + 1.2) / 2.4))
-        p.setXYZ(i, x, y, -0.5 + 0.95 * k2 * k2 * (3 - 2 * k2))
-      }
-      t.computeVertexNormals()
-      const tm = mesh(t, tapeMat, 'room.tape')
-      card.add(tm)
-      return tm
-    })
-    card.add(m)
-    board.add(card)
-    const a = peeler(apply, 0.05, 0.5)
-    items.push({ name: 'postcard', meshes: [m, ...tapes], tap: a.tap })
-    boardMeshes.push(m, ...tapes)
-  }
-
-  // the pins: map pins (a round head on a steel shaft) for what hangs, push pins for the spares
-  const plasticPin = mat(new THREE.MeshPhysicalMaterial({ roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.2 }))
-  const hangPins = [
-    [B.badge, 0x26282c],
-    [B.calendar, 0xb6432f],
-    [B.clip, 0xe4dccb],
-    [B.ticket, 0xc4922f],
-  ]
-  {
-    const head = geo(new THREE.SphereGeometry(2.6, 16, 12).translate(0, 0, 10.2))
-    const shaft = geo(new THREE.CylinderGeometry(0.42, 0.42, 9, 8, 1).rotateX(Math.PI / 2).translate(0, 0, 4.5))
-    const push = geo(
-      new THREE.LatheGeometry(
-        [
-          [0, 0],
-          [4.6, 0],
-          [4.7, 0.5],
-          [4.3, 1.1],
-          [2.9, 1.6],
-          [2.6, 3.5],
-          [2.8, 6.4],
-          [3.9, 7.1],
-          [4.1, 8.3],
-          [3.4, 9.6],
-          [1.8, 10.3],
-          [0, 10.5],
-        ].map(([r, y]) => new THREE.Vector2(r, y)),
-        18,
-      ).rotateX(Math.PI / 2),
-    )
-    const heads = new THREE.InstancedMesh(head, plasticPin, hangPins.length)
-    const shafts = new THREE.InstancedMesh(shaft, steel, hangPins.length)
-    const pushes = new THREE.InstancedMesh(push, plasticPin, B.spare.length)
-    const m4 = new THREE.Matrix4()
-    const c = new THREE.Color()
-    hangPins.forEach(([[x, y], col], i) => {
-      m4.makeTranslation(x, y, zc)
-      heads.setMatrixAt(i, m4)
-      shafts.setMatrixAt(i, m4)
-      heads.setColorAt(i, c.set(col))
-    })
-    const spareCols = [0xb6432f, 0xe9e2d2, 0x2a2c30]
-    B.spare.forEach(([x, y], i) => {
-      m4.makeRotationZ(i * 1.3).setPosition(x, y, zc)
-      pushes.setMatrixAt(i, m4)
-      pushes.setColorAt(i, c.set(spareCols[i % spareCols.length]))
-    })
-    for (const o of [heads, shafts, pushes]) {
-      o.castShadow = true
-      o.name = 'room.pins'
-      board.add(o)
-      boardMeshes.push(o)
-    }
+    const W = 168
+    const H = 122
+    const bar = 9
+    const dp = 12
+    const fr = new THREE.Group()
+    fr.position.set(B.postcard, TH, 42)
+    fr.rotation.x = -0.17
+    const bars = [
+      new THREE.BoxGeometry(W, bar, dp).translate(0, H - bar / 2, dp / 2),
+      new THREE.BoxGeometry(W, bar, dp).translate(0, bar / 2, dp / 2),
+      new THREE.BoxGeometry(bar, H - 2 * bar, dp).translate(-W / 2 + bar / 2, H / 2, dp / 2),
+      new THREE.BoxGeometry(bar, H - 2 * bar, dp).translate(W / 2 - bar / 2, H / 2, dp / 2),
+      new THREE.BoxGeometry(W - 2, H - 2, 2).translate(0, H / 2, 1),
+    ]
+    const frameMat = mat(new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.5 }))
+    const frame = mesh(mergeGeometries(bars), frameMat, 'room.frame', { cast: true, takes: true })
+    for (const g of bars) g.dispose()
+    const cardMat = mat(new THREE.MeshStandardMaterial({ map: canvasTex(postcardCanvas(font)), roughness: 0.55 }))
+    const card = mesh(new THREE.PlaneGeometry(W - 2 * bar + 1, H - 2 * bar + 1).translate(0, H / 2, dp - 4), cardMat, 'room.postcard', { takes: true })
+    fr.add(frame, card)
+    board.add(fr)
+    boardMeshes.push(frame, card)
   }
 
   // a pendulum: what hangs from one pin (x0: the pin's x on the board; set(q): turn it by q about
@@ -944,120 +863,21 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     }
     return a
   }
-  const swing = (pivot, rest, ...k) => {
-    pivot.rotation.z = rest
-    return pendulum(pivot.position.x, (q) => (pivot.rotation.z = rest + q), ...k)
-  }
 
-  // the bulldog clip (brass, 51 mm) hanging from its pin by its handles, a pencil sketch in its jaws
-  // and a till receipt behind it
-  {
-    const pivot = new THREE.Group()
-    pivot.position.set(B.clip[0], B.clip[1], zc)
-    const zs = 3.2 // (the sketch's face at the jaws)
-    const sketch = sheet(100, 124, 6, 14)
-    const sm = mesh(sketch, paperMat(canvasTex(sketchCanvas(handFont)), 0xf2f1ea, 2, { alphaTest: 0.5, roughness: 0.88 }), 'room.sketch', { cast: true, takes: true })
-    sm.position.set(0, -36, zs)
-    bend(sketch, (s) => (s < 46 ? -0.057 * (1 - s / 46) : 0), [[-50, 74, 50, 52, 0.45]])
-    const receipt = sheet(58, 128, 4, 16)
-    const rm = mesh(receipt, paperMat(canvasTex(receiptCanvas()), 0xeeede8, 1, { alphaTest: 0.5, roughness: 0.7 }), 'room.receipt', { cast: true, takes: true })
-    rm.position.set(50, -31, zs - 0.9)
-    rm.rotation.z = -0.05
-    bend(receipt, (s) => (s < 46 ? -0.065 * (1 - s / 46) : 0), [[-29, 40, 29, 40, -0.3]])
-    // the clip: its front plate (a thin curved shell, its lip pressed on the paper), the roll its
-    // handles turn in, and the two wire handles up to the pin
-    const brass = mat(new THREE.MeshStandardMaterial({ color: 0xc6a36a, metalness: 1, roughness: 0.32 }))
-    const line = [
-      [-44, 0.35],
-      [-43, 1.5],
-      [-41, 2.6],
-      [-36, 3.6],
-      [-28, 4.3],
-      [-20, 4.5],
-      [-15.5, 4.1],
-      [-13, 3.4],
-    ]
-    const shell = new THREE.Shape()
-    const off = (k, d) => {
-      const a = line[Math.max(0, k - 1)]
-      const b = line[Math.min(line.length - 1, k + 1)]
-      const ty = b[0] - a[0]
-      const tz = b[1] - a[1]
-      const l = Math.hypot(ty, tz)
-      return [line[k][0] - (tz / l) * d, line[k][1] + (ty / l) * d]
-    }
-    // (in the shape's plane: x = -z, y = y; extruded along the clip's width)
-    line.forEach((_, k) => {
-      const [y, z] = off(k, 0.35)
-      if (k === 0) shell.moveTo(-z, y)
-      else shell.lineTo(-z, y)
-    })
-    for (let k = line.length - 1; k >= 0; k--) {
-      const [y, z] = off(k, -0.35)
-      shell.lineTo(-z, y)
-    }
-    const plate = new THREE.ExtrudeGeometry(shell, { depth: 50.4, bevelEnabled: true, bevelThickness: 0.3, bevelSize: 0.25, bevelSegments: 1, curveSegments: 4 })
-    plate.rotateY(Math.PI / 2).translate(-25.2, 0, zs)
-    const roll = new THREE.CylinderGeometry(2.5, 2.5, 51, 18, 1).rotateZ(Math.PI / 2).translate(0, -11, zs + 2.1)
-    const handle = (dz, lean) =>
-      new THREE.TubeGeometry(
-        new THREE.CatmullRomCurve3(
-          [
-            [-23.5, -11],
-            [-22.5, -6],
-            [-19, -1.6],
-            [-14, 0.95],
-            [-7, 1.25],
-            [0, 1.25],
-            [7, 1.25],
-            [14, 0.95],
-            [19, -1.6],
-            [22.5, -6],
-            [23.5, -11],
-          ].map(([x, y]) => new THREE.Vector3(x, y, zs + 2.1 + dz + lean * (y + 11))),
-        ),
-        56,
-        0.8,
-        6,
-        false,
-      )
-    const clipGeo = mergeGeometries([plate, roll.toNonIndexed(), handle(0.9, -0.02).toNonIndexed(), handle(-0.9, -0.05).toNonIndexed()])
-    for (const g of [plate, roll]) g.dispose()
-    const clip = mesh(clipGeo, brass, 'room.clip', { cast: true })
-    shadeOf(pivot, 14, -12, 0.35, 0, 132, 150, [3, 4, 4.5, 3.5], 0.42, 3)
-    pivot.add(sm, rm, clip)
-    board.add(pivot)
-    const a = swing(pivot, 0.02, 10.5, 0.2, 1.5)
-    items.push({ name: 'clip', meshes: [clip, sm, rm], tap: a.tap })
-    boardMeshes.push(clip, sm, rm)
-  }
-
-  // the ticket stub, hanging by its corner from a pin through its hole
-  {
-    const pivot = new THREE.Group()
-    pivot.position.set(B.ticket[0], B.ticket[1], zc)
-    const g = sheet(90, 46, 8, 3)
-    g.translate(45 - 5.4, 5.4, 0) // (its hole at the pin)
-    const m = mesh(g, paperMat(canvasTex(ticketCanvas(font)), 0xc5d3df, 2, { alphaTest: 0.5, roughness: 0.75 }), 'room.ticket', { cast: true, takes: true })
-    m.position.z = 2.2
-    m.rotation.y = 0.02
-    shadeOf(pivot, 39.6, 5.4, 0.35, 0, 90, 46, [2, 2.5, 2.5, 2], 0.36, 2.2)
-    pivot.add(m)
-    board.add(pivot)
-    // (its middle below the pin, nearly: it rests a little short of it, held by the pin's friction)
-    const a = swing(pivot, -1.05, 13, 0.24, 2.0)
-    items.push({ name: 'ticket', meshes: [m], tap: a.tap })
-    boardMeshes.push(m)
-  }
-
-  // the calendar: a wire-bound pad hanging from its pin by a wire hanger; this month on top, next
-  // month under it. A tap turns the page up over the binding to show next month, and lets it fall
+  // the calendar: a wire-bound pad standing on the shelf, leaning back on the wall; this month on
+  // top, next month under it. A tap turns the page up over the binding to show next month, and
+  // lets it fall
   {
     const CW = 130
     const CH = 182
     const cal = new THREE.Group()
-    cal.position.set(B.calendar[0], B.calendar[1], zc)
-    const yb = -12 // (the binding's line, below the pin)
+    const yb = -12 // (the binding's line, below the pad's top)
+    // (its foot on the shelf, out from the wall; its top back against it)
+    const stand = new THREE.Group()
+    stand.position.set(B.calendar, TH, 66)
+    stand.rotation.x = -0.24
+    cal.position.set(0, CH - (yb + 2.2), 0)
+    stand.add(cal)
     const zb = 4.4
     const lean = (s) => (s < 40 ? -0.05 : s < 70 ? -0.05 * (1 - (s - 40) / 30) : 0)
     // (every sheet of the pad on the same grid, half a millimetre apart: their depth offsets then
@@ -1087,31 +907,8 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     }
     loops.castShadow = true
     loops.name = 'room.binding'
-    const hanger = mesh(
-      new THREE.TubeGeometry(
-        new THREE.CatmullRomCurve3(
-          [
-            [-13, yb, zb],
-            [-8, yb + 6, zb + 0.6],
-            [-2.2, 0.6, zb + 1.2],
-            [0, 0.95, zb + 1.3],
-            [2.2, 0.6, zb + 1.2],
-            [8, yb + 6, zb + 0.6],
-            [13, yb, zb],
-          ].map(([x, y, z]) => new THREE.Vector3(x, y, z)),
-        ),
-        40,
-        0.5,
-        6,
-        false,
-      ),
-      steel,
-      'room.hanger',
-      { cast: true },
-    )
-    cal.add(loops, hanger)
-    shadeOf(cal, 0, yb + 2.2, 0.35, 0, CW, CH, [2.5, 3, 4, 3], 0.42, 2.5)
-    board.add(cal)
+    cal.add(loops)
+    board.add(stand)
     // (the turn: th, the page's angle at the binding; while it turns its free end lags, and gravity
     // droops it; it falls back onto the pad, bounces a little and lies still)
     const G = top.geometry
@@ -1177,11 +974,11 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
       shape(dt)
       return true
     }
-    items.push({ name: 'calendar', meshes: [top, under, backCard, loops, hanger], tap: f.tap })
-    boardMeshes.push(top, under, backCard, loops, hanger)
+    items.push({ name: 'calendar', meshes: [top, under, backCard, loops], tap: f.tap })
+    boardMeshes.push(top, under, backCard, loops)
   }
 
-  // the badge's own soft shadow on the cork (the card hangs ~5 mm off it, from the pin; scene.js
+  // the badge's own soft shadow on the wall (the card hangs ~5 mm off it, from the hook; scene.js
   // hangs the badge: move this with it if it ever moves)
   const badgeShade = shadeOf(board, B.badge[0] + 0.3, B.badge[1] - 1, zc + 0.35, 0.06, 56, 85, [3, 3, 3.5, 3], 0.32, 3.5)
 
@@ -1199,12 +996,12 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     wallMeshes,
     floor,
     boardMeshes,
-    /** The badge's pin (world), and which way is out of the board (world). */
+    /** The badge's hook (world), and which way is out of the wall (world). */
     badgePin: onBoard(B.badge[0], B.badge[1], zc),
     boardOut: new THREE.Vector3(0, 0, 1).transformDirection(board.matrixWorld),
-    /** The board's middle on its face (world), and its size (mm). */
-    boardCenter: onBoard(B.w / 2, B.h / 2, zc),
-    boardSize: [B.w, B.h],
+    /** The shelf's middle, with what stands on it and hangs under it (world), and that's size (mm). */
+    boardCenter: onBoard(B.w / 2, (B.h - 150) / 2, D / 2),
+    boardSize: [B.w + 30, B.h + 150],
     badgeShade,
     /** What a tap moves: { name, meshes, tap(hit) } (hit: the raycast's intersection). */
     items,
@@ -1235,6 +1032,7 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
 }
 
 /** A little dust where a surface faces up (its vertex colour lighter and greyer): k, how much. */
+
 /** The floor's boards (1120 mm square, tiling): eight rows of oak, their ends staggered. */
 function floorCanvas() {
   const c = document.createElement('canvas')
@@ -1268,12 +1066,26 @@ function floorCanvas() {
   return c
 }
 
-function dust(g, k) {
-  const n = g.attributes.normal
-  const c = g.attributes.color
-  for (let i = 0; i < n.count; i++) {
-    const t = n.getY(i)
-    const d = k * Math.max(0, Math.min(1, (t - 0.35) / 0.6))
-    c.setXYZ(i, c.getX(i) * (1 + 0.1 * d), c.getY(i) * (1 + 0.12 * d), c.getZ(i) * (1 + 0.17 * d))
+/** The shelf's oak (512 x 128, along the grain): a warm ground, long streaks, a few darker rays. */
+function plankCanvas() {
+  const c = document.createElement('canvas')
+  c.width = 512
+  c.height = 128
+  const g = c.getContext('2d')
+  g.fillStyle = '#b48a5c'
+  g.fillRect(0, 0, 512, 128)
+  let seed = 41
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
+  for (let i = 0; i < 260; i++) {
+    const y = rnd() * 128
+    const dark = rnd() < 0.6
+    g.strokeStyle = dark ? `rgba(92,60,30,${0.05 + rnd() * 0.13})` : `rgba(236,206,160,${0.05 + rnd() * 0.1})`
+    g.lineWidth = 0.5 + rnd() * 1.6
+    g.beginPath()
+    const a = rnd() * 3
+    const ph = rnd() * 6
+    for (let x = 0; x <= 512; x += 16) g.lineTo(x, y + Math.sin(x / 90 + ph) * a)
+    g.stroke()
   }
+  return c
 }

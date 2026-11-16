@@ -149,9 +149,16 @@ the physics and the cable's mesh both read it.
 
 ## Round the desk
 
-- The wall is plain warm white; on it a white steel pegboard (`src/objects/room.js`: the holes are
-  drawn in its shader), what is pinned on it unchanged. The desk is a real one now: 1.32 m wide,
-  on two black steel end frames, over an oak floor, a skirting along the wall.
+- The wall is plain warm white; on it, over the monitor, an oak shelf (`src/objects/room.js`): a
+  snake plant in a clay pot, a few books, a postcard in a thin black frame and this month's
+  calendar leaning back on the wall, three sticky notes on its front edge, the ID badge on a brass
+  hook under its right end. A tap peels a note, turns the calendar's page, swings the badge. The
+  desk is a real one: 1.32 m wide, on two black steel end frames, over an oak floor, a skirting
+  along the wall.
+- The light: a dark room held by three pools of light. The lamp's on the desk (the key, the only
+  shadow), a warm spot down the wall onto the shelf, and the monitor's own glow on the desk in
+  front of it (off while it has no signal); the dusk sky, the room's bounce and the environment
+  are low under them, and the picture darkens a little to its corners (`.cg-stage::after`).
 - `src/objects/studio.js`: a studio monitor on a floor stand at each end of the desk, turned in
   towards the chair (a tap closes in; a tap there is the sound's switch), and a small stainless
   steel pedal bin right of the right stand.
@@ -161,7 +168,7 @@ the physics and the cable's mesh both read it.
   one, up close, opens it) over the site's page; up close, the live site itself (as on the laptop, below; the page is
   flat, laid half way into the curve, the picture black under it). It hangs
   off the laptop's left USB-C port: a USB-C to HDMI adapter, then the HDMI cable back to the pole,
-  up it and along the arm. The pegboard hangs higher, above the monitor.
+  up it and along the arm.
 
 Since then: the speakers have pale cones, trim rings, foam pads and
 round-footed stands. A tap on the USB-C plug at the laptop's side pulls it
@@ -170,8 +177,16 @@ a koi pond under cherry blossom, drawn in code (`MAT_COLORS.koi` in `src/objects
 
 The laptop's tabs show the sites' own screenshots where a project has one (`src/assets/sites/<id>.webp`,
 2048 px square; `scene.js` loads them by project id; a project without one has its page drawn).
-Up close on the laptop a button at the bottom opens the open tab's live site, or its code. "tour"
-(top right) takes the camera from thing to thing with a line about each (`TOUR` in `scene.js`).
+Up close a button at the bottom opens the GitHub profile (the laptop's GitHub tab) or the site on
+the monitor (or its code).
+
+The tour (`TOUR` in `scene.js`) is how the desk introduces itself: it starts by itself about three
+seconds after a visitor comes in, takes the camera from thing to thing (the laptop, the monitor,
+the player, the shelf, the visitors' book) with a line about each, and ends at home. Dots show
+where it is; "next", the back arrow and the arrow keys step through it, it waits while the
+pointer is on its card, and "skip", Escape or a press on the scene ends it. "tour" (top right)
+plays it again. It does not start by itself for a visitor who asked for reduced motion, under
+automation (unless the address has `?tour`), or with `?notour`.
 
 Up close on the laptop or the monitor, a project with a live site shows the real thing: an iframe
 laid over the page's part of that screen, fitted to its four corners as the camera sees them
@@ -230,10 +245,11 @@ line, and becomes the page's hidden semantic HTML, for search engines and screen
 `vite.config.js` from `src/content/pages.js`).
 
 The laptop holds the portfolio and the GitHub profile, two tabs, nothing else
-(`src/content/homePage.js`). The portfolio is a plain page, one serif column: the name, the role,
-the bio, the links, the projects as a list, each opening its write-up (what it is, what I built,
-what was hard, what it is built with, its ways in, the previous and next project). "see it on the
-monitor" takes the view to the monitor with that site on it. The GitHub tab lists the repositories: those the portfolio links to
+(`src/content/homePage.js`). The portfolio is a bento grid: a dark tile says who, each project is a
+tile (its screenshot filling it where it has one, its own colour where not), with tiles for GitHub
+and the stack; a project's tile opens its write-up, tiles again (what it is, what I built, what
+was hard, what it is built with, its ways in, the next project). "See it on the monitor" takes the
+view to the monitor with that site on it. The GitHub tab lists the repositories: those the portfolio links to
 at once, then the profile's own list from GitHub's API when it answers. Up close each is a real
 page laid over the screen; from across the room `laptopScreen.js` draws the same layouts
 (`homePage`, `githubPage` there).

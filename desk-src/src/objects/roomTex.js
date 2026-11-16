@@ -11,8 +11,6 @@
 //   paper   fine fibres (normal), for everything pinned up; 32 mm square, tiling
 //   wallAO  the wall's contact shade over the part of it ever seen (one channel): round the board's
 //           hanging gap, under and over the rail, round the socket; and the paint's slow clouds
-//   corkAO  the cork's (one channel): under the frame's lip, round each pin, old pin holes, the
-//           ghost of a card that hung there for a year
 // (Value noise from lookup tables: a few times faster than core/noise.js's hashed noise, which
 // only fills the coarse grids here.)
 import { fbm2t } from '../core/noise.js'
@@ -384,7 +382,8 @@ export function wallAOTex(L) {
   const [x0, y0, x1, y1] = L.wallAO.rect
   const [W, H] = L.wallAO.size
   const B = L.board
-  const board = [B.u - B.w / 2 + 2, B.y0 - 5, B.u + B.w / 2 + 2, B.y0 + B.h - 4]
+  // (the shelf's plank: its shade on the wall under it, a little round its ends)
+  const board = [B.u - B.w / 2 - 10, B.y0 - 6, B.u + B.w / 2 + 14, B.y0 + B.thick - 2]
   const S = L.socket
   const sock = [S.u - S.w / 2, S.y - S.h / 2 - 2.5, S.u + S.w / 2, S.y + S.h / 2 - 1]
   const lo = L.rail.y
@@ -411,69 +410,12 @@ export function wallAOTex(L) {
   return { size: [W, H], px }
 }
 
-/**
- * The cork's contact shade (1 = none), over the cork (mm from its lower left corner, a texel a mm):
- * under the frame's lip (deeper under its top), round each pin (the light from above: a little
- * below it), old pin holes, the ghost of a card long gone (the cork it covered kept its colour),
- * and a slow patina.
- */
-export function corkAOTex(L) {
-  const B = L.board
-  const F = B.frame
-  const cw = B.w - 2 * F
-  const ch = B.h - 2 * F
-  const W = Math.round(cw)
-  const H = Math.round(ch)
-  const sx = cw / W
-  const sy = ch / H
-  const g = B.ghost && [B.ghost[0] - F, B.ghost[1] - F, B.ghost[2] - F, B.ghost[3] - F]
-  const patina = coarse(32, 24, (u, v) => fbm2t(u * 8, v * 6, 8, 6, 2, 91) * 0.032)
-  const k = new Float32Array(W * H)
-  for (let j = 0; j < H; j++) {
-    const y = (j + 0.5) * sy
-    const top = 1 - 0.12 * Math.exp(-(ch - y) / 8)
-    for (let i = 0; i < W; i++) {
-      const x = (i + 0.5) * sx
-      const d = Math.min(x, cw - x, y, ch - y)
-      const lip = B.lip ?? 1
-      let a = (1 - lip * (1 - top)) * (d < 60 ? 1 - lip * (0.46 * Math.exp(-d / 3.2) + 0.14 * Math.exp(-d / 16)) : 1)
-      if (g) {
-        const e = Math.min(x - g[0], g[2] - x, y - g[1], g[3] - y)
-        if (e > -2) a *= 1 - 0.05 * smooth(-1.5, 1.5, e)
-      }
-      k[j * W + i] = a * (0.968 + patina(i / W, j / H))
-    }
-  }
-  // each pin's soft shade and each hole, stamped over its own few texels
-  const stamp = (cx, cy, rad, f) => {
-    for (let j = Math.max(0, Math.floor((cy - rad) / sy)); j <= Math.min(H - 1, Math.ceil((cy + rad) / sy)); j++)
-      for (let i = Math.max(0, Math.floor((cx - rad) / sx)); i <= Math.min(W - 1, Math.ceil((cx + rad) / sx)); i++) {
-        const dx = (i + 0.5) * sx - cx
-        const dy = (j + 0.5) * sy - cy
-        k[j * W + i] *= f(dx * dx + dy * dy)
-      }
-  }
-  const pin = (x, y, down, r, a) => stamp(x - F, y - F - down, 2 * r, (d2) => 1 - a * Math.exp(-d2 / (r * r)))
-  // (the pins things hang from stand out further: their shade falls lower and wider)
-  for (const [x, y] of [B.badge, B.calendar, B.clip, B.ticket]) pin(x, y, 4, 4.5, 0.3)
-  for (const [x, y] of B.spare) pin(x, y, 1.6, 3.4, 0.36)
-  for (const [x, y] of B.holes)
-    stamp(x - F, y - F, 2, (d2) => {
-      const r = Math.sqrt(d2)
-      return r < 0.45 ? 0.3 : 0.72 + 0.28 * smooth(0.45, 1.6, r)
-    })
-  const px = new Uint8Array(W * H)
-  for (let i = 0; i < W * H; i++) px[i] = byte(k[i])
-  return { size: [W, H], px }
-}
-
 /** Every texture the room needs, from its layout (ROOM: plain numbers, so it can be posted). */
 export function bakeRoom(L) {
   return {
     paint: paintTex(),
     paper: paperTex(),
     wallAO: wallAOTex(L),
-    corkAO: corkAOTex(L),
   }
 }
 
