@@ -73,7 +73,7 @@ export const DESK = {
   // side: back to the pole's foot (it goes up the pole and along the arm: monitor.js)
   monitor: deskAt(-10, -418),
   monitorTurn: 0,
-  hdmiRun: [deskAt(-232, -312), deskAt(-290, -330), deskAt(-345, -372), deskAt(-372, -400)],
+  hdmiRun: [deskAt(-232, -312), deskAt(-290, -322), deskAt(-338, -332)],
 }
 /**
  * What the seated home view shows of the desk: its middle and its extent (mm, across and up the

@@ -1,7 +1,8 @@
 // A second screen behind the laptop: a 27-inch curved monitor (1800R), landscape, held up over the laptop's
-// lid on an arm from a pole clamped to the desk's back edge at its left (the "side stand"). It
-// shows what the laptop's browser has open, bigger: a strip of tabs (a tap on one switches the
-// laptop too), the project's page under it (up close, the live site itself: scene.js lays it over
+// lid on an arm from a pole at its left, standing on a weighted base (the "side stand": the desk is
+// against the wall, no room for a clamp behind it). Brushed aluminium, black joints. It
+// shows the projects' sites, a tab each: a strip of tabs (a tap on one opens it), the site's page
+// under it (its screenshot) (up close, the live site itself: scene.js lays it over
 // the page's part of the glass, as for the laptop: flat, so laid halfway into the curve, a little
 // inside the glass, the page's part of the picture black under it).
 // It is plugged into the laptop: the laptop has only USB-C, so a small aluminium USB-C to HDMI
@@ -11,6 +12,7 @@
 // of its glass (mm).
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { drawPage, PAGE } from './laptopScreen.js'
 
 export const MONITOR = {
@@ -18,7 +20,7 @@ export const MONITOR = {
   h: 351,
   glass: [597, 336],
   bottom: 240, // (its lower edge above the desk: clear of the laptop's open lid)
-  pole: [-400, -44], // (the pole: x, z in its frame; on the desk's back edge, left of the glass)
+  pole: [-400, -36], // (the pole: x, z in its frame; near the wall, left of the glass)
   poleR: 15,
   armZ: -46, // (the arm's depth, behind the panel)
   tex: [1920, 1080],
@@ -130,9 +132,12 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
   group.rotation.y = yaw
   const geometries = []
   const shell = new THREE.MeshStandardMaterial({ color: 0x161618, roughness: 0.58 })
-  const metal = new THREE.MeshStandardMaterial({ color: 0x2c2d30, roughness: 0.42, metalness: 0.7 })
+  // (the stand: brushed aluminium, its joints and caps black plastic, its base on rubber)
+  const metal = new THREE.MeshStandardMaterial({ color: 0xc3c7cc, roughness: 0.3, metalness: 0.92 })
+  const black = new THREE.MeshStandardMaterial({ color: 0x18191c, roughness: 0.52 })
   shell.customProgramCacheKey = () => 'monitor.shell'
   metal.customProgramCacheKey = () => 'monitor.metal'
+  black.customProgramCacheKey = () => 'monitor.black'
   const canvas = document.createElement('canvas')
   canvas.width = M.tex[0]
   canvas.height = M.tex[1]
@@ -173,36 +178,60 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     'body',
   )
   const display = add(bend(new THREE.PlaneGeometry(M.glass[0], M.glass[1], 48, 1).translate(0, CY, 0.3)), glass, 'display', false)
-  // the stand: a clamp on the desk's back edge, a pole up from it, a collar, an arm in two
-  // pieces across behind the panel to the plate, a tilt block
+  // the stand: a weighted base on rubber, a pole up from it (a black foot collar, a height collar
+  // with its knob, a cap), an arm in two pieces with black joints across behind the panel, a tilt
+  // head with its knob, the mount's plate; clips along the arm for the cable
   const [px, pz] = M.pole
   const PR = M.poleR
   const armY = CY + 6
-  const cyl = (r0, r1, h, x, y, z, seg = 24) => new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z)
-  const bar = (a, b, r) => {
+  const BASE = [170, 12, 104]
+  const bz = pz + BASE[2] / 2 - 6 // (the base's middle: in front of the pole)
+  const cyl = (r0, r1, h, x, y, z, seg = 32) => new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z)
+  const knob = (x, y, z, r, len) => new THREE.CylinderGeometry(r, r, len, 18).rotateZ(Math.PI / 2).translate(x, y, z)
+  /** A rounded bar from a to b (its section w x h, corner r), its long side along a -> b. */
+  const seg = (a, b, w, h, r) => {
     const d = new THREE.Vector3().subVectors(b, a)
-    const g = new THREE.CylinderGeometry(r, r, d.length(), 18)
-    g.translate(0, d.length() / 2, 0)
-    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()))
-    return g.translate(a.x, a.y, a.z)
+    const g = new RoundedBoxGeometry(d.length(), h, w, 3, r)
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), d.clone().normalize()))
+    const m = a.clone().addScaledVector(d, 0.5)
+    return g.translate(m.x, m.y, m.z)
   }
-  const elbow = new THREE.Vector3(-170, armY, M.armZ - 2)
+  // (rounded boxes come unindexed, cylinders indexed: all made alike before they are merged)
+  const merge = (list) => mergeGeometries(list.map((g) => (g.index ? g.toNonIndexed() : g)))
+  const collar = new THREE.Vector3(px, armY, pz)
+  const elbow = new THREE.Vector3(-180, armY, M.armZ - 2)
+  const head = new THREE.Vector3(0, CY, -46)
+  const poleTop = armY + 44
   add(
-    mergeGeometries([
-      // the clamp: a plate on the desk, its jaw down the back edge
-      new THREE.BoxGeometry(70, 10, 64).translate(px, 5, pz + 6),
-      new THREE.BoxGeometry(70, 70, 10).translate(px, -25, pz - 31),
-      new THREE.BoxGeometry(70, 10, 46).translate(px, -55, pz - 10),
-      cyl(PR, PR, armY + 40, px, (armY + 40) / 2, pz),
-      cyl(PR + 6, PR + 6, 44, px, armY, pz),
-      cyl(PR, PR * 0.7, 10, px, armY + 45, pz),
-      bar(new THREE.Vector3(px, armY, pz), elbow, 12),
-      cyl(16, 16, 40, elbow.x, elbow.y, elbow.z),
-      bar(elbow, new THREE.Vector3(0, CY, -40), 11),
-      new THREE.BoxGeometry(60, 60, 12).translate(0, CY, -40),
+    merge([
+      new RoundedBoxGeometry(BASE[0], BASE[1], BASE[2], 3, 5).translate(px, 1.6 + BASE[1] / 2, bz),
+      cyl(PR, PR, poleTop - BASE[1], px, BASE[1] + (poleTop - BASE[1]) / 2, pz),
+      seg(collar, elbow, 30, 22, 7),
+      seg(elbow, head, 26, 20, 6),
+      new RoundedBoxGeometry(100, 100, 5, 2, 2).translate(0, CY, -33),
     ]),
     metal,
     'stand',
+  )
+  const mid1 = collar.clone().lerp(elbow, 0.5)
+  const mid2 = elbow.clone().lerp(head, 0.45)
+  add(
+    merge([
+      new RoundedBoxGeometry(BASE[0] - 4, 1.6, BASE[2] - 4, 2, 0.7).translate(px, 0.8, bz),
+      cyl(PR + 5, PR + 5, 16, px, BASE[1] + 1.6 + 8, pz),
+      cyl(PR + 7, PR + 7, 46, px, armY, pz),
+      knob(px + PR + 7 + 8, armY, pz, 6, 16),
+      cyl(PR + 0.5, PR - 1.5, 7, px, poleTop + 3.5, pz),
+      cyl(19, 19, 36, elbow.x, elbow.y, elbow.z),
+      cyl(19.5, 19.5, 3, elbow.x, elbow.y + 18, elbow.z),
+      new RoundedBoxGeometry(58, 72, 26, 3, 6).translate(head.x, head.y, head.z),
+      knob(head.x + 29 + 9, head.y, head.z, 7, 18),
+      // (the clips)
+      new RoundedBoxGeometry(12, 30, 26, 2, 3).translate(mid1.x, mid1.y, mid1.z),
+      new RoundedBoxGeometry(12, 28, 24, 2, 3).translate(mid2.x, mid2.y, mid2.z),
+    ]),
+    black,
+    'joints',
   )
   group.updateMatrixWorld(true)
   let lit = true
@@ -219,7 +248,7 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     group,
     meshes,
     display,
-    materials: [shell, metal, glass],
+    materials: [shell, metal, black, glass],
     /** Its picture lit or dark (dark in the ember's own frame: the light is counted once). */
     glow(on) {
       lit = on
@@ -235,7 +264,11 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     get signal() {
       return signal
     },
-    /** The laptop's open tab, shown here too (drawn again only when it changes). */
+    /** The site it shows (its index in `projects`). */
+    get tab() {
+      return tab
+    },
+    /** A site's tab (drawn again only when it changes). */
     showTab(i) {
       if (i === tab) return false
       tab = i
@@ -288,14 +321,15 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
       for (const v of out) v.applyMatrix4(group.matrixWorld)
       return out
     },
-    /** Its clamp on the desk (x, z in its frame; half its size), for what stands on the desk. */
-    clamp: { x: px, z: pz + 6, hw: 35, hd: 32 },
+    /** Its base on the desk (x, z in its frame; half its size), for what stands on the desk. */
+    clamp: { x: px, z: bz, hw: BASE[0] / 2, hd: BASE[2] / 2 },
     /** Points from the desk up the pole's front and along the arm to the panel's back (world). */
     cableUp: () =>
       [
-        [px + 30, 3.4, pz + 30],
-        [px + 6, 3.4, pz + PR + 3],
-        [px + 6, 14, pz + PR + 3],
+        [px + 40, 3.4, bz + BASE[2] / 2 + 14],
+        [px + 30, BASE[1] + 5, bz + 20],
+        [px + 6, BASE[1] + 5, pz + PR + 3],
+        [px + 6, BASE[1] + 30, pz + PR + 3],
         [px + 6, armY - 40, pz + PR + 3],
         [px + 16, armY - 16, pz + 8],
         [px + 80, armY - 14, M.armZ + 8],
@@ -303,7 +337,7 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
       ].map((p) => new THREE.Vector3(...p).applyMatrix4(group.matrixWorld)),
     dispose() {
       for (const g of geometries) g.dispose()
-      for (const m of [shell, metal, glass]) m.dispose()
+      for (const m of [shell, metal, black, glass]) m.dispose()
       map.dispose()
       lostMap.dispose()
     },

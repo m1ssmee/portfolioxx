@@ -33,6 +33,9 @@ export interface Portfolio {
   initials: string
   /** A photo URL ('./media/me.jpg', the file in public/media/), or empty for the initials. */
   photo: string
+  /** The portfolio page's headline (big, short) and the line under it. */
+  headline: string
+  lead: string
   bio: string
   /** Where you are (empty: not shown). */
   basedIn: string
@@ -48,7 +51,9 @@ export const portfolio: Portfolio = {
   role: 'AI engineer · builder',
   initials: 'KP',
   photo: '',
-  bio: 'I build AI products people can actually use: a 3D body that explains your medical reports, a tavern where your codebase’s modules argue about who caused the bug, deep learning for crop disease and a GPS-denied lunar rover. I care about grounding: answers that cite their source, and numbers computed rather than guessed.',
+  headline: 'Software that shows its work.',
+  lead: 'A 3D body that reads your medical reports. A codebase that argues about its own bugs. A rover that finds its way without GPS.',
+  bio: 'I build things that explain themselves: answers that cite their source, and numbers computed rather than guessed. Lately that has meant medical reports pinned to a 3D body, a codebase whose modules argue about who caused the bug, crop disease spotted from a single leaf, and a lunar rover that navigates without GPS.',
   basedIn: '',
   projects: [
     {

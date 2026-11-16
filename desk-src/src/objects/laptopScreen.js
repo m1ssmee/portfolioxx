@@ -9,7 +9,7 @@
 // Every text is measured where it is laid out (wrapped, or cut with an ellipsis): a fallback font,
 // wider or narrower than Inter, still fits.
 import { SCREEN } from './laptopGeo.js'
-import { heroText } from '../content/homePage.js'
+import { isSite, githubUser } from '../content/homePage.js'
 
 export const CHROME = { h: 110, texW: 2048, texH: 160 } // (its strip: 160 px for 112.5 of the screen's)
 export const PAGE = { w: 1440, h: 1440, texW: 2048, texH: 2048 }
@@ -17,7 +17,8 @@ export const VIEW_H = SCREEN.h - CHROME.h // (the page's window: 826)
 
 // ---- each project's look
 export const THEMES = {
-  home: { dark: false, bg: '#f4f1ec', surface: '#fffdf9', ink: '#16181c', sub: '#555b66', faint: '#8b919b', line: '#e2ddd4', accent: '#2f4a66', accentInk: '#ffffff', soft: '#e8eef5', chip: '#ebe7e0', tag: 'Portfolio', glow: [0.88, 0.86, 0.82] },
+  home: { dark: true, bg: '#0e0f11', surface: '#15161a', ink: '#ece8e1', sub: '#a29d95', faint: '#6d6a65', line: '#25262b', accent: '#f0b46a', accentInk: '#16120c', soft: '#1c1d21', chip: '#1c1d21', tag: 'Portfolio', glow: [0.04, 0.04, 0.05] },
+  github: { dark: false, bg: '#f6f7f9', surface: '#ffffff', ink: '#1d2127', sub: '#59616d', faint: '#8a919c', line: '#e1e4e8', accent: '#2f6fdf', accentInk: '#ffffff', soft: '#eef3fc', chip: '#e9ebef', tag: 'Code', glow: [0.9, 0.91, 0.93] },
   bodymap: { dark: false, bg: '#f6f8fb', surface: '#ffffff', ink: '#0f172a', sub: '#4f5d73', faint: '#8a96a8', line: '#e2e8f0', accent: '#e0464e', accentInk: '#ffffff', soft: '#fdebec', chip: '#eef2f7', tag: 'Health · AI', glow: [0.86, 0.88, 0.92] },
   'codebase-tavern': { dark: true, bg: '#1a120d', surface: '#231812', ink: '#f6e7c9', sub: '#cdb08a', faint: '#8d7559', line: '#3b2b20', accent: '#f0a33a', accentInk: '#1a120d', soft: '#3a2614', chip: '#2c1f17', tag: 'Developer tools · AI', glow: [0.15, 0.11, 0.07] },
   'lunar-rover': { dark: true, bg: '#0d1117', surface: '#161b22', ink: '#e6edf3', sub: '#9198a1', faint: '#6e7681', line: '#30363d', accent: '#4493f8', accentInk: '#ffffff', soft: '#1f2a3a', chip: '#121d2f', tag: 'Robotics', glow: [0.07, 0.08, 0.1], green: '#238636' },
@@ -1278,119 +1279,208 @@ function shotPage(g, shot) {
 }
 
 /**
- * The portfolio's own page (the first tab): the same layout as content/homePage.js's HTML, which
- * replaces it up close: a header, the headline and lead, the work as cards (three across).
+ * The portfolio (the first tab): the layout of content/homePage.js's page, which replaces it up
+ * close: the header, the headline (its last words in amber), the lead, the work as an index.
  */
+const MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
 function homePage(g, C, T, font) {
   const W = PAGE.w
   g.fillStyle = T.bg
   g.fillRect(0, 0, W, PAGE.h)
-  const x0 = (W - 1180) / 2 + 72
-  const cw = 1036
+  const x0 = (W - 1200) / 2 + 64
+  const cw = 1072
+  // the glow behind the headline
+  const gr = g.createRadialGradient(x0 + cw - 170, 300, 0, x0 + cw - 170, 300, 210)
+  gr.addColorStop(0, 'rgba(240,180,106,0.13)')
+  gr.addColorStop(1, 'rgba(240,180,106,0)')
+  g.fillStyle = gr
+  g.fillRect(0, 64, W, 600)
   // the header
   g.fillStyle = T.line
-  g.fillRect(0, 67, W, 1)
-  setFont(g, font, 700, 19)
-  g.fillStyle = T.ink
-  g.fillText(C.name, x0, 41)
-  const nw = g.measureText(C.name).width
-  setFont(g, font, 500, 15)
-  g.fillStyle = T.faint
-  g.fillText(C.role, x0 + nw + 10, 41)
-  g.textAlign = 'right'
-  g.fillStyle = T.sub
-  g.fillText(C.links.github ? 'Work        About        GitHub ↗' : 'Work        About', x0 + cw, 41)
-  g.textAlign = 'left'
-  // the headline and the lead
-  const { h1, lead } = heroText(C)
-  let y = 68 + 72
-  setFont(g, font, 600, 13)
-  track(g, 1)
+  g.fillRect(0, 63, W, 1)
   g.fillStyle = T.accent
-  g.fillText(C.role.toUpperCase(), x0, y + 14)
-  track(g, 0)
-  y += 18 + 18
-  setFont(g, font, 800, 62)
-  track(g, -2.2)
+  dot(g, x0 + 4, 32, 4)
+  setFont(g, font, 650, 17)
   g.fillStyle = T.ink
-  const hl = wrap(g, h1, 900).slice(0, 3)
-  hl.forEach((l, i) => g.fillText(l, x0, y + 54 + i * 66))
+  g.fillText(C.name, x0 + 18, 38)
+  g.font = `500 12.5px ${MONO}`
+  g.fillStyle = T.sub
+  g.textAlign = 'right'
+  g.fillText(C.links.github ? 'WORK      ABOUT      GITHUB ↗' : 'WORK      ABOUT', x0 + cw, 37)
+  g.textAlign = 'left'
+  // the headline, the lead
+  let y = 64 + 96
+  g.font = `500 12px ${MONO}`
+  g.fillStyle = T.faint
+  g.fillText(C.role.toUpperCase(), x0, y + 12)
+  y += 22 + 12
+  setFont(g, font, 750, 92)
+  track(g, -4.6)
+  const head = C.headline || C.name
+  const words = head.split(' ')
+  const hot = words.length > 2 ? words.slice(-2).join(' ') : ''
+  const lines = wrap(g, head, 980).slice(0, 3)
+  let used = 0
+  lines.forEach((l, i) => {
+    const ly = y + 82 + i * 90
+    // (the last two words in amber, wherever they fall)
+    const start = used
+    used += l.length + 1
+    const hotAt = head.length - hot.length
+    if (hot && start + l.length > hotAt) {
+      const cut = Math.max(0, hotAt - start)
+      g.fillStyle = T.ink
+      g.fillText(l.slice(0, cut), x0, ly)
+      g.fillStyle = T.accent
+      g.fillText(l.slice(cut), x0 + g.measureText(l.slice(0, cut)).width, ly)
+    } else {
+      g.fillStyle = T.ink
+      g.fillText(l, x0, ly)
+    }
+  })
   track(g, 0)
-  y += hl.length * 66 + 22
-  if (lead) {
-    setFont(g, font, 400, 21)
+  y += lines.length * 90 + 30
+  if (C.lead) {
+    setFont(g, font, 400, 22)
     g.fillStyle = T.sub
-    y += para(g, lead, x0, y + 26, 720, 32.5, 4) * 32.5
+    y += para(g, C.lead, x0, y + 24, 760, 33, 3) * 33
   }
-  y += 56
+  y += 84
   // the work
+  g.font = `500 12px ${MONO}`
+  g.fillStyle = T.faint
+  g.fillText('SELECTED WORK', x0, y)
+  g.textAlign = 'right'
+  g.fillText(String(C.projects.length).padStart(2, '0'), x0 + cw, y)
+  g.textAlign = 'left'
+  y += 16
   g.fillStyle = T.line
   g.fillRect(x0, y, cw, 1)
-  y += 26
-  setFont(g, font, 700, 28)
-  track(g, -0.6)
-  g.fillStyle = T.ink
-  g.fillText('Selected work', x0, y + 26)
-  track(g, 0)
-  setFont(g, font, 400, 15)
-  g.fillStyle = T.faint
-  g.textAlign = 'right'
-  g.fillText(`${C.projects.length} projects`, x0 + cw, y + 26)
-  g.textAlign = 'left'
-  y += 26 + 22 + 12
-  const gap = 22
-  const w = (cw - 2 * gap) / 3
-  const h = 270
   C.projects.forEach((p, i) => {
-    const cx = x0 + (i % 3) * (w + gap)
-    const cy = y + Math.floor(i / 3) * (h + gap)
-    if (cy > PAGE.h) return
-    rr(g, cx, cy, w, h, 18)
-    g.fillStyle = T.surface
-    g.fill()
-    g.strokeStyle = T.line
-    g.lineWidth = 1
-    g.stroke()
-    setFont(g, font, 600, 12.5)
-    track(g, 0.8)
+    const ry = y + i * 100
+    if (ry > PAGE.h) return
+    const by = ry + 58
+    g.font = `500 13px ${MONO}`
     g.fillStyle = T.faint
-    const k = `${String(i + 1).padStart(2, '0')} · ${p.year}`
-    g.fillText(k, cx + 24, cy + 38)
-    if (p.live) {
-      g.fillStyle = '#2c7a4b'
-      g.fillText(' · LIVE', cx + 24 + g.measureText(k).width, cy + 38)
-    }
-    track(g, 0)
-    setFont(g, font, 700, 25)
-    track(g, -0.5)
+    g.fillText(String(i + 1).padStart(2, '0'), x0 + 8, by)
+    setFont(g, font, 650, 26)
+    track(g, -0.6)
     g.fillStyle = T.ink
-    g.fillText(fit(g, p.name, w - 48), cx + 24, cy + 76)
+    g.fillText(fit(g, p.name, 220), x0 + 80, by)
     track(g, 0)
     setFont(g, font, 400, 15.5)
     g.fillStyle = T.sub
-    para(g, p.oneLiner, cx + 24, cy + 108, w - 48, 24, 3)
-    // its stack, then the way in
-    let chx = cx + 24
-    setFont(g, font, 400, 12.5)
-    for (const t of p.stack.slice(0, 3)) {
-      const tw = g.measureText(t).width + 20
-      if (chx + tw > cx + w - 24) break
-      rr(g, chx, cy + h - 82, tw, 26, 13)
-      g.fillStyle = T.chip
-      g.fill()
-      g.fillStyle = '#454a52'
-      g.fillText(t, chx + 10, cy + h - 64)
-      chx += tw + 6
+    para(g, p.oneLiner, x0 + 330, by, 400, 23, 2)
+    g.font = `500 12px ${MONO}`
+    g.fillStyle = T.faint
+    g.fillText(fit(g, p.stack.slice(0, 3).join(' · '), 220), x0 + 750, by)
+    const st = isSite(p) ? (p.live ? 'LIVE' : 'SITE') : 'CODE'
+    if (isSite(p)) {
+      g.fillStyle = '#7fd39a'
+      dot(g, x0 + 994, by - 4, 3.5)
     }
-    setFont(g, font, 600, 14)
+    g.fillStyle = T.faint
+    g.fillText(st, x0 + 1004, by)
+    g.fillText('→', x0 + cw - 18, by)
+    g.fillStyle = T.line
+    g.fillRect(x0, ry + 100, cw, 1)
+  })
+  return { h: PAGE.h, button: null, thumb: [0.9, 0.93, 0.96, 0.32], glow: T.glow }
+}
+
+/** The GitHub tab: content/homePage.js's githubHtml, as it is before GitHub's own list comes. */
+function githubPage(g, C, T, font) {
+  const W = PAGE.w
+  g.fillStyle = T.bg
+  g.fillRect(0, 0, W, PAGE.h)
+  const user = githubUser(C)
+  const x0 = (W - 1180) / 2 + 56
+  const cw = 1068
+  g.fillStyle = T.surface
+  g.fillRect(0, 0, W, 58)
+  g.fillStyle = T.line
+  g.fillRect(0, 58, W, 1)
+  setFont(g, font, 650, 14)
+  g.fillStyle = T.ink
+  g.fillText(user, x0, 34)
+  const uw = g.measureText(user).width
+  setFont(g, font, 400, 14)
+  g.fillStyle = T.sub
+  g.fillText(' / repositories', x0 + uw, 34)
+  g.textAlign = 'right'
+  g.fillText('Open the profile ↗', x0 + cw, 34)
+  g.textAlign = 'left'
+  // the profile
+  const ay = 98
+  const av = g.createLinearGradient(x0, ay, x0 + 220, ay + 220)
+  av.addColorStop(0, '#2b3340')
+  av.addColorStop(1, '#11151b')
+  g.fillStyle = av
+  g.beginPath()
+  g.arc(x0 + 110, ay + 110, 110, 0, Math.PI * 2)
+  g.fill()
+  setFont(g, font, 700, 76)
+  g.fillStyle = '#f0b46a'
+  g.textAlign = 'center'
+  g.fillText(C.initials, x0 + 110, ay + 137)
+  g.textAlign = 'left'
+  setFont(g, font, 700, 26)
+  g.fillStyle = T.ink
+  g.fillText(C.name, x0, ay + 270)
+  setFont(g, font, 400, 18)
+  g.fillStyle = T.sub
+  g.fillText(user, x0, ay + 298)
+  setFont(g, font, 400, 15)
+  g.fillStyle = T.ink
+  g.fillText(C.role, x0, ay + 332)
+  rr(g, x0, ay + 352, 220, 40, 8)
+  g.fillStyle = T.surface
+  g.fill()
+  g.strokeStyle = '#d0d5dc'
+  g.stroke()
+  setFont(g, font, 600, 14)
+  g.textAlign = 'center'
+  g.fillText('Follow on GitHub ↗', x0 + 110, ay + 377)
+  g.textAlign = 'left'
+  // the repositories
+  const rx = x0 + 328
+  const rw = cw - 328
+  const repos = C.projects.filter((p) => p.github)
+  setFont(g, font, 600, 15)
+  g.fillStyle = T.ink
+  g.fillText('Repositories', rx + 2, ay + 2)
+  g.fillStyle = T.ink
+  g.fillRect(rx, ay + 18, 104, 2)
+  g.fillStyle = T.line
+  g.fillRect(rx, ay + 20, rw, 1)
+  const w = (rw - 14) / 2
+  repos.forEach((p, i) => {
+    const cx = rx + (i % 2) * (w + 14)
+    const cy = ay + 40 + Math.floor(i / 2) * 146
+    rr(g, cx, cy, w, 132, 12)
+    g.fillStyle = T.surface
+    g.fill()
+    g.strokeStyle = T.line
+    g.stroke()
+    setFont(g, font, 650, 16)
     g.fillStyle = T.accent
-    g.fillText('Read more →', cx + 24, cy + h - 26)
+    const name = p.github.replace(/\/+$/, '').split('/').pop()
+    g.fillText(name, cx + 20, cy + 32)
+    setFont(g, font, 400, 14)
+    g.fillStyle = T.sub
+    para(g, p.oneLiner, cx + 20, cy + 60, w - 40, 21, 2)
+    g.fillStyle = '#9aa3ae'
+    dot(g, cx + 25, cy + 110, 5)
+    setFont(g, font, 400, 12.5)
+    g.fillStyle = T.faint
+    g.fillText(p.stack[0] || '', cx + 36, cy + 114)
   })
   return { h: PAGE.h, button: null, thumb: [0.06, 0.09, 0.16, 0.3], glow: T.glow }
 }
 
 export function drawPage(g, p, font, shot) {
   if (p.home) return homePage(g, p.content, themeOf(p), font)
+  if (p.githubTab) return githubPage(g, p.content, themeOf(p), font)
   if (shot) return shotPage(g, shot)
   const T = themeOf(p)
   let out

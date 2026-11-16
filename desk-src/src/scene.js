@@ -32,7 +32,7 @@ import { createCan, CAN } from './objects/can.js'
 import { createLamp, LAMP } from './objects/lamp.js'
 import { createStudio, STUDIO } from './objects/studio.js'
 import { createMonitor, createHdmiLink, MONITOR } from './objects/monitor.js'
-import { homeHtml } from './content/homePage.js'
+import { homeHtml, githubHtml, githubUser, isSite } from './content/homePage.js'
 import caveatUrl from './assets/caveat.woff2?url'
 import { createVisitorsBook } from './visitors/book.js'
 import badgeFaceUrl from './assets/badge-face.webp?url'
@@ -1236,8 +1236,13 @@ export function createScene(container, options = {}) {
       }),
     )
     if (destroyed) return
-    // (the browser's tabs: the portfolio's own page first, then each project's site)
-    const lapTabs = [{ id: 'home', name: 'Portfolio', home: true, local: 'localhost:5173', year: '', stack: [], content: portfolio }, ...portfolio.projects]
+    // (the laptop's browser: the portfolio and the GitHub profile, nothing else; the monitor shows
+    // the projects' sites, those that have one)
+    const lapTabs = [
+      { id: 'home', name: 'Portfolio', home: true, local: 'localhost:5173', year: '', stack: [], content: portfolio },
+      { id: 'github', name: 'GitHub', githubTab: true, local: `github.com/${githubUser(portfolio)}`, year: '', stack: [], content: portfolio },
+    ]
+    const monTabs = portfolio.projects.filter(isSite)
     const laptop = createLaptop({ shots: siteShots, at: [LAYOUT.DESK.laptop[0], ROOM.deskY, LAYOUT.DESK.laptop[2]], yaw: LAYOUT.PLAYER.yaw + LAYOUT.DESK.laptopTurn, projects: lapTabs, font: FONT, anisotropy: aniso, baked: laptopBaked?.tex })
     scene.add(laptop.group)
     disposables.push(laptop)
@@ -1342,8 +1347,8 @@ export function createScene(container, options = {}) {
     // ---- the second screen (objects/monitor.js): landscape, behind the laptop, on an arm from a
     // pole clamped to the desk's back; it shows the laptop's open tab (up close, the live site);
     // plugged into the laptop's left USB-C port through an adapter, by HDMI
-    const monitor = createMonitor({ at: new THREE.Vector3(LAYOUT.DESK.monitor[0], ROOM.deskY, LAYOUT.DESK.monitor[2]), yaw: facing(LAYOUT.DESK.monitorTurn), projects: lapTabs, font: FONT, shots: siteShots, anisotropy: aniso })
-    monitor.showTab(laptop.tab)
+    const monitor = createMonitor({ at: new THREE.Vector3(LAYOUT.DESK.monitor[0], ROOM.deskY, LAYOUT.DESK.monitor[2]), yaw: facing(LAYOUT.DESK.monitorTurn), projects: monTabs, font: FONT, shots: siteShots, anisotropy: aniso })
+    monitor.showTab(0)
     scene.add(monitor.group)
     for (const m of monitor.materials) withEmber(m)
     addObstacle(monitor.group.matrixWorld, [monitor.clamp.hw, 40, monitor.clamp.hd], [monitor.clamp.x, 40, monitor.clamp.z], 3)
@@ -2163,7 +2168,7 @@ export function createScene(container, options = {}) {
     const seatPts = seats.map((s) => new THREE.Vector3(s.dir[0] * (TRAY.bowlTop + 2.3), s.y + CIG.radius + 0.05, s.dir[2] * (TRAY.bowlTop + 2.3)))
     // (a tap on an object from afar, or from another object's close-up, brings the camera to it, and
     // only to it; once there, taps are the object's own: a flick, the remote's button)
-    // (the monitor up close: a tap on one of its tabs opens that project, on the laptop too)
+    // (the monitor up close: a tap on one of its tabs opens that site)
     const monitorItem = {
       meshes: [...monitor.meshes, ...hdmi.meshes],
       fixed: true,
@@ -2171,8 +2176,7 @@ export function createScene(container, options = {}) {
       onTap: (hit) => {
         if (focus.focused !== 'monitor') return
         const i = monitor.tapAt(hit)
-        if (i < 0 || i === laptop.tab) return
-        laptop.setTab(i)
+        if (i < 0 || !monitor.showTab(i)) return
         lapAnswer('tab')
       },
     }
@@ -2913,15 +2917,18 @@ export function createScene(container, options = {}) {
       wake()
     })
     let homePageHtml = ''
-    // (the portfolio's page asks for a project's tab, or for Escape: it is a page of this site)
+    let githubPageHtml = ''
+    // (the portfolio asks for a project's site, on the monitor: the camera goes there; or for
+    // Escape: these are pages of this site)
     listen(window, 'message', (e) => {
       if (e.source !== siteFrame.contentWindow || !e.data || typeof e.data !== 'object') return
-      if (e.data.desk === 'tab') {
-        const i = lapTabs.findIndex((t) => t.id === e.data.id)
-        if (i >= 0 && i !== laptop.tab) {
-          laptop.setTab(i)
-          lapAnswer('tab')
-        }
+      if (e.data.desk === 'site') {
+        const i = monTabs.findIndex((t) => t.id === e.data.id)
+        if (i < 0) return
+        monitor.showTab(i)
+        siteFrame.blur()
+        lapAnswer('tab')
+        focus.focusOn('monitor')
       } else if (e.data.desk === 'key' && e.data.key === 'Escape' && focus.focused) {
         siteFrame.blur()
         focus.back()
@@ -2932,9 +2939,9 @@ export function createScene(container, options = {}) {
     const siteP = new Float64Array(8)
     function updateSite() {
       const on = projOpen ? null : focus.focused === 'laptop' ? laptop : focus.focused === 'monitor' && monitor.signal ? monitor : null
-      const p = on ? lapTabs[laptop.tab] : null
-      // (the portfolio's own page, or a project's live site)
-      const url = p && p.home ? 'home' : p && p.live ? p.live : ''
+      const p = on === laptop ? lapTabs[laptop.tab] : on === monitor ? monTabs[monitor.tab] : null
+      // (the laptop: the portfolio or the GitHub tab, pages of this site; the monitor: a live site)
+      const url = !p ? '' : p.home ? 'home' : p.githubTab ? 'github' : p.live || ''
       if (on && on !== siteOn) {
         siteOn = on
         siteFrame.width = String(on.pageSize[0])
@@ -2946,10 +2953,10 @@ export function createScene(container, options = {}) {
       if (url !== siteSrc && (url || !on)) {
         siteSrc = url
         siteLoaded = false
-        siteFrame.title = url === 'home' ? `${portfolio.name}: portfolio` : url ? `${p.name}: live site` : 'Live site'
-        if (url === 'home') {
+        siteFrame.title = url === 'home' ? `${portfolio.name}: portfolio` : url === 'github' ? `${portfolio.name}: GitHub` : url ? `${p.name}: live site` : 'Live site'
+        if (url === 'home' || url === 'github') {
           siteFrame.removeAttribute('src')
-          siteFrame.srcdoc = homePageHtml || (homePageHtml = homeHtml(portfolio, opts.fontUrl))
+          siteFrame.srcdoc = url === 'home' ? homePageHtml || (homePageHtml = homeHtml(portfolio, opts.fontUrl)) : githubPageHtml || (githubPageHtml = githubHtml(portfolio, opts.fontUrl))
         } else {
           siteFrame.removeAttribute('srcdoc')
           siteFrame.src = url || 'about:blank'
@@ -2990,15 +2997,19 @@ export function createScene(container, options = {}) {
       if (xf !== siteXf) siteFrame.style.transform = siteXf = xf
     }
     function updateLive() {
-      const p = (focus.focused === 'laptop' || focus.focused === 'monitor') && !focus.moving && !projOpen ? lapTabs[laptop.tab] : null
-      const href = p ? p.live || p.github || '' : ''
-      const key = `${href}|${p && p.live ? 1 : 0}`
+      const still = !focus.moving && !projOpen
+      // (the laptop: the GitHub tab, the profile; the monitor: the site live, or its code)
+      const lp = still && focus.focused === 'laptop' ? lapTabs[laptop.tab] : null
+      const mp = still && focus.focused === 'monitor' ? monTabs[monitor.tab] : null
+      const href = lp ? (lp.githubTab ? portfolio.links.github : '') : mp ? mp.live || mp.github || '' : ''
+      const text = lp ? 'Open on GitHub' : mp && mp.live ? 'View live site' : 'View the code'
+      const key = `${href}|${text}`
       if (key === liveKey) return
       liveKey = key
       liveBtn.hidden = !href
       if (href) {
         liveBtn.href = href
-        liveText.textContent = p.live ? 'View live site' : 'View the code'
+        liveText.textContent = text
       }
     }
     // ---- the tour: the camera goes from thing to thing, a line about each; it moves on by itself,
@@ -3006,8 +3017,8 @@ export function createScene(container, options = {}) {
     const TOUR = [
       [null, 'The desk', 'Everything here can be clicked, picked up or switched. A quick look round first.'],
       ['player', 'The player', 'Four songs on it. Pick one, plug the earbuds in, and its keys play, pause and skip.'],
-      ['laptop', 'The laptop', 'My work: the first tab is the portfolio, every project in it written up; then each project\u2019s own site, live.'],
-      ['monitor', 'The second screen', 'The live sites, big. Its tabs switch the laptop too; pull the USB-C plug at the laptop\u2019s side and it loses its signal.'],
+      ['laptop', 'The laptop', 'The portfolio: every project written up, and my GitHub in the next tab.'],
+      ['monitor', 'The second screen', 'The sites themselves, live: a tab each. Pull the USB-C plug at the laptop\u2019s side and it loses its signal.'],
       ['board', 'The pegboard', 'A few notes, this month with today ringed, and my badge. Tap a note and it lifts.'],
       ['notebook', 'The visitors\u2019 book', 'Open it and leave a thumbprint. Everyone\u2019s who came before is in there.'],
       ['speakerR', 'The speakers', 'Tap one for music. The lamp has a switch too, and the can opens.'],
@@ -3410,7 +3421,7 @@ export function createScene(container, options = {}) {
       const canBusy = can.update(dt)
       if (canBusy) shadowDirty = true
       const linkBusy = hdmi.update(dt)
-      const monBusy = monitor.update(dt) | monitor.showTab(laptop.tab)
+      const monBusy = monitor.update(dt)
       if (linkBusy) shadowDirty = true
       // the lamp: its head re-aimed, its glow easing (the key light on its bulb, along its shade, and
       // as bright: setMode); its shadow drawn again only when the head moved

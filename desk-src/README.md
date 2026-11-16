@@ -156,9 +156,9 @@ the physics and the cable's mesh both read it.
   towards the chair (a tap closes in; a tap there is the sound's switch), and a small stainless
   steel pedal bin right of the right stand.
 - `src/objects/monitor.js`: a curved 27-inch monitor (1800R), landscape, behind the laptop and over its open
-  lid, held on an arm from a pole clamped to the desk's back edge at its left. It shows what the
-  laptop's browser has open, bigger: a strip of tabs (a tap on one, up close, switches the laptop
-  too) over the project's page; up close, the live site itself (as on the laptop, below; the page is
+  lid, on an arm from a pole at its left that stands on a weighted base (brushed aluminium, black
+  joints, clips along the arm for the cable). It shows the projects' sites: a strip of tabs (a tap on
+  one, up close, opens it) over the site's page; up close, the live site itself (as on the laptop, below; the page is
   flat, laid half way into the curve, the picture black under it). It hangs
   off the laptop's left USB-C port: a USB-C to HDMI adapter, then the HDMI cable back to the pole,
   up it and along the arm. The pegboard hangs higher, above the monitor.
@@ -229,13 +229,19 @@ build reads it too. The same file also gives the name and role at the top left a
 line, and becomes the page's hidden semantic HTML, for search engines and screen readers (made by
 `vite.config.js` from `src/content/pages.js`).
 
-The laptop's browser opens on the portfolio itself, its first tab (`src/content/homePage.js`): the
-headline and lead from the bio, the work as cards, each card opening the project's write-up (what
-it is, what I built, the stack, what was hard, its live site, its code, the previous and next
-project), then about and contact. Up close it is a real page, laid over the screen like a live
-site; from across the room `laptopScreen.js` draws the same layout (`homePage` there). The page's
-"Open the live site" switches the browser to that project's tab. The other tabs are the projects'
-own sites, live up close. The monitor behind shows the same tab.
+The laptop holds the portfolio and the GitHub profile, two tabs, nothing else
+(`src/content/homePage.js`). The portfolio: the headline and lead (`headline`, `lead` in
+`portfolio.ts`; the headline's last two words in amber), the work as an index, each row opening the
+project's write-up (what it is, what I built, the stack, what was hard, its live site, its code, the
+previous and next project), then about and contact. "See it on the monitor" takes the view to the
+monitor with that site on it. The GitHub tab lists the repositories: those the portfolio links to
+at once, then the profile's own list from GitHub's API when it answers. Up close each is a real
+page laid over the screen; from across the room `laptopScreen.js` draws the same layouts
+(`homePage`, `githubPage` there).
+
+The monitor shows only the sites (the projects with a `live` or a `local` address): a tab each, the
+live site itself up close, the screenshot otherwise (`src/assets/sites/<id>.webp`; Meshh, run only
+locally, is its screenshot).
 
 Pod OS is the music now, one screen: what plays (its time, previous, play or pause, next), a hint
 when nothing can be heard (the sound off, the earbuds out), and the four songs (`src/core/tracks.js`
