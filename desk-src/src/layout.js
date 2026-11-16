@@ -50,10 +50,6 @@ export const DESK = {
   // the way it was pushed where the desk is clear (a tap on its middle: straight back, past the
   // laptop's corner), else the nearest clear way to it (can.js)
   can: deskAt(190, -135),
-  // the two marble faces on their plinth: on the bare desk right of the can, near the wall, turned
-  // a little towards the chair (turn: from facing the chair, towards the right of the picture)
-  masks: deskAt(412, -262),
-  masksTurn: -0.22,
   // beside the desk, on the floor (the desk runs from u = -760 to 560: objects/room.js): a studio
   // monitor on a stand at each end, 35 mm off it and near the wall, turned in towards the chair
   // (turn: from facing the chair, towards the right of the picture); a bin right of the right stand
@@ -71,12 +67,13 @@ export const DESK = {
   lampBase: deskAt(-652, -292),
   lampHead: deskAt(-640, -30, 312),
   lampAim: deskAt(-150, 34),
-  // the second screen: a curved monitor in portrait, left of the laptop, its foot near the wall,
-  // turned a little towards the chair's side of the laptop; the HDMI cable's way over the desk from
-  // the adapter by the laptop's left side: round the front of the monitor's foot, back up its left
-  monitor: deskAt(-345, -375),
-  monitorTurn: 0.1,
-  hdmiRun: [deskAt(-365, -180), deskAt(-430, -192), deskAt(-482, -232), deskAt(-498, -300), deskAt(-494, -372)],
+  // the second screen: a 27-inch monitor, landscape, behind the laptop and over its open lid, on an
+  // arm from a pole clamped to the desk's back edge at its left (monitor: on the desk under the
+  // middle of its glass). The HDMI cable's way over the desk from the adapter by the laptop's left
+  // side: back to the pole's foot (it goes up the pole and along the arm: monitor.js)
+  monitor: deskAt(-10, -418),
+  monitorTurn: 0,
+  hdmiRun: [deskAt(-232, -312), deskAt(-290, -330), deskAt(-345, -372), deskAt(-372, -400)],
 }
 /**
  * What the seated home view shows of the desk: its middle and its extent (mm, across and up the

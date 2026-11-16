@@ -155,14 +155,15 @@ the physics and the cable's mesh both read it.
 - `src/objects/studio.js`: a studio monitor on a floor stand at each end of the desk, turned in
   towards the chair (a tap closes in; a tap there is the sound's switch), and a small stainless
   steel pedal bin right of the right stand.
-- `src/objects/monitor.js`: a curved 27-inch monitor in portrait, left of the laptop, showing only
-  a terminal: four panes, a dev server on localhost in each (the projects from `portfolio.ts`, and
-  this desk's own). It hangs off the laptop's left USB-C port: a USB-C to HDMI adapter, then the
-  HDMI cable round the front of the monitor's foot and up its neck. The lamp moved to the desk's
-  left end to clear it.
+- `src/objects/monitor.js`: a flat 27-inch monitor, landscape, behind the laptop and over its open
+  lid, held on an arm from a pole clamped to the desk's back edge at its left. It shows what the
+  laptop's browser has open, bigger: a strip of tabs (a tap on one, up close, switches the laptop
+  too) over the project's page; up close, the live site itself (as on the laptop, below). It hangs
+  off the laptop's left USB-C port: a USB-C to HDMI adapter, then the HDMI cable back to the pole,
+  up it and along the arm. The pegboard hangs higher, above the monitor.
 
 Since then: the speakers have pale cones, trim rings, foam pads and
-round-footed stands. The monitor sits lower; a tap on the USB-C plug at the laptop's side pulls it
+round-footed stands. A tap on the USB-C plug at the laptop's side pulls it
 out (the monitor shows "No signal") or puts it back. The desk mat is wider and printed: contour
 a koi pond under cherry blossom, drawn in code (`MAT_COLORS.koi` in `src/objects/deskMat.js`; `ink` is a contour-map print).
 
@@ -171,30 +172,12 @@ The laptop's tabs show the sites' own screenshots where a project has one (`src/
 Up close on the laptop a button at the bottom opens the open tab's live site, or its code. "tour"
 (top right) takes the camera from thing to thing with a line about each (`TOUR` in `scene.js`).
 
-Up close on the laptop, a project with a live site shows the real thing: an iframe laid over the
-page's part of the display, fitted to its four corners as the camera sees them
-(`laptop.pageCorners()`, `updateSite()` in `scene.js`), there to scroll and click. The tabs above
+Up close on the laptop or the monitor, a project with a live site shows the real thing: an iframe
+laid over the page's part of that screen, fitted to its four corners as the camera sees them
+(`laptop.pageCorners()`, `monitor.pageCorners()`, `updateSite()` in `scene.js`), there to scroll and click. The tabs above
 stay the scene's own; the screenshot shows under it until the site has loaded, from further away,
-and for a project with no site. Leaving the laptop empties the iframe. A site that refuses to be
+and for a project with no site. Leaving both empties the iframe; the monitor unplugged shows none. A site that refuses to be
 framed (`X-Frame-Options` or `frame-ancestors`) would show blank there: all three allow it now.
-
-Three pictures hang on the wall (`src/objects/portraits.js`). They are not drawings: each frame is a
-window onto a small lit scene of its own, a life-size bald, gaunt head and shoulders
-(`src/objects/headGeo.js`, a distance field meshed in a worker at 2 mm; `src/objects/headRig.js`
-gives it skin, a jaw that opens, eyeballs that turn, lids that blink and a hand), drawn into a
-render target only when something in it changes and only while it is in view, one picture a frame,
-then printed like an old photograph (drained of colour, hard, dark at the edges, grainy):
-- `face`: lit from above left; it looks at you wherever you stand, blinks, and now and then its
-  mouth comes open;
-- `void`: a black hole where its face should be, two lights in it that blink and follow you;
-- `coal`: lit from below; every fourteen seconds its hand comes up, takes out its eye and eats it,
-  and the eye grows back (a tap, or the tour, starts it).
-The pictures are black until the head's mesh comes from the worker; the scene does not wait for it.
-Under automation they hold still unless the address has `?art`; `api.art.clock` holds their time
-at a given second for tests.
-
-On the desk, right of the can, two marble faces on a granite plinth (`src/objects/masks.js`,
-`src/objects/masksGeo.js`): unfinished, still being carved.
 
 ## The camera
 

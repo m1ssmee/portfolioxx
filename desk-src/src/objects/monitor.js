@@ -1,177 +1,72 @@
-// A second screen left of the laptop: a 27-inch curved monitor turned to portrait (so its curve
-// runs from top to bottom: its top and bottom edges lean towards the chair), on a stand with a
-// flat foot. It shows one thing, full screen: a terminal, split in four, a dev server running in
-// each (the projects' and this desk's own), every one on localhost.
+// A second screen behind the laptop: a 27-inch monitor, landscape, flat, held up over the laptop's
+// lid on an arm from a pole clamped to the desk's back edge at its left (the "side stand"). It
+// shows what the laptop's browser has open, bigger: a strip of tabs (a tap on one switches the
+// laptop too), the project's page under it (up close, the live site itself: scene.js lays it over
+// the page's part of the glass, as for the laptop).
 // It is plugged into the laptop: the laptop has only USB-C, so a small aluminium USB-C to HDMI
 // adapter hangs from its left side (a USB-C plug, a short tail, the adapter's block), an HDMI plug
-// in the block, and the HDMI cable round the front of the monitor's foot and up behind its neck.
-// The monitor's frame: y up from the desk, +z its front, the origin under the middle of its foot (mm).
+// in the block, and the HDMI cable over the desk to the pole, up it and along the arm.
+// The monitor's frame: y up from the desk, +z its front, the origin on the desk under the middle
+// of its glass (mm).
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { drawPage, PAGE } from './laptopScreen.js'
 
 export const MONITOR = {
-  w: 346, // (portrait: the glass 336 x 597 inside a 5 mm border)
-  h: 612,
-  glass: [336, 597],
-  bottom: 44, // (its lower edge above the desk: low on its stand)
-  R: 1500, // (the curve's radius)
-  z0: 18, // (the glass's middle, in front of the foot's middle)
-  foot: [230, 172, 10],
+  w: 612, // (the glass 597 x 336 inside a 7.5 mm border)
+  h: 351,
+  glass: [597, 336],
+  bottom: 240, // (its lower edge above the desk: clear of the laptop's open lid)
+  pole: [-400, -44], // (the pole: x, z in its frame; on the desk's back edge, left of the glass)
+  poleR: 15,
+  armZ: -46, // (the arm's depth, behind the panel)
+  tex: [1920, 1080],
+  bar: 64, // (the tab strip's height, in the picture's pixels)
+  page: [1600, 847], // (the page under it, as a page would see it: px)
 }
 const M = MONITOR
 const CY = M.bottom + M.h / 2
 
-/** The curve: how far forward a point at height y (from the screen's middle) stands. */
-const sag = (y) => M.R - Math.sqrt(M.R * M.R - y * y)
-function bend(g) {
-  const p = g.attributes.position
-  for (let i = 0; i < p.count; i++) p.setZ(i, p.getZ(i) + sag(p.getY(i) - CY))
-  g.computeVertexNormals()
-  return g
-}
-
-/** The terminal (1080 x 1920): four panes, a dev server in each. projects: portfolio.ts's. */
-export function drawTerminal(c, projects) {
+/**
+ * The picture (1920 x 1080): a tab for each project, the open one's page under them (as the
+ * laptop draws it: its screenshot, or drawn). Returns the tabs' rectangles ([x0, x1], px).
+ */
+export function drawBrowser(c, projects, tab, font, shots, pageC) {
   const g = c.getContext('2d')
-  const W = c.width
-  const H = c.height
-  g.fillStyle = '#0c0f13'
-  g.fillRect(0, 0, W, H)
-  const FS = 23
-  const LH = 33
-  const mono = `${FS}px ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace`
-  g.font = mono
-  g.textBaseline = 'alphabetic'
-  const C = { dim: '#6b7684', text: '#c9d1d9', green: '#56d364', cyan: '#56b6c2', blue: '#79c0ff', yellow: '#e3b341', mag: '#d2a8ff', white: '#f0f3f6' }
-  const X0 = 30
-  /** A line of coloured runs: [[text, colour, underline?], ...]. */
-  const line = (y, runs) => {
-    let x = X0
-    for (const [t, col, ul] of runs) {
-      g.fillStyle = C[col] || col
-      g.fillText(t, x, y)
-      const w = g.measureText(t).width
-      if (ul) g.fillRect(x, y + 4, w, 1.5)
-      x += w
+  const [W, H] = M.tex
+  const B = M.bar
+  g.setTransform(1, 0, 0, 1, 0, 0)
+  g.fillStyle = '#1d1f23'
+  g.fillRect(0, 0, W, B)
+  const n = projects.length
+  const tw = Math.min(300, (W - 40) / n)
+  const rects = []
+  g.font = `500 22px ${font || 'Inter'}, -apple-system, 'Segoe UI', Arial, sans-serif`
+  g.textBaseline = 'middle'
+  projects.forEach((p, i) => {
+    const x = 20 + i * tw
+    if (i === tab) {
+      g.fillStyle = '#34373d'
+      g.beginPath()
+      g.roundRect(x, 10, tw - 6, B - 10, [10, 10, 0, 0])
+      g.fill()
     }
-    return x
-  }
-  const has = (id) => projects.some((p) => p.id === id)
-  const name = (id, fallback) => (projects.find((p) => p.id === id)?.name || fallback).toLowerCase().replace(/[^a-z0-9]+/g, '-')
-  const next = (dir, port, extra) => [
-    [['~/code/' + dir, 'cyan'], [' $ ', 'green'], [`npm run dev${port === 3000 ? '' : ` -- -p ${port}`}`, 'white']],
-    [],
-    [[`> ${dir}@0.1.0 dev`, 'dim']],
-    [[`> next dev${port === 3000 ? '' : ` -p ${port}`}`, 'dim']],
-    [],
-    [['   ▲ Next.js', 'white']],
-    [['   - Local:        ', 'text'], [`http://localhost:${port}`, 'blue', true]],
-    [],
-    [[' ✓ ', 'green'], ['Starting...', 'text']],
-    [[' ✓ ', 'green'], ['Ready in 1.6s', 'text']],
-    [[' ○ ', 'dim'], ['Compiling / ...', 'text']],
-    [[' ✓ ', 'green'], ['Compiled / in 2.4s', 'text']],
-    ...extra,
-  ]
-  const panes = []
-  if (has('bodymap'))
-    panes.push({
-      title: 'bodymap',
-      lines: next('bodymap', 3000, [
-        [[' GET / ', 'text'], ['200', 'green'], [' in 2731ms', 'dim']],
-        [[' GET / ', 'text'], ['200', 'green'], [' in 48ms', 'dim']],
-      ]),
-    })
-  if (has('codebase-tavern'))
-    panes.push({
-      title: 'codebase-tavern',
-      lines: next('codebase-tavern', 3001, [
-        [[' GET / ', 'text'], ['200', 'green'], [' in 3120ms', 'dim']],
-        [[' GET / ', 'text'], ['200', 'green'], [' in 61ms', 'dim']],
-      ]),
-    })
-  if (has('blinkscope'))
-    panes.push({
-      title: 'blinkscope',
-      lines: next('blinkscope', 3002, [[[' GET /view?ra=133.75976&dec=-7.24219 ', 'text'], ['200', 'green'], [' in 412ms', 'dim']]]),
-    })
-  if (has('meshh'))
-    panes.push({
-      title: 'meshh',
-      lines: [
-        [['~/code/meshh', 'cyan'], [' $ ', 'green'], ['npm start', 'white']],
-        [],
-        [['> meshh@0.1.0 start', 'dim']],
-        [['> node bin/meshh.js', 'dim']],
-        [],
-        [['  Meshh ', 'white'], ['running at ', 'text'], ['http://localhost:4317', 'blue', true]],
-        [['  project  ', 'dim'], ['~/code/portfolioxx', 'text']],
-        [['  agents   ', 'dim'], ['lead, frontend x5', 'text']],
-        [['  ready. ', 'green'], ['Ctrl+C to stop', 'dim']],
-      ],
-    })
-  if (has('cropscan'))
-    panes.push({
-      title: 'cropscan',
-      lines: [
-        [['~/code/CropScan', 'cyan'], [' $ ', 'green'], ['flask --app app run --debug', 'white']],
-        [],
-        [[" * Serving Flask app 'app'", 'text']],
-        [[' * Debug mode: on', 'text']],
-        [[' * Running on ', 'text'], ['http://127.0.0.1:5000', 'blue', true]],
-        [['Press CTRL+C to quit', 'yellow']],
-        [[' * Restarting with stat', 'dim']],
-        [[' * Debugger is active!', 'dim']],
-        [],
-        [['127.0.0.1 - - ', 'dim'], ['"GET / HTTP/1.1" ', 'text'], ['200', 'green'], [' -', 'dim']],
-        [['127.0.0.1 - - ', 'dim'], ['"GET /static/app.css HTTP/1.1" ', 'text'], ['200', 'green'], [' -', 'dim']],
-        [['127.0.0.1 - - ', 'dim'], ['"POST /predict HTTP/1.1" ', 'text'], ['200', 'green'], [' -', 'dim']],
-      ],
-    })
-  panes.push({
-    title: 'portfolio',
-    lines: [
-      [['~/code/portfolioxx/desk-src', 'cyan'], [' $ ', 'green'], ['npm run dev', 'white']],
-      [],
-      [['> late-night-desk@1.0.0 dev', 'dim']],
-      [['> vite', 'dim']],
-      [],
-      [['  VITE', 'green'], [' ready in ', 'text'], ['412 ms', 'white']],
-      [],
-      [['  ➜  ', 'green'], ['Local:   ', 'white'], ['http://localhost:5173/', 'blue', true]],
-      [['  ➜  ', 'dim'], ['Network: use --host to expose', 'dim']],
-      [['  ➜  ', 'dim'], ['press ', 'dim'], ['h + enter', 'text'], [' to show help', 'dim']],
-      [],
-      [['9:41:07 PM ', 'dim'], ['[vite] ', 'cyan'], ['hmr update ', 'green'], ['/src/scene.js', 'dim']],
-    ],
-    cursor: true,
+    g.fillStyle = i === tab ? '#f1f3f5' : '#9aa0a8'
+    let t = p.name
+    while (g.measureText(t).width > tw - 36 && t.length > 2) t = t.slice(0, -2) + '…'
+    g.fillText(t, x + 16, B / 2 + 4)
+    rects.push([x, x + tw - 6])
   })
-  const ph = H / panes.length
-  panes.forEach((p, i) => {
-    const top = i * ph
-    // the pane's rule and its name, as a terminal multiplexer draws them
-    if (i) {
-      g.fillStyle = '#2a313a'
-      g.fillRect(0, top, W, 2)
-    }
-    g.font = `${FS - 5}px ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace`
-    g.fillStyle = '#4d5866'
-    const label = `${i + 1}:${p.title}`
-    g.fillText(label, W - X0 - g.measureText(label).width, top + 34)
-    g.font = mono
-    let y = top + 52
-    let endX = X0
-    // (many panes: no blank lines in them)
-    for (const l of panes.length > 4 ? p.lines.filter((q) => q.length) : p.lines) {
-      if (y > top + ph - 14) break
-      endX = l.length ? line(y, l) : X0
-      y += LH
-    }
-    if (p.cursor) {
-      g.fillStyle = C.text
-      g.fillRect(X0, y - FS + 2, 13, FS + 3)
-    }
-  })
+  // the page: drawn as the laptop draws it (1440 wide), shown 1920 wide from its top
+  const pg = pageC.getContext('2d')
+  pg.setTransform(PAGE.texW / PAGE.w, 0, 0, PAGE.texW / PAGE.w, 0, 0)
+  pg.clearRect(0, 0, PAGE.w, PAGE.h)
+  const p = projects[tab]
+  drawPage(pg, p, font, shots[p.id])
+  const k = PAGE.texW / PAGE.w
+  const srcH = ((H - B) * PAGE.w) / W
+  g.drawImage(pageC, 0, 0, PAGE.w * k, srcH * k, 0, B, W, H - B)
+  return rects
 }
 
 /** What it shows with nothing plugged in: its own small box, on black. */
@@ -206,11 +101,13 @@ export function drawNoSignal(c) {
 }
 
 /**
- * The monitor. at: under the middle of its foot (world, on the desk); yaw: the way it faces.
- * Returns { group, meshes, materials, glow(on), screenCenter(out), screenNormal(out),
- *   cableEnd(out) (world: where its cable goes in, behind its neck), dispose() }.
+ * The monitor. at: on the desk under the middle of its glass (world); yaw: the way it faces;
+ * projects, font, shots: as the laptop's. Returns { group, meshes, display, materials, glow(on),
+ *   setSignal(on), signal, showTab(i), tapAt(hit) -> a tab's index or -1, update(dt), screenCenter(out),
+ *   screenNormal(out), pageSize, pageCorners(out), cableUp(), clamp (its foot: x, z in its frame),
+ *   dispose() }.
  */
-export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
+export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy = 4 }) {
   const group = new THREE.Group()
   group.name = 'monitor'
   group.position.copy(at)
@@ -221,15 +118,17 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
   shell.customProgramCacheKey = () => 'monitor.shell'
   metal.customProgramCacheKey = () => 'monitor.metal'
   const canvas = document.createElement('canvas')
-  canvas.width = 1080
-  canvas.height = 1920
-  drawTerminal(canvas, projects)
+  canvas.width = M.tex[0]
+  canvas.height = M.tex[1]
+  const pageC = document.createElement('canvas')
+  pageC.width = PAGE.texW
+  pageC.height = PAGE.texH
   const map = new THREE.CanvasTexture(canvas)
   map.colorSpace = THREE.SRGBColorSpace
   map.anisotropy = anisotropy
   const lost = document.createElement('canvas')
-  lost.width = 1080
-  lost.height = 1920
+  lost.width = M.tex[0]
+  lost.height = M.tex[1]
   drawNoSignal(lost)
   const lostMap = new THREE.CanvasTexture(lost)
   lostMap.colorSpace = THREE.SRGBColorSpace
@@ -247,25 +146,44 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
     meshes.push(o)
     return o
   }
-  const zb = M.z0 - 13 // (the panel's back)
+  // the panel, the bulge of its electronics behind, the mount's plate
   add(
     mergeGeometries([
-      bend(new THREE.BoxGeometry(M.w, M.h, 13, 1, 28, 1).translate(0, CY, M.z0 - 6.5)),
-      // the bulge of its electronics, behind
-      bend(new THREE.BoxGeometry(232, 330, 24, 1, 14, 1).translate(0, CY, zb - 12)),
+      new THREE.BoxGeometry(M.w, M.h, 12).translate(0, CY, -6),
+      new THREE.BoxGeometry(380, 220, 16).translate(0, CY - 10, -20),
+      new THREE.BoxGeometry(110, 110, 6).translate(0, CY, -31),
     ]),
     shell,
     'body',
   )
-  add(bend(new THREE.PlaneGeometry(M.glass[0], M.glass[1], 1, 28).translate(0, CY, M.z0 + 0.3)), glass, 'display', false)
-  // the stand: a foot, a neck up its back, the pivot's block
-  const [fw, fd, fh] = M.foot
-  const neckZ = zb - 24 - 9
+  const display = add(new THREE.PlaneGeometry(M.glass[0], M.glass[1]).translate(0, CY, 0.3), glass, 'display', false)
+  // the stand: a clamp on the desk's back edge, a pole up from it, a collar, an arm in two
+  // pieces across behind the panel to the plate, a tilt block
+  const [px, pz] = M.pole
+  const R = M.poleR
+  const armY = CY + 6
+  const cyl = (r0, r1, h, x, y, z, seg = 24) => new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z)
+  const bar = (a, b, r) => {
+    const d = new THREE.Vector3().subVectors(b, a)
+    const g = new THREE.CylinderGeometry(r, r, d.length(), 18)
+    g.translate(0, d.length() / 2, 0)
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()))
+    return g.translate(a.x, a.y, a.z)
+  }
+  const elbow = new THREE.Vector3(-170, armY, M.armZ - 2)
   add(
     mergeGeometries([
-      new THREE.BoxGeometry(fw, fh, fd).translate(0, fh / 2, -6),
-      new THREE.BoxGeometry(56, CY + 30 - fh, 18).translate(0, fh + (CY + 30 - fh) / 2, neckZ),
-      new THREE.BoxGeometry(96, 78, 12).translate(0, CY, zb - 24 - 3 + sag(0)),
+      // the clamp: a plate on the desk, its jaw down the back edge
+      new THREE.BoxGeometry(70, 10, 64).translate(px, 5, pz + 6),
+      new THREE.BoxGeometry(70, 70, 10).translate(px, -25, pz - 31),
+      new THREE.BoxGeometry(70, 10, 46).translate(px, -55, pz - 10),
+      cyl(R, R, armY + 40, px, (armY + 40) / 2, pz),
+      cyl(R + 6, R + 6, 44, px, armY, pz),
+      cyl(R, R * 0.7, 10, px, armY + 45, pz),
+      bar(new THREE.Vector3(px, armY, pz), elbow, 12),
+      cyl(16, 16, 40, elbow.x, elbow.y, elbow.z),
+      bar(elbow, new THREE.Vector3(0, CY, -40), 11),
+      new THREE.BoxGeometry(60, 60, 12).translate(0, CY, -40),
     ]),
     metal,
     'stand',
@@ -274,17 +192,23 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
   let lit = true
   let signal = true
   let blank = 0
+  let tab = -1
+  let tabs = []
   const show = () => (glass.emissiveIntensity = lit && blank <= 0 ? 0.92 : 0)
+  const GW = M.glass[0]
+  const GH = M.glass[1]
+  const barMM = (M.bar / M.tex[1]) * GH
   return {
     group,
     meshes,
+    display,
     materials: [shell, metal, glass],
     /** Its picture lit or dark (dark in the ember's own frame: the light is counted once). */
     glow(on) {
       lit = on
       show()
     },
-    /** A signal on its input, or none: the picture goes black for a moment, then the terminal or its "No signal". */
+    /** A signal on its input, or none: the picture goes black for a moment, then the page or its "No signal". */
     setSignal(on) {
       if (on === signal) return
       signal = on
@@ -293,6 +217,22 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
     },
     get signal() {
       return signal
+    },
+    /** The laptop's open tab, shown here too (drawn again only when it changes). */
+    showTab(i) {
+      if (i === tab) return false
+      tab = i
+      tabs = drawBrowser(canvas, projects, tab, font, shots, pageC)
+      map.needsUpdate = true
+      return true
+    },
+    /** A tap on the glass (a raycast hit): on a tab, its index; else -1. */
+    tapAt(hit) {
+      if (!hit || hit.object !== display || !hit.uv || !signal) return -1
+      const x = hit.uv.x * M.tex[0]
+      const y = (1 - hit.uv.y) * M.tex[1]
+      if (y > M.bar) return -1
+      return tabs.findIndex((r) => x >= r[0] && x <= r[1])
     },
     /** Each frame: the blank moment running out (returns true while it lasts). */
     update(dt) {
@@ -304,19 +244,33 @@ export function createMonitor({ at, yaw, projects, anisotropy = 4 }) {
       }
       return true
     },
-    screenCenter: (out) => out.set(0, CY, M.z0).applyMatrix4(group.matrixWorld),
+    screenCenter: (out) => out.set(0, CY, 0).applyMatrix4(group.matrixWorld),
     screenNormal: (out) => out.set(0, 0, 1).transformDirection(group.matrixWorld),
-    /** Points up the back of its neck, from the desk to where the cable goes in (world). */
+    /** The page's part of the glass (under the tabs), in the page's own pixels. */
+    pageSize: M.page,
+    /** Its corners (world): top left, top right, bottom right, bottom left (out: four vectors). */
+    pageCorners(out) {
+      const top = CY + GH / 2 - barMM
+      const bot = CY - GH / 2
+      out[0].set(-GW / 2, top, 0.4)
+      out[1].set(GW / 2, top, 0.4)
+      out[2].set(GW / 2, bot, 0.4)
+      out[3].set(-GW / 2, bot, 0.4)
+      for (const v of out) v.applyMatrix4(group.matrixWorld)
+      return out
+    },
+    /** Its clamp on the desk (x, z in its frame; half its size), for what stands on the desk. */
+    clamp: { x: px, z: pz + 6, hw: 35, hd: 32 },
+    /** Points from the desk up the pole's front and along the arm to the panel's back (world). */
     cableUp: () =>
       [
-        // (onto the foot from its left, across it to the neck, up the neck's back)
-        [-fw / 2 - 20, 3.4, -45],
-        [-fw / 2 + 4, fh + 3.6, -44],
-        [-45, fh + 3.4, neckZ - 15],
-        [6, fh + 3.4, neckZ - 13.5],
-        [12, fh + 26, neckZ - 12.6],
-        [12, CY - 190, neckZ - 12.6],
-        [12, CY - 150, neckZ - 4],
+        [px + 30, 3.4, pz + 30],
+        [px + 6, 3.4, pz + R + 3],
+        [px + 6, 14, pz + R + 3],
+        [px + 6, armY - 40, pz + R + 3],
+        [px + 16, armY - 16, pz + 8],
+        [px + 80, armY - 14, M.armZ + 8],
+        [-120, CY - 40, -30],
       ].map((p) => new THREE.Vector3(...p).applyMatrix4(group.matrixWorld)),
     dispose() {
       for (const g of geometries) g.dispose()

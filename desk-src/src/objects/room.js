@@ -46,7 +46,7 @@ export const ROOM = {
   // postcard's middle, spare pins, old pin holes, the ghost of a card long gone
   board: {
     u: 132,
-    y0: 240,
+    y0: 615,
     w: 580,
     h: 400,
     frame: 5,
