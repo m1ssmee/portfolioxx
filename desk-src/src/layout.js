@@ -70,10 +70,11 @@ export const DESK = {
   // the second screen: a 27-inch monitor, landscape, behind the laptop and over its open lid, on an
   // arm from a pole on a weighted base at its left (monitor: on the desk under the
   // middle of its glass). The HDMI cable's way over the desk from the adapter by the laptop's left
-  // side: back to the pole's foot (it goes up the pole and along the arm: monitor.js)
+  // side: straight back to the wall, then along it behind the stand's base (it goes up the back of
+  // the pole and under the arm: monitor.js)
   monitor: deskAt(-10, -418),
   monitorTurn: 0,
-  hdmiRun: [deskAt(-232, -312), deskAt(-290, -322), deskAt(-338, -332)],
+  hdmiRun: [deskAt(-232, -312), deskAt(-252, -372), deskAt(-268, -440), deskAt(-286, -466)],
 }
 /**
  * What the seated home view shows of the desk: its middle and its extent (mm, across and up the

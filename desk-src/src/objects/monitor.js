@@ -139,7 +139,8 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
   const geometries = []
   const shell = new THREE.MeshStandardMaterial({ color: 0x161618, roughness: 0.58 })
   // (the stand: brushed aluminium, its joints and caps black plastic, its base on rubber)
-  const metal = new THREE.MeshStandardMaterial({ color: 0xc3c7cc, roughness: 0.3, metalness: 0.92 })
+  // (not a mirror: in a dark room polished metal shows only the dark; satin aluminium takes the light)
+  const metal = new THREE.MeshStandardMaterial({ color: 0xd2d5d8, roughness: 0.42, metalness: 0.5 })
   const black = new THREE.MeshStandardMaterial({ color: 0x18191c, roughness: 0.52 })
   const canvas = document.createElement('canvas')
   canvas.width = M.tex[0]
@@ -338,14 +339,15 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     /** Points from the desk up the pole's front and along the arm to the panel's back (world). */
     cableUp: () =>
       [
-        [px + 40, 3.4, bz + BASE[2] / 2 + 14],
-        [px + 30, BASE[1] + 5, bz + 20],
-        [px + 6, BASE[1] + 5, pz + PR + 3],
-        [px + 6, BASE[1] + 30, pz + PR + 3],
-        [px + 6, armY - 40, pz + PR + 3],
-        [px + 16, armY - 16, pz + 8],
-        [px + 80, armY - 14, M.armZ + 8],
-        [-120, CY - 40, -30],
+        // (out of sight: along the wall behind the base, up the back of the pole, under the arm)
+        [px + BASE[0] / 2 + 26, 3.4, pz - PR - 2],
+        [px + 30, 3.4, pz - PR - 3.5],
+        [px + 3, 3.4, pz - PR - 3.5],
+        [px, 16, pz - PR - 3.5],
+        [px, armY - 44, pz - PR - 3.5],
+        [px + 10, armY - 26, pz - PR - 2],
+        [px + 44, armY - 15, M.armZ + 2],
+        [-210, armY - 15, M.armZ],
       ].map((p) => new THREE.Vector3(...p).applyMatrix4(group.matrixWorld)),
     dispose() {
       for (const g of geometries) g.dispose()

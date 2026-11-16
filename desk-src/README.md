@@ -149,14 +149,17 @@ the physics and the cable's mesh both read it.
 
 ## Round the desk
 
-- The wall is plain warm white; on it, over the monitor, an oak shelf (`src/objects/room.js`): a
-  snake plant in a clay pot, a few books, a postcard in a thin black frame and this month's
-  calendar leaning back on the wall, three sticky notes on its front edge, the ID badge on a brass
-  hook under its right end. A tap peels a note, turns the calendar's page, swings the badge. The
-  desk is a real one: 1.32 m wide, on two black steel end frames, over an oak floor, a skirting
-  along the wall.
+- The wall is plain warm white; on it, up and to the right of the monitor, an oak shelf
+  (`src/objects/room.js`): two clothbound books lying flat with a snake plant in a glazed pot on
+  them, a row of books standing (boards, a spine and a block of pages each; their spines printed
+  from one canvas, `bookCanvas`), a print in a mounted black frame and this month's calendar
+  leaning back on the wall, three sticky notes on its front edge, the ID badge on a brass hook
+  under its right end. A tap peels a note, turns the calendar's page, swings the badge. The desk
+  is a real one: 1.32 m wide, on two black steel end frames, over an oak floor, a skirting along
+  the wall.
 - The light: a dark room held by three pools of light. The lamp's on the desk (the key, the only
-  shadow), a warm spot down the wall onto the shelf, and the monitor's own glow on the desk in
+  shadow on the desk), a warm spot down the wall onto the shelf (it casts what stands there onto
+  the shelf and the wall, drawn again only when something there moves), and the monitor's own glow on the desk in
   front of it (off while it has no signal); the dusk sky, the room's bounce and the environment
   are low under them, and the picture darkens a little to its corners (`.cg-stage::after`).
 - `src/objects/studio.js`: a studio monitor on a floor stand at each end of the desk, turned in

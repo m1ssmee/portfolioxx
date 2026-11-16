@@ -547,13 +547,23 @@ export function createScene(container, options = {}) {
     // cache's region layer too)
     // the room is dark; three pools of light hold it: the lamp's on the desk (the key, above), a warm
     // spot down the wall onto the shelf, and the monitor's own glow on the desk in front of it
-    // (neither casts a shadow: each is one more light in the lit materials, no more passes)
+    // (the shelf's casts shadows, what stands on the shelf onto it and the wall: drawn again only
+    // when something there moved; the monitor's glow casts none)
     const shelfSpot = new THREE.SpotLight(0xffdcb4, 4.6e5, 0, 0.5, 0.95, 2)
     const screenGlow = new THREE.SpotLight(0xcfdcff, 5.2e4, 0, 1.15, 1, 2)
     shelfSpot.position.set(...LAYOUT.deskAt(ROOM.board.u, -110, ROOM.board.y0 + 640))
     shelfSpot.target.position.copy(room.boardCenter)
     scene.add(shelfSpot, shelfSpot.target, screenGlow, screenGlow.target)
     shelfSpot.target.updateMatrixWorld()
+    shelfSpot.castShadow = true
+    shelfSpot.shadow.mapSize.set(1024, 1024)
+    shelfSpot.shadow.camera.near = 150
+    shelfSpot.shadow.camera.far = 1300
+    shelfSpot.shadow.bias = -0.0006
+    shelfSpot.shadow.normalBias = 0.8
+    shelfSpot.shadow.radius = 5
+    shelfSpot.shadow.blurSamples = 12
+    shelfSpot.shadow.autoUpdate = false
     for (const l of [key, rim, fill, bounce, shelfSpot, screenGlow]) l.layers.enableAll()
     // (the ember's own light is a term in the lit materials: core/emberlight.js; so is the lighter's
     // flame, except below it, where a spotlight pointing down carries it with a shadow: dark, never
@@ -3199,6 +3209,7 @@ export function createScene(container, options = {}) {
     function shadowsNow() {
       renderer.shadowMap.needsUpdate = true
       key.shadow.needsUpdate = true
+      shelfSpot.shadow.needsUpdate = true
     }
     const cigSwapping = (q) => q.state === 'arriving' || q.state === 'leaving'
     // ---- steady frames: while someone turns, zooms or carries something, the frames' own pace is
@@ -3569,7 +3580,7 @@ export function createScene(container, options = {}) {
           // (the shadows drawn again only if what casts them changed: the camera does not change them)
           if (!baking) {
             bakeShadows = shadowDirty || burnStep || !shadowsDrawn
-            if (bakeShadows) key.shadow.needsUpdate = true
+            if (bakeShadows) key.shadow.needsUpdate = shelfSpot.shadow.needsUpdate = true
             shadowsDrawn = true
             shadowDirty = false
             bakedCam.copy(camera.matrixWorld)

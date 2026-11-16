@@ -38,28 +38,30 @@ export const ROOM = {
   rail: { y: 790, h: 0, none: true }, // (no rail now: only where the wall's two parts meet)
   // the double socket low on the right: its middle (x, height) and its size (mm)
   socket: { u: 330, y: 86, w: 151, h: 80 },
-  // the shelf (the name is the old board's): its middle across the picture, its underside's
-  // height, its length, how high what stands on it reaches above its underside (for the views),
-  // its thickness and depth (mm). On it (x from its left end): the badge's hook under it ([x, y from
-  // its underside]), the notes on its front edge ([x, turn]), where the books start, the plant
-  // ([x, z out of the wall]), the framed postcard's middle, the calendar's
+  // the shelf (the name is the old board's), right of the monitor's middle: its middle across the
+  // picture, its underside's height, its length, how high what stands on it reaches above its
+  // underside (for the views), its thickness and depth (mm). On it (x from its left end): the
+  // badge's hook under it ([x, y from its underside]), the notes on its front edge ([x, turn]),
+  // where the books lying flat start and the plant on them ([x, z out of the wall]), where the
+  // row of books starts, the framed print's middle, the calendar's
   board: {
-    u: 132,
+    u: 356,
     y0: 700,
-    w: 580,
-    h: 300,
-    thick: 24,
-    deep: 150,
-    badge: [522, -14],
+    w: 680,
+    h: 330,
+    thick: 28,
+    deep: 168,
+    badge: [652, -14],
     notes: [
-      [58, -0.05],
-      [146, 0.04],
-      [236, -0.03],
+      [334, -0.05],
+      [424, 0.04],
+      [514, -0.03],
     ],
-    plant: [60, 78],
-    books: 138,
-    postcard: 372,
-    calendar: 498,
+    stack: 22,
+    plant: [132, 92],
+    books: 264,
+    postcard: 502,
+    calendar: 616,
   },
   // the wall's contact shade: where it is baked (the room's frame: x0, y0, x1, y1) and its texels
   wallAO: { rect: [-1200, -40, 1200, 1160], size: [512, 256] },
@@ -590,10 +592,11 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   socket.add(...socketMeshes)
 
   // ---- the shelf: its parts in its own frame (x from its left end, y up from its underside, z
-  // out of the wall). An oak plank, nothing holding it up that shows; on it a snake plant in a clay
-  // pot, a few books (the last leaning on the rest), a postcard in a thin black frame and the
-  // calendar, both leaning back on the wall; three sticky notes on its front edge; under its right
-  // end a brass hook in the wall, the badge hanging from it
+  // out of the wall). An oak plank, nothing holding it up that shows. On it, from the left: two
+  // books lying flat, a snake plant in a glazed pot on them; a row of clothbound books, the last
+  // leaning on the rest; a print in a thin frame with a wide mount and the calendar, both leaning
+  // back on the wall; three sticky notes on its front edge; under its right end a brass hook in
+  // the wall, the badge hanging from it. (A warm spot lights it and casts its shadows: scene.js)
   const B = R.board
   const TH = B.thick
   const D = B.deep
@@ -601,8 +604,15 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   const board = new THREE.Group()
   board.position.set(B.u - B.w / 2, B.y0, face)
   const boardMeshes = []
-  const woodMat = mat(new THREE.MeshStandardMaterial({ map: canvasTex(plankCanvas()), roughness: 0.56, metalness: 0 }))
-  boardMeshes.push(mesh(new RoundedBoxGeometry(B.w + 24, TH, D, 3, 3.5).translate(B.w / 2, TH / 2, D / 2), woodMat, 'room.shelf', { cast: true, takes: true }))
+  const woodMat = mat(new THREE.MeshStandardMaterial({ map: canvasTex(plankCanvas()), roughness: 0.6, metalness: 0 }))
+  {
+    // (its grain along its length on every face that shows: the box's own UVs stretched to it)
+    const g = new RoundedBoxGeometry(B.w + 24, TH, D, 4, 2.2).translate(B.w / 2, TH / 2, D / 2)
+    const p = g.attributes.position
+    const uv = g.attributes.uv
+    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 620, (p.getZ(i) + p.getY(i) * 0.6) / 170)
+    boardMeshes.push(mesh(g, woodMat, 'room.shelf', { cast: true, takes: true }))
+  }
   const brass = mat(new THREE.MeshStandardMaterial({ color: 0xc6a36a, metalness: 1, roughness: 0.32 }))
   // the hook the badge hangs from: a peg out of the wall, a ball on its end
   {
@@ -613,94 +623,151 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     peg.dispose()
     ball.dispose()
   }
-  // the books: standing, their spines out; the last one leaning on the others. Cloth covers, the
-  // pages' edge on top, a paler label on each spine
+  // the books: clothbound, each two boards and a spine round a block of pages (the boards a little
+  // proud of the pages all round), its spine printed (bookCanvas: one picture for them all).
+  // Standing in a row, the last leaning on the rest; two lying flat at the left, under the plant
+  const BOOKS = [
+    // [thickness, height, depth, cloth, ink, title, author, lying]
+    [31, 226, 158, '#1f3a34', '#d9c79a', 'A FIELD GUIDE TO DUSK', 'H. Marlow', 1],
+    [24, 204, 150, '#b7b0a0', '#2a2a2a', 'Small Machines', 'I. Okafor', 1],
+    [27, 212, 146, '#27364f', '#e6dcc3', 'NOTES ON LIGHT', 'R. Vance'],
+    [35, 222, 150, '#7d2e23', '#e9d9b0', 'CARTOGRAPHY', 'Vol. II'],
+    [23, 198, 140, '#c58a2e', '#2a2114', 'How Rovers Think', 'S. Anand'],
+    [28, 208, 144, '#22332a', '#d9c79a', 'THE LONG EVENING', 'K. Desrosiers', 0, 0.16],
+  ]
+  let stackTop = TH
   {
-    const page = new THREE.Color(0xe9e2d0)
+    const atlas = bookCanvas(BOOKS, font)
+    const bookMat = mat(new THREE.MeshStandardMaterial({ map: canvasTex(atlas.canvas), roughness: 0.82 }))
     const parts = []
-    const tint = (g, f) => {
-      const n = g.attributes.position.count
-      const c = new Float32Array(n * 3)
-      for (let i = 0; i < n; i++) f(Math.floor(i / 6)).toArray(c, i * 3)
-      g.setAttribute('color', new THREE.BufferAttribute(c, 3))
+    /** A box whose every face shows one spot of the picture (uv), but face `f` a rectangle of it. */
+    const part = (w, h, d, x, y, z, spot, f = -1, rect = null, turn = false) => {
+      const g = new THREE.BoxGeometry(w, h, d).toNonIndexed().translate(x + w / 2, y + h / 2, z + d / 2)
+      const uv = g.attributes.uv
+      for (let i = 0; i < uv.count; i++) {
+        if (Math.floor(i / 6) === f) {
+          // (the face's own u, v in 0..1; turned: a quarter turn, for a spine read along the shelf)
+          const a = turn ? uv.getY(i) : uv.getX(i)
+          const b = turn ? 1 - uv.getX(i) : uv.getY(i)
+          uv.setXY(i, rect[0] + a * (rect[2] - rect[0]), rect[1] + b * (rect[3] - rect[1]))
+        } else uv.setXY(i, spot[0], spot[1])
+      }
       return g
     }
-    let x = B.books
-    for (const [t, h, d, col, lean = 0] of [
-      [28, 206, 138, 0x2f4a3c],
-      [22, 188, 132, 0xd8d0bd],
-      [34, 218, 140, 0x9c4a31],
-      [18, 176, 128, 0x27344d],
-      [26, 198, 136, 0x1f1f22, 0.17],
-    ]) {
-      const cover = new THREE.Color(col)
-      const label = cover.clone().lerp(new THREE.Color(0xf2ead8), cover.getHSL({}).l > 0.6 ? -0.5 : 0.72)
-      // (leaning: its top left corner against the book before it)
-      const x0 = x + Math.sin(lean) * h
-      const put = (g) => g.rotateZ(lean).translate(x0, TH, 9)
-      // (a box's faces in order: +x, -x, +y, -y, +z, -z; the top one is the pages)
-      parts.push(put(tint(new THREE.BoxGeometry(t, h, d).toNonIndexed().translate(t / 2, h / 2, d / 2), (f) => (f === 2 ? page : cover))))
-      parts.push(put(tint(new THREE.BoxGeometry(t * 0.62, 30, 0.6).toNonIndexed().translate(t / 2, h * 0.74, d + 0.3), () => label)))
-      x = x0 + t / Math.cos(lean) + 0.6
+    const BD = 2.4 // (a board's thickness)
+    const IN = 3.2 // (how far the pages stand back from the boards' edges)
+    /** One book, standing at the origin: x its thickness, y its height, z its depth (its spine at z = d). */
+    const book = (i) => {
+      const [t, h, d] = BOOKS[i]
+      const { spine, cloth, pages } = atlas.at[i]
+      return [
+        part(BD, h, d, 0, 0, 0, cloth),
+        part(BD, h, d, t - BD, 0, 0, cloth),
+        part(t, h, BD, 0, 0, d - BD, cloth, 4, spine),
+        // (the pages: their edges on top, underneath and at the fore-edge)
+        part(t - 2 * BD, h - 2 * IN, d - BD - IN, BD, IN, IN, [pages[0], pages[1]], 2, pages),
+      ]
     }
-    const bookMat = mat(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.74 }))
+    // the two lying flat, the second a little askew on the first
+    let y = TH
+    BOOKS.forEach((b, i) => {
+      if (!b[7]) return
+      const [t, h, d] = b
+      const skew = i ? 0.07 : -0.02
+      for (const g of book(i)) {
+        // (laid on its side: its height along the shelf, its thickness up, its spine to the room)
+        g.rotateZ(Math.PI / 2).translate(h, 0, 0).translate(-h / 2, 0, -d / 2).rotateY(skew).translate(B.stack + 113 + (i ? 6 : 0), y, 12 + d / 2 + (i ? 5 : 0))
+        parts.push(g)
+      }
+      y += t
+    })
+    stackTop = y
+    // the row standing
+    let x = B.books
+    BOOKS.forEach((b, i) => {
+      if (b[7]) return
+      const [t, h, d, , , , , , lean = 0] = b
+      const x0 = x + Math.sin(lean) * h
+      for (const g of book(i)) parts.push(g.rotateZ(lean).translate(x0, TH, 10 + (i % 3) * 2.5))
+      x = x0 + t / Math.cos(lean) + 0.5
+    })
     boardMeshes.push(mesh(mergeGeometries(parts), bookMat, 'room.books', { cast: true, takes: true }))
     for (const g of parts) g.dispose()
   }
-  // the plant: a snake plant, its blades up out of a clay pot, each cupped, tapering to a point,
-  // banded, a yellow line down each edge
+  // the plant: a snake plant in a glazed pot on its saucer, on the two books. Its blades stand out
+  // of dark soil, each cupped and a little twisted, tapering to a point, banded across in two
+  // greens with a yellow line down each edge (leafCanvas)
   {
     const [px, pz] = B.plant
+    const y0 = stackTop
+    const prof = (pts) => pts.map(([r, y]) => new THREE.Vector2(r, y))
     const pot = new THREE.LatheGeometry(
-      [
+      prof([
+        [0, 3],
+        [27, 3],
+        [34, 4.5],
+        [38.5, 9],
+        [41, 20],
+        [43, 62],
+        [43.6, 76],
+        [44.6, 79],
+        [44.2, 81.5],
+        [41.6, 81.5],
+        [40.8, 76],
+        [0, 76],
+      ]),
+      56,
+    ).translate(px, y0, pz)
+    const saucer = new THREE.LatheGeometry(
+      prof([
         [0, 0],
-        [30, 0],
-        [33, 2.5],
-        [41.5, 70],
-        [44, 73],
-        [44, 82],
-        [40, 82],
-        [39, 75],
-        [0, 75],
-      ].map(([r, y]) => new THREE.Vector2(r, y)),
-      40,
-    ).translate(px, TH, pz)
-    boardMeshes.push(mesh(pot, mat(new THREE.MeshStandardMaterial({ color: 0xb46d49, roughness: 0.82 })), 'room.pot', { cast: true, takes: true }))
-    const soil = new THREE.CircleGeometry(39.5, 32).rotateX(-Math.PI / 2).translate(px, TH + 75.4, pz)
-    boardMeshes.push(mesh(soil, mat(new THREE.MeshStandardMaterial({ color: 0x2b231d, roughness: 1 })), 'room.soil'))
-    let seed = 7
+        [40, 0],
+        [47, 1.6],
+        [50, 6.5],
+        [48.6, 7],
+        [45.5, 3.4],
+        [0, 3.4],
+      ]),
+      56,
+    ).translate(px, y0, pz)
+    // (stoneware, an off-white glaze with a little speckle in it)
+    const glaze = mat(new THREE.MeshPhysicalMaterial({ color: 0xe6e1d6, roughness: 0.36, clearcoat: 0.5, clearcoatRoughness: 0.3, map: canvasTex(speckleCanvas()) }))
+    boardMeshes.push(mesh(mergeGeometries([pot, saucer]), glaze, 'room.pot', { cast: true, takes: true }))
+    pot.dispose()
+    saucer.dispose()
+    const soil = new THREE.CircleGeometry(40.6, 40).rotateX(-Math.PI / 2).translate(px, y0 + 73.5, pz)
+    boardMeshes.push(mesh(soil, mat(new THREE.MeshStandardMaterial({ color: 0x1f1a16, roughness: 1 })), 'room.soil', { takes: true }))
+    let seed = 11
     const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
-    const dark = new THREE.Color(0x27513a)
-    const light = new THREE.Color(0x4f8058)
-    const edge = new THREE.Color(0xc9b964)
-    const c = new THREE.Color()
     const blades = []
-    for (let k = 0; k < 9; k++) {
-      const H = 112 + rnd() * 78
-      const w = 21 + rnd() * 9
-      const yaw = k * 2.39996 + rnd() * 0.5
-      const lean = 0.04 + rnd() * 0.2 + (k < 3 ? 0 : 0.06)
-      const curl = 0.03 + rnd() * 0.07
-      const g = new THREE.PlaneGeometry(w, H, 4, 12).translate(0, H / 2, 0)
+    const N = 15
+    for (let k = 0; k < N; k++) {
+      // (the middle ones tallest and upright; the outer ones shorter, leaning out)
+      const out = k / (N - 1)
+      const H = (198 - 96 * out) * (0.86 + rnd() * 0.28)
+      const w = 30 + rnd() * 12 - 6 * out
+      const yaw = k * 2.39996 + rnd() * 0.6
+      const lean = 0.03 + out * 0.3 + rnd() * 0.06
+      const curl = 0.02 + rnd() * 0.07 + out * 0.05
+      const twist = (rnd() - 0.5) * 1.1
+      const rad = 4 + out * 17
+      const g = new THREE.PlaneGeometry(w, H, 6, 18).translate(0, H / 2, 0)
       const p = g.attributes.position
-      const col = new Float32Array(p.count * 3)
-      const ph = rnd() * 6
       for (let i = 0; i < p.count; i++) {
         const s = Math.min(1, Math.max(0, p.getY(i) / H))
         const u = p.getX(i) / (w / 2)
-        // (narrow at its foot, widest a third up, a point at its tip)
-        const f = (0.55 + 0.45 * Math.min(1, s * 3.2)) * Math.pow(1 - s, 0.42)
-        p.setXYZ(i, p.getX(i) * f, p.getY(i), u * u * 5.5 * f + s * s * H * curl)
-        c.copy(dark).lerp(light, 0.5 + 0.5 * Math.sin(s * 34 + ph + u * 1.5))
-        if (Math.abs(u) > 0.72) c.lerp(edge, 0.85)
-        c.toArray(col, i * 3)
+        // (narrow at its foot, widest a third up, a point at its tip; cupped; wavy at its edges)
+        const f = (0.5 + 0.5 * Math.min(1, s * 2.6)) * Math.pow(1 - s, 0.5) * (1 + 0.05 * Math.sin(s * 13 + k))
+        const x = p.getX(i) * f
+        const z = u * u * 7.5 * f + s * s * H * curl
+        const a = twist * s
+        p.setXYZ(i, x * Math.cos(a) - z * Math.sin(a) * 0.35, p.getY(i), z + x * Math.sin(a) * 0.5)
       }
-      g.setAttribute('color', new THREE.BufferAttribute(col, 3))
-      g.rotateX(lean).rotateY(yaw).translate(px + Math.sin(yaw) * 9, TH + 74, pz + Math.cos(yaw) * 9)
+      g.rotateX(lean).rotateY(yaw).translate(px + Math.sin(yaw) * rad, y0 + 72, pz + Math.cos(yaw) * rad)
       g.computeVertexNormals()
       blades.push(g)
     }
-    const leafMat = mat(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.5 }))
+    const leafMat = mat(new THREE.MeshStandardMaterial({ map: canvasTex(leafCanvas()), side: THREE.DoubleSide, roughness: 0.42 }))
     boardMeshes.push(mesh(mergeGeometries(blades), leafMat, 'room.plant', { cast: true, takes: true }))
     for (const g of blades) g.dispose()
   }
@@ -807,15 +874,17 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
     boardMeshes.push(m)
   })
 
-  // the postcard, in a thin black frame leaning back on the wall
+  // the print: the postcard in a wide off-white mount, in a thin black frame leaning back on the
+  // wall (its mount a card's thickness proud of the print: a shadow line round it)
   {
-    const W = 168
-    const H = 122
-    const bar = 9
-    const dp = 12
+    const W = 196
+    const H = 152
+    const bar = 6
+    const dp = 16
+    const mount = 26
     const fr = new THREE.Group()
-    fr.position.set(B.postcard, TH, 42)
-    fr.rotation.x = -0.17
+    fr.position.set(B.postcard, TH, 44)
+    fr.rotation.x = -0.15
     const bars = [
       new THREE.BoxGeometry(W, bar, dp).translate(0, H - bar / 2, dp / 2),
       new THREE.BoxGeometry(W, bar, dp).translate(0, bar / 2, dp / 2),
@@ -823,14 +892,25 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
       new THREE.BoxGeometry(bar, H - 2 * bar, dp).translate(W / 2 - bar / 2, H / 2, dp / 2),
       new THREE.BoxGeometry(W - 2, H - 2, 2).translate(0, H / 2, 1),
     ]
-    const frameMat = mat(new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.5 }))
-    const frame = mesh(mergeGeometries(bars), frameMat, 'room.frame', { cast: true, takes: true })
+    const frame = mesh(mergeGeometries(bars), mat(new THREE.MeshStandardMaterial({ color: 0x161617, roughness: 0.42 })), 'room.frame', { cast: true, takes: true })
     for (const g of bars) g.dispose()
-    const cardMat = mat(new THREE.MeshStandardMaterial({ map: canvasTex(postcardCanvas(font)), roughness: 0.55 }))
-    const card = mesh(new THREE.PlaneGeometry(W - 2 * bar + 1, H - 2 * bar + 1).translate(0, H / 2, dp - 4), cardMat, 'room.postcard', { takes: true })
-    fr.add(frame, card)
+    // (the mount: a card with a window cut in it, its bevel white)
+    const iw = W - 2 * bar
+    const ih = H - 2 * bar
+    const mw = iw - 2 * mount
+    const mh = ih - 2 * mount
+    const card = new THREE.Shape()
+    card.moveTo(-iw / 2, -ih / 2).lineTo(iw / 2, -ih / 2).lineTo(iw / 2, ih / 2).lineTo(-iw / 2, ih / 2).closePath()
+    const hole = new THREE.Path()
+    hole.moveTo(-mw / 2, -mh / 2).lineTo(-mw / 2, mh / 2).lineTo(mw / 2, mh / 2).lineTo(mw / 2, -mh / 2).closePath()
+    card.holes.push(hole)
+    const mountGeo = new THREE.ExtrudeGeometry(card, { depth: 1.6, bevelEnabled: false }).translate(0, H / 2, dp - 5.2)
+    const mountMesh = mesh(mountGeo, mat(new THREE.MeshStandardMaterial({ color: 0xefece4, roughness: 0.9 })), 'room.mount', { cast: true, takes: true })
+    const cardMat = mat(new THREE.MeshStandardMaterial({ map: canvasTex(postcardCanvas(font)), roughness: 0.6 }))
+    const print = mesh(new THREE.PlaneGeometry(mw + 4, mh + 4).translate(0, H / 2, dp - 5.4), cardMat, 'room.postcard', { takes: true })
+    fr.add(frame, mountMesh, print)
     board.add(fr)
-    boardMeshes.push(frame, card)
+    boardMeshes.push(frame, mountMesh, print)
   }
 
   // a pendulum: what hangs from one pin (x0: the pin's x on the board; set(q): turn it by q about
@@ -1066,26 +1146,203 @@ function floorCanvas() {
   return c
 }
 
-/** The shelf's oak (512 x 128, along the grain): a warm ground, long streaks, a few darker rays. */
+/** A small steady random source. */
+function rng(seed) {
+  let s = seed
+  return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646
+}
+
+/**
+ * The shelf's oak (1024 x 256, along the grain): a warm ground, the growth rings' long lines
+ * drifting and closing into a few cathedral arches, fine pores, a soft light and dark across it.
+ */
 function plankCanvas() {
   const c = document.createElement('canvas')
-  c.width = 512
-  c.height = 128
+  c.width = 1024
+  c.height = 256
   const g = c.getContext('2d')
-  g.fillStyle = '#b48a5c'
-  g.fillRect(0, 0, 512, 128)
-  let seed = 41
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
-  for (let i = 0; i < 260; i++) {
-    const y = rnd() * 128
-    const dark = rnd() < 0.6
-    g.strokeStyle = dark ? `rgba(92,60,30,${0.05 + rnd() * 0.13})` : `rgba(236,206,160,${0.05 + rnd() * 0.1})`
-    g.lineWidth = 0.5 + rnd() * 1.6
+  const grad = g.createLinearGradient(0, 0, 0, 256)
+  grad.addColorStop(0, '#a87c4f')
+  grad.addColorStop(0.5, '#b58a5a')
+  grad.addColorStop(1, '#a47648')
+  g.fillStyle = grad
+  g.fillRect(0, 0, 1024, 256)
+  const r = rng(41)
+  // the rings: lines that wander together, pinched into arches at two places
+  const arch = [[260, 96], [760, 170]]
+  for (let i = 0; i < 46; i++) {
+    const y0 = (i / 46) * 256 + (r() - 0.5) * 3
+    g.strokeStyle = `rgba(84,52,24,${0.1 + r() * 0.2})`
+    g.lineWidth = 0.6 + r() * 1.5
     g.beginPath()
-    const a = rnd() * 3
-    const ph = rnd() * 6
-    for (let x = 0; x <= 512; x += 16) g.lineTo(x, y + Math.sin(x / 90 + ph) * a)
+    for (let x = -8; x <= 1032; x += 8) {
+      let y = y0 + Math.sin(x / 170 + 1.3) * 5 + Math.sin(x / 61 + i * 0.4) * 1.2
+      for (const [ax, ay] of arch) {
+        const d = y0 - ay
+        y += (d * 0.75 * 60 * 60) / ((x - ax) * (x - ax) * 0.02 + 60 * 60 + d * d * 6) - 0
+      }
+      g.lineTo(x, y)
+    }
     g.stroke()
+  }
+  // the pores: short dark dashes along the grain
+  for (let i = 0; i < 2600; i++) {
+    g.fillStyle = `rgba(70,42,18,${0.06 + r() * 0.16})`
+    g.fillRect(r() * 1024, r() * 256, 3 + r() * 9, 0.7)
+  }
+  // light and dark, slowly
+  for (let i = 0; i < 9; i++) {
+    const x = r() * 1024
+    const w = 120 + r() * 260
+    const lg = g.createLinearGradient(x, 0, x + w, 0)
+    const col = r() < 0.5 ? '255,226,180' : '70,40,14'
+    lg.addColorStop(0, `rgba(${col},0)`)
+    lg.addColorStop(0.5, `rgba(${col},0.07)`)
+    lg.addColorStop(1, `rgba(${col},0)`)
+    g.fillStyle = lg
+    g.fillRect(x, 0, w, 256)
+  }
+  return c
+}
+
+/**
+ * The books' picture (2048 x 1024): each one's spine upright (4 px a mm: its cloth, a little darker
+ * to its edges and worn pale at its head and foot, two bands, its title down it, the author at its
+ * foot), a patch of its plain cloth, and one strip of page edges. Returns { canvas, at: [{ spine:
+ * [u0, v0, u1, v1], cloth: [u, v], pages: [u0, v0, u1, v1] }] }.
+ */
+function bookCanvas(books, font) {
+  const W = 2048
+  const H = 1024
+  const c = document.createElement('canvas')
+  c.width = W
+  c.height = H
+  const g = c.getContext('2d')
+  g.fillStyle = '#888'
+  g.fillRect(0, 0, W, H)
+  const r = rng(5)
+  const K = 4
+  const uvOf = (x, y) => [x / W, 1 - y / H]
+  // the page edges: cream, fine lines across the strip's width (sheets), a few darker (signatures)
+  const PX = 1700
+  g.fillStyle = '#e4dccb'
+  g.fillRect(PX, 0, 340, 200)
+  for (let x = PX; x < PX + 340; x += 1) {
+    g.fillStyle = `rgba(120,104,78,${r() < 0.12 ? 0.22 : 0.04 + r() * 0.07})`
+    g.fillRect(x, 0, 1, 200)
+  }
+  const pages = [...uvOf(PX + 4, 196), ...uvOf(PX + 336, 4)]
+  const at = []
+  let x = 0
+  books.forEach(([t, h, , cloth, ink, title, author], i) => {
+    const w = t * K
+    const hh = h * K
+    // the cloth: its colour, darker to the spine's edges (it is a little round), its weave
+    g.fillStyle = cloth
+    g.fillRect(x, 0, w + 44, hh)
+    const sh = g.createLinearGradient(x, 0, x + w, 0)
+    sh.addColorStop(0, 'rgba(0,0,0,0.28)')
+    sh.addColorStop(0.22, 'rgba(0,0,0,0)')
+    sh.addColorStop(0.78, 'rgba(0,0,0,0)')
+    sh.addColorStop(1, 'rgba(0,0,0,0.3)')
+    g.fillStyle = sh
+    g.fillRect(x, 0, w, hh)
+    for (let k = 0; k < w * hh * 0.05; k++) {
+      g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.06)'
+      g.fillRect(x + r() * (w + 44), r() * hh, 1 + r() * 2, 1)
+    }
+    // worn at its head and foot
+    for (const y0 of [0, hh - 14]) {
+      const wg = g.createLinearGradient(0, y0, 0, y0 + 14)
+      wg.addColorStop(y0 ? 1 : 0, 'rgba(255,244,220,0.2)')
+      wg.addColorStop(y0 ? 0 : 1, 'rgba(255,244,220,0)')
+      g.fillStyle = wg
+      g.fillRect(x, y0, w, 14)
+    }
+    // two bands, the title down the spine, the author at its foot
+    g.fillStyle = ink
+    g.globalAlpha = 0.85
+    g.fillRect(x + 4, 50, w - 8, 2.5)
+    g.fillRect(x + 4, hh - 132, w - 8, 2.5)
+    g.save()
+    g.translate(x + w / 2, 84)
+    g.rotate(Math.PI / 2)
+    const serif = i % 2 === 0
+    const size = Math.min(w * 0.5, 46)
+    g.font = `${serif ? 600 : 650} ${size}px ${serif ? "'Iowan Old Style', Palatino, Georgia, serif" : font}`
+    g.textBaseline = 'middle'
+    g.letterSpacing = serif ? '2px' : '0px'
+    const maxW = hh - 84 - 160
+    let tt = title
+    while (g.measureText(tt).width > maxW && tt.length > 3) tt = tt.slice(0, -1)
+    g.fillText(tt, 0, 2)
+    g.restore()
+    g.save()
+    g.translate(x + w / 2, hh - 116)
+    g.rotate(Math.PI / 2)
+    g.font = `500 ${Math.min(w * 0.3, 24)}px ${font}`
+    g.textBaseline = 'middle'
+    g.globalAlpha = 0.7
+    let aa = author
+    while (g.measureText(aa).width > 96 && aa.length > 3) aa = aa.slice(0, -1)
+    g.fillText(aa, 0, 1)
+    g.restore()
+    g.globalAlpha = 1
+    at.push({ spine: [...uvOf(x + 1, hh - 1), ...uvOf(x + w - 1, 1)], cloth: uvOf(x + w + 24, hh / 2), pages })
+    x += w + 48
+  })
+  return { canvas: c, at }
+}
+
+/** A snake plant's blade (128 x 512, its foot at the bottom): two greens in ragged bands across it, a yellow line down each edge. */
+function leafCanvas() {
+  const c = document.createElement('canvas')
+  c.width = 128
+  c.height = 512
+  const g = c.getContext('2d')
+  g.fillStyle = '#5f7f62'
+  g.fillRect(0, 0, 128, 512)
+  const r = rng(23)
+  for (let y = 0; y < 512; ) {
+    const h = 5 + r() * 15
+    g.fillStyle = `rgba(30,62,42,${0.55 + r() * 0.4})`
+    g.beginPath()
+    g.moveTo(0, y)
+    for (let x = 0; x <= 128; x += 8) g.lineTo(x, y + Math.sin(x / 14 + y) * 2.4 + (r() - 0.5) * 3)
+    for (let x = 128; x >= 0; x -= 8) g.lineTo(x, y + h + Math.sin(x / 11 + y * 1.3) * 2.6 + (r() - 0.5) * 3)
+    g.fill()
+    y += h + 5 + r() * 13
+  }
+  // (darker down its middle: the fold)
+  const mid = g.createLinearGradient(0, 0, 128, 0)
+  mid.addColorStop(0, 'rgba(0,0,0,0)')
+  mid.addColorStop(0.5, 'rgba(8,28,16,0.34)')
+  mid.addColorStop(1, 'rgba(0,0,0,0)')
+  g.fillStyle = mid
+  g.fillRect(0, 0, 128, 512)
+  for (const [x0, x1] of [[0, 11], [117, 128]]) {
+    const e = g.createLinearGradient(x0, 0, x1, 0)
+    e.addColorStop(x0 ? 0 : 1, 'rgba(206,190,104,0)')
+    e.addColorStop(x0 ? 1 : 0, 'rgba(206,190,104,0.95)')
+    g.fillStyle = e
+    g.fillRect(x0, 0, 11, 512)
+  }
+  return c
+}
+
+/** A glaze's speckle (128 square, tiling well enough): off-white, a few small iron spots. */
+function speckleCanvas() {
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')
+  g.fillStyle = '#ffffff'
+  g.fillRect(0, 0, 128, 128)
+  const r = rng(77)
+  for (let i = 0; i < 130; i++) {
+    g.fillStyle = `rgba(96,74,52,${0.12 + r() * 0.3})`
+    g.beginPath()
+    g.arc(r() * 128, r() * 128, 0.4 + r() * 1.1, 0, 7)
+    g.fill()
   }
   return c
 }
