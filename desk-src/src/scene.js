@@ -1348,7 +1348,9 @@ export function createScene(container, options = {}) {
     // pole clamped to the desk's back; it shows the laptop's open tab (up close, the live site);
     // plugged into the laptop's left USB-C port through an adapter, by HDMI
     const monitor = createMonitor({ at: new THREE.Vector3(LAYOUT.DESK.monitor[0], ROOM.deskY, LAYOUT.DESK.monitor[2]), yaw: facing(LAYOUT.DESK.monitorTurn), projects: monTabs, font: FONT, shots: siteShots, anisotropy: aniso })
-    monitor.showTab(0)
+    // (it opens on Blinkscope; else the first site)
+    const MON_FIRST = Math.max(0, monTabs.findIndex((t) => t.id === 'blinkscope'))
+    monitor.showTab(MON_FIRST)
     scene.add(monitor.group)
     for (const m of monitor.materials) withEmber(m)
     addObstacle(monitor.group.matrixWorld, [monitor.clamp.hw, 40, monitor.clamp.hd], [monitor.clamp.x, 40, monitor.clamp.z], 3)
@@ -3092,6 +3094,7 @@ export function createScene(container, options = {}) {
       setLamp(true)
       lamp.aimAt(LAMP_AIM0)
       laptop.setTab(0)
+      monitor.showTab(MON_FIRST)
       laptop.scroll(-1e5)
       laptop.setOpen(1)
       shadowDirty = true
