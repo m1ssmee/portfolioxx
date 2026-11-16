@@ -3,8 +3,9 @@
 // against the wall, no room for a clamp behind it). Brushed aluminium, black joints. It
 // shows the projects' sites, a tab each: a strip of tabs (a tap on one opens it), the site's page
 // under it (its screenshot) (up close, the live site itself: scene.js lays it over
-// the page's part of the glass, as for the laptop: flat, so laid halfway into the curve, a little
-// inside the glass, the page's part of the picture black under it).
+// the page's part of the glass, as for the laptop: an iframe is flat, so it lies on the plane of
+// the glass's edges, clipped to the curved glass's outline as the camera sees it and shaded darker
+// to its sides, the page's part of the picture black under it).
 // It is plugged into the laptop: the laptop has only USB-C, so a small aluminium USB-C to HDMI
 // adapter hangs from its left side (a USB-C plug, a short tail, the adapter's block), an HDMI plug
 // in the block, and the HDMI cable over the desk to the pole, up it and along the arm.
@@ -306,19 +307,32 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     screenNormal: (out) => out.set(0, 0, 1).transformDirection(group.matrixWorld),
     /** The page's part of the glass (under the tabs), in the page's own pixels. */
     pageSize: M.page,
-    /** Its corners (world): top left, top right, bottom right, bottom left (out: four vectors). */
+    /**
+     * Its corners (world): top left, top right, bottom right, bottom left (out: four vectors). The
+     * page is flat: these are on the plane through the glass's curved edges (its middle bends away
+     * behind it); pageEdge() gives the curved outline it is clipped to.
+     */
     pageCorners(out) {
-      // (flat, through the curve: half way into it, and a little inside the glass every way, so the
-      // straight page stays on the curved glass as the camera sees it close to square on)
-      const top = CY + GH / 2 - barMM - 2.2
-      const bot = CY - GH / 2 + 2.2
-      const x = GW / 2 - 4
-      const z = 0.4 + sag(x) * 0.5
+      const top = CY + GH / 2 - barMM
+      const bot = CY - GH / 2
+      const x = GW / 2
+      const z = 0.4 + sag(x)
       out[0].set(-x, top, z)
       out[1].set(x, top, z)
       out[2].set(x, bot, z)
       out[3].set(-x, bot, z)
       for (const v of out) v.applyMatrix4(group.matrixWorld)
+      return out
+    },
+    /** The curved glass's page outline (world): n points along its top, left to right, then n along its bottom, right to left. */
+    pageEdge(out, n) {
+      const top = CY + GH / 2 - barMM
+      const bot = CY - GH / 2
+      for (let i = 0; i < 2 * n; i++) {
+        const k = i < n ? i / (n - 1) : 1 - (i - n) / (n - 1)
+        const x = (k - 0.5) * GW
+        out[i].set(x, i < n ? top : bot, 0.4 + sag(x)).applyMatrix4(group.matrixWorld)
+      }
       return out
     },
     /** Its base on the desk (x, z in its frame; half its size), for what stands on the desk. */

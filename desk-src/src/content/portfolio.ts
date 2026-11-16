@@ -3,8 +3,8 @@
 // becomes the page's hidden semantic HTML and the "plain view" page (vite.config.js builds both, so
 // keep this file plain data: no imports). Anything left empty ('' or []) is simply not shown.
 //
-// The page: the headline and lead (from the bio), the projects as cards, each one's write-up,
-// about and contact. (Pod OS, on the player, is the music.)
+// The page: your name, the bio, the projects as a list, each one's write-up, the links.
+// (Pod OS, on the player, is the music.)
 
 export interface Project {
   /** Short, lowercase, no spaces (it names the project's page). */
@@ -33,9 +33,6 @@ export interface Portfolio {
   initials: string
   /** A photo URL ('./media/me.jpg', the file in public/media/), or empty for the initials. */
   photo: string
-  /** The portfolio page's headline (big, short) and the line under it. */
-  headline: string
-  lead: string
   bio: string
   /** Where you are (empty: not shown). */
   basedIn: string
@@ -51,9 +48,7 @@ export const portfolio: Portfolio = {
   role: 'AI engineer · builder',
   initials: 'KP',
   photo: '',
-  headline: 'Software that shows its work.',
-  lead: 'A 3D body that reads your medical reports. A codebase that argues about its own bugs. A rover that finds its way without GPS.',
-  bio: 'I build things that explain themselves: answers that cite their source, and numbers computed rather than guessed. Lately that has meant medical reports pinned to a 3D body, a codebase whose modules argue about who caused the bug, crop disease spotted from a single leaf, and a lunar rover that navigates without GPS.',
+  bio: 'I build software with AI in it, and what I care about most is that it is right: an answer should point to where it came from, and a number should be worked out, not guessed. These are the things I have made lately.',
   basedIn: '',
   projects: [
     {

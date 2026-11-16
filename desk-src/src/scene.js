@@ -71,7 +71,7 @@ const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 2)
 const DOF = 0
 
 const CSS = `
-.cg-root{--ink:#f1efe9;--label:#c9c4ba;--rule:rgba(241,239,233,.36);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.cg-root{--ink:#f1efe9;--label:#c9c4ba;--rule:rgba(241,239,233,.36);--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;position:absolute;inset:0;overflow:hidden;overflow:clip;color:var(--ink);font:500 10.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .cg-poster{position:absolute;left:50%;top:0;height:100%;width:auto;min-width:100%;max-width:none;object-fit:cover;transform:translateX(-50%);pointer-events:none}
 .cg-stage{position:absolute;inset:0;opacity:0;transition:opacity .8s ease}
 .cg-ready .cg-stage{opacity:1}
@@ -144,6 +144,8 @@ const CSS = `
 .cg-site{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none}
 .cg-site iframe{position:absolute;left:0;top:0;border:0;margin:0;background:#fff;transform-origin:0 0;opacity:0;visibility:hidden;pointer-events:auto;transition:opacity .35s ease,visibility 0s .35s}
 .cg-site.on iframe{opacity:1;visibility:visible;transition:opacity .35s ease}
+.cg-site-shade{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;opacity:0;transition:opacity .35s ease;background:linear-gradient(90deg,rgba(0,0,0,.26),rgba(0,0,0,.07) 12%,rgba(255,255,255,.03) 38%,rgba(255,255,255,.05) 50%,rgba(255,255,255,.03) 62%,rgba(0,0,0,.07) 88%,rgba(0,0,0,.26))}
+.cg-site.on.curved .cg-site-shade{opacity:1}
 .cg-touring .cg-site iframe{pointer-events:none}
 .cg-tour{position:absolute;left:50%;bottom:max(112px,calc(env(safe-area-inset-bottom) + 100px));transform:translateX(-50%);z-index:3;box-sizing:border-box;width:min(460px,calc(100% - 40px));padding:16px 18px 12px;border-radius:14px;background:rgba(24,23,22,.93);border:1px solid var(--rule);box-shadow:0 10px 40px rgba(0,0,0,.4)}
 .cg-tour[hidden]{display:none}
@@ -2907,7 +2909,10 @@ export function createScene(container, options = {}) {
     const siteFrame = document.createElement('iframe')
     siteFrame.title = 'Live site'
     siteFrame.referrerPolicy = 'no-referrer'
-    siteEl.appendChild(siteFrame)
+    // (over the curved monitor: a shade darker to its sides, the same shape)
+    const siteShade = document.createElement('div')
+    siteShade.className = 'cg-site-shade'
+    siteEl.append(siteFrame, siteShade)
     stageEl.after(siteEl)
     let siteSrc = ''
     let siteLoaded = false
@@ -2918,6 +2923,14 @@ export function createScene(container, options = {}) {
       siteLoaded = true
       wake()
     })
+    // (a site in the iframe that focuses something of its own, or scrolls itself into view, scrolls
+    // the boxes it sits in: the scene's root and its holder clip, and are put back if anything does)
+    const unscroll = (e) => {
+      const t = e.target
+      if (t && t.nodeType === 1 && (t.scrollTop || t.scrollLeft)) t.scrollTop = t.scrollLeft = 0
+    }
+    listen(root, 'scroll', unscroll, { capture: true })
+    listen(container, 'scroll', unscroll, { capture: true })
     let homePageHtml = ''
     let githubPageHtml = ''
     // (the portfolio asks for a project's site, on the monitor: the camera goes there; or for
@@ -2939,6 +2952,14 @@ export function createScene(container, options = {}) {
     })
     const siteQ = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
     const siteP = new Float64Array(8)
+    const EDGE_N = 24
+    const siteEdge = Array.from({ length: 2 * EDGE_N }, () => new THREE.Vector3())
+    const siteU = new THREE.Vector3()
+    const siteV = new THREE.Vector3()
+    const siteW = new THREE.Vector3()
+    const siteNrm = new THREE.Vector3()
+    const siteRay = new THREE.Vector3()
+    let siteClip = ''
     function updateSite() {
       const on = projOpen ? null : focus.focused === 'laptop' ? laptop : focus.focused === 'monitor' && monitor.signal ? monitor : null
       const p = on === laptop ? lapTabs[laptop.tab] : on === monitor ? monTabs[monitor.tab] : null
@@ -2948,9 +2969,12 @@ export function createScene(container, options = {}) {
         siteOn = on
         siteFrame.width = String(on.pageSize[0])
         siteFrame.height = String(on.pageSize[1])
-        siteFrame.style.width = `${on.pageSize[0]}px`
-        siteFrame.style.height = `${on.pageSize[1]}px`
+        siteFrame.style.width = siteShade.style.width = `${on.pageSize[0]}px`
+        siteFrame.style.height = siteShade.style.height = `${on.pageSize[1]}px`
         siteXf = ''
+        siteClip = ''
+        siteFrame.style.clipPath = siteShade.style.clipPath = ''
+        siteEl.classList.toggle('curved', on === monitor)
       }
       if (url !== siteSrc && (url || !on)) {
         siteSrc = url
@@ -2958,7 +2982,7 @@ export function createScene(container, options = {}) {
         siteFrame.title = url === 'home' ? `${portfolio.name}: portfolio` : url === 'github' ? `${portfolio.name}: GitHub` : url ? `${p.name}: live site` : 'Live site'
         if (url === 'home' || url === 'github') {
           siteFrame.removeAttribute('src')
-          siteFrame.srcdoc = url === 'home' ? homePageHtml || (homePageHtml = homeHtml(portfolio, opts.fontUrl)) : githubPageHtml || (githubPageHtml = githubHtml(portfolio, opts.fontUrl))
+          siteFrame.srcdoc = url === 'home' ? homePageHtml || (homePageHtml = homeHtml(portfolio)) : githubPageHtml || (githubPageHtml = githubHtml(portfolio, opts.fontUrl))
         } else {
           siteFrame.removeAttribute('srcdoc')
           siteFrame.src = url || 'about:blank'
@@ -2996,7 +3020,26 @@ export function createScene(container, options = {}) {
       const [W, H] = siteOn.pageSize
       const m = [(x1 - x0 + g * x1) / W, (y1 - y0 + g * y1) / W, 0, g / W, (x3 - x0 + h * x3) / H, (y3 - y0 + h * y3) / H, 0, h / H, 0, 0, 1, 0, x0, y0, 0, 1]
       const xf = `matrix3d(${m.map((x) => +x.toFixed(9)).join(',')})`
-      if (xf !== siteXf) siteFrame.style.transform = siteXf = xf
+      if (xf !== siteXf) siteFrame.style.transform = siteShade.style.transform = siteXf = xf
+      // (the curved monitor: each point of its glass's outline seen along the camera's ray onto the
+      // page's plane, in the page's own pixels: the page clipped to it)
+      if (siteOn === monitor) {
+        monitor.pageEdge(siteEdge, EDGE_N)
+        // (the corners again, in the world: siteQ went to the screen above)
+        siteOn.pageCorners(siteQ)
+        siteU.subVectors(siteQ[1], siteQ[0])
+        siteV.subVectors(siteQ[3], siteQ[0])
+        siteNrm.crossVectors(siteU, siteV).normalize()
+        const pts = []
+        for (const e of siteEdge) {
+          siteRay.subVectors(e, camera.position)
+          const t = siteNrm.dot(siteW.subVectors(siteQ[0], camera.position)) / siteNrm.dot(siteRay)
+          siteW.copy(camera.position).addScaledVector(siteRay, t).sub(siteQ[0])
+          pts.push(`${((siteW.dot(siteU) / siteU.lengthSq()) * W).toFixed(1)}px ${((siteW.dot(siteV) / siteV.lengthSq()) * H).toFixed(1)}px`)
+        }
+        const clip = `polygon(${pts.join(',')})`
+        if (clip !== siteClip) siteFrame.style.clipPath = siteShade.style.clipPath = siteClip = clip
+      }
     }
     function updateLive() {
       const still = !focus.moving && !projOpen

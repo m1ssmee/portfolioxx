@@ -4,147 +4,97 @@
 //   { desk: 'site', id }  show that project's site on the monitor
 //   { desk: 'key', key }  a key the desk wants (Escape: step back from the laptop)
 // From across the room the screen shows laptopScreen.js's drawings of the same pages.
-//   homeHtml: the portfolio. The headline, the work as an index (each opens its write-up: what it
-//             is, what was built, the stack, what was hard, the ways in), about and contact.
+//   homeHtml: the portfolio, a plain page: the name, the bio, the links, the projects as a list
+//             (each opens its write-up: what it is, what was built, what was hard, the stack, the
+//             ways in).
 //   githubHtml: the GitHub profile's repositories (the projects' own, at once; the live list from
 //             GitHub's API when it answers).
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
-const two = (n) => String(n).padStart(2, '0')
 
 /** Which projects are sites the monitor shows (a live site, or one run locally). */
 export const isSite = (p) => !!(p.live || p.local)
 /** The GitHub user from the profile link. */
 export const githubUser = (C) => (C.links.github || '').replace(/\/+$/, '').split('/').pop() || ''
 
-const ARROW = '<svg class="ar" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 const fontFace = (fontUrl) => (fontUrl ? `@font-face{font-family:Inter;src:url(${JSON.stringify(fontUrl)});font-weight:100 900;font-display:block}` : '')
 const ESC_SCRIPT = `document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !window.__back?.()) parent.postMessage({ desk: 'key', key: 'Escape' }, '*') })`
 
-/** The portfolio, one HTML document. fontUrl: Inter's file (a page's fonts are its own). */
-export function homeHtml(C, fontUrl) {
+/** The page's serif (system faces: no download), and its numbers' figures. */
+export const SERIF = "'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif"
+
+/** The portfolio, one HTML document: a plain page, one column, in the system's serif. */
+export function homeHtml(C) {
   const P = C.projects
-  const row = (p, i) => `
-    <button class="row" data-open="${esc(p.id)}">
-      <span class="r-n">${two(i + 1)}</span>
-      <span class="r-t">${esc(p.name)}</span>
-      <span class="r-l">${esc(p.oneLiner)}</span>
-      <span class="r-s">${p.stack.slice(0, 3).map(esc).join(' · ')}</span>
-      <span class="r-y">${isSite(p) ? `<i class="dot"></i>${p.live ? 'Live' : 'Site'}` : 'Code'}</span>
-      <span class="r-go" aria-hidden="true">→</span>
-    </button>`
+  const ways = (p) =>
+    [isSite(p) && `<button class="a" data-site="${esc(p.id)}">see it on the monitor</button>`, p.live && `<a href="${esc(p.live)}" target="_blank" rel="noopener">the site</a>`, p.github && `<a href="${esc(p.github)}" target="_blank" rel="noopener">the code</a>`]
+      .filter(Boolean)
+      .join(' · ')
+  const item = (p) => `
+    <li><button class="a name" data-open="${esc(p.id)}">${esc(p.name)}</button> <span class="yr">${esc(p.year)}</span>
+      <p>${esc(p.oneLiner)}</p></li>`
   const detail = (p, i) => `
-    <article class="view detail" data-view="${esc(p.id)}" hidden>
-      <button class="back" data-back>← Work</button>
-      <p class="k">${two(i + 1)} / ${two(P.length)} · ${esc(p.year)}${p.live ? ' · <b>Live</b>' : ''}</p>
-      <h1 class="d-t">${esc(p.name)}</h1>
-      <p class="lead">${esc(p.oneLiner)}</p>
-      <div class="btns">
-        ${isSite(p) ? `<button class="btn solid" data-site="${esc(p.id)}">See it on the monitor</button>` : ''}
-        ${p.live ? `<a class="btn" href="${esc(p.live)}" target="_blank" rel="noopener">Live site ${ARROW}</a>` : ''}
-        ${p.github ? `<a class="btn${isSite(p) ? '' : ' solid'}" href="${esc(p.github)}" target="_blank" rel="noopener">Code ${ARROW}</a>` : ''}
-      </div>
-      <div class="cols">
-        ${p.whatItIs ? `<section><h2 class="k">What it is</h2><p>${esc(p.whatItIs)}</p></section>` : ''}
-        ${p.whatIBuilt ? `<section><h2 class="k">What I built</h2><p>${esc(p.whatIBuilt)}</p></section>` : ''}
-      </div>
-      ${p.stack.length ? `<section class="sec"><h2 class="k">Stack</h2><div class="chips">${p.stack.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div></section>` : ''}
-      ${p.challenges.length ? `<section class="sec"><h2 class="k">Under the hood</h2><ol class="hard">${p.challenges.map((c, j) => `<li><span class="k">${two(j + 1)}</span><p>${esc(c)}</p></li>`).join('')}</ol></section>` : ''}
-      <nav class="pager">
-        ${i > 0 ? `<button class="pg" data-open="${esc(P[i - 1].id)}"><span class="k">← Previous</span>${esc(P[i - 1].name)}</button>` : '<span></span>'}
-        ${i < P.length - 1 ? `<button class="pg nx" data-open="${esc(P[i + 1].id)}"><span class="k">Next →</span>${esc(P[i + 1].name)}</button>` : '<span></span>'}
-      </nav>
+    <article class="view" data-view="${esc(p.id)}" hidden>
+      <p class="nav"><button class="a" data-back>← all projects</button></p>
+      <h1>${esc(p.name)}</h1>
+      <p class="sub">${esc(p.oneLiner)}</p>
+      <p class="ways">${ways(p)}</p>
+      ${p.whatItIs ? `<h2>What it is</h2><p>${esc(p.whatItIs)}</p>` : ''}
+      ${p.whatIBuilt ? `<h2>What I built</h2><p>${esc(p.whatIBuilt)}</p>` : ''}
+      ${p.challenges.length ? `<h2>What was hard</h2><ul>${p.challenges.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
+      ${p.stack.length ? `<p class="built">Built with ${esc(p.stack.slice(0, -1).join(', '))}${p.stack.length > 1 ? ' and ' : ''}${esc(p.stack[p.stack.length - 1])}. ${esc(p.year)}.</p>` : ''}
+      <p class="nav pn">${i > 0 ? `<button class="a" data-open="${esc(P[i - 1].id)}">← ${esc(P[i - 1].name)}</button>` : '<span></span>'}${i < P.length - 1 ? `<button class="a" data-open="${esc(P[i + 1].id)}">${esc(P[i + 1].name)} →</button>` : ''}</p>
     </article>`
-  const links = [C.links.github && ['GitHub', C.links.github], C.links.linkedin && ['LinkedIn', C.links.linkedin], C.links.x && ['X', C.links.x]].filter(Boolean)
+  const links = [C.email && ['email', `mailto:${C.email}`], C.links.github && ['GitHub', C.links.github], C.links.linkedin && ['LinkedIn', C.links.linkedin], C.links.x && ['X', C.links.x]].filter(Boolean)
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(C.name)}</title>
 <style>
-${fontFace(fontUrl)}
-:root{--bg:#0e0f11;--bg2:#15161a;--ink:#ece8e1;--sub:#a29d95;--faint:#6d6a65;--line:#25262b;--amber:#f0b46a;--green:#7fd39a}
 *{box-sizing:border-box;margin:0;padding:0}
-html{background:var(--bg);color:var(--ink);font:400 17px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
-::selection{background:var(--amber);color:#111}
-button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left}
-a{color:inherit;text-decoration:none}
-.wrap{max-width:1200px;margin:0 auto;padding:0 64px}
-.k{font:500 12px/1.4 ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
-.k b{color:var(--green);font-weight:500}
-header{position:sticky;top:0;z-index:3;background:rgba(14,15,17,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-header .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
-.brand{font-weight:650;font-size:17px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
-.brand i{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 12px var(--amber)}
-nav.top{display:flex;gap:30px}
-nav.top>*{font:500 12.5px/1 ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);padding:8px 0;transition:color .15s}
-nav.top>*:hover{color:var(--ink)}
-.hero{padding:96px 0 84px;position:relative}
-.hero::after{content:'';position:absolute;right:-40px;top:40px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(240,180,106,.13),transparent 65%);pointer-events:none}
-.hero h1{font-size:92px;line-height:.98;letter-spacing:-.05em;font-weight:750;max-width:980px;margin-top:22px}
-.hero h1 em{font-style:normal;color:var(--amber)}
-.lead{font-size:22px;line-height:1.5;color:var(--sub);max-width:760px;margin-top:30px;letter-spacing:-.005em}
-.sech{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:16px}
-.list{margin-bottom:96px}
-.row{display:grid;grid-template-columns:52px 230px 1fr 230px 64px 24px;align-items:baseline;gap:20px;width:100%;padding:24px 8px;border-bottom:1px solid var(--line);transition:background .18s,padding .18s}
-.row:hover{background:var(--bg2);padding-left:16px}
-.r-n{font:500 13px ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:var(--faint)}
-.r-t{font-size:26px;font-weight:650;letter-spacing:-.025em;line-height:1.2}
-.r-l{font-size:15.5px;line-height:1.5;color:var(--sub)}
-.r-s,.r-y{font:500 12px/1.5 ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:var(--faint);letter-spacing:.03em}
-.r-y{display:flex;align-items:center;gap:7px;text-transform:uppercase}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
-.r-go{color:var(--faint);transition:color .18s,transform .18s}
-.row:hover .r-go{color:var(--amber);transform:translateX(4px)}
-.about{display:grid;grid-template-columns:240px 1fr;gap:40px;padding:56px 0 96px;border-top:1px solid var(--line)}
-.about p{font-size:22px;line-height:1.6;color:var(--ink);letter-spacing:-.01em;max-width:820px}
-.contact{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}
-.btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:34px}
-.btn{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 20px;border-radius:999px;border:1px solid #393a40;font-size:15px;font-weight:550;transition:background .15s,border-color .15s}
-.btn:hover{background:#1c1d21;border-color:#4a4b52}
-.btn.solid{background:var(--amber);color:#16120c;border-color:var(--amber)}
-.btn.solid:hover{background:#f6c487}
-.detail{padding:44px 0 80px}
-.back{font:500 12.5px ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);margin-bottom:46px}
-.d-t{font-size:80px;line-height:1;letter-spacing:-.05em;font-weight:750;margin-top:16px}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:56px;margin-top:64px;padding-top:36px;border-top:1px solid var(--line)}
-.cols h2,.sec h2{margin-bottom:14px}
-.cols p{font-size:17px;line-height:1.75;color:#cfcac2}
-.sec{margin-top:52px}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{font:500 12.5px/1 ui-monospace,'SF Mono',Menlo,Consolas,monospace;padding:9px 12px;border-radius:999px;border:1px solid var(--line);color:#cfcac2}
-.hard{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.hard li{display:grid;grid-template-columns:34px 1fr;background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:22px 24px}
-.hard p{font-size:15.5px;line-height:1.65;color:#cfcac2}
-.pager{display:flex;justify-content:space-between;gap:16px;margin-top:72px;padding-top:28px;border-top:1px solid var(--line)}
-.pg{display:flex;flex-direction:column;gap:6px;font-size:24px;font-weight:650;letter-spacing:-.02em;transition:color .15s}
-.pg:hover{color:var(--amber)}
-.pg.nx{text-align:right;align-items:flex-end}
-footer{padding:26px 0 44px;border-top:1px solid var(--line);display:flex;justify-content:space-between}
-:focus-visible{outline:2px solid var(--amber);outline-offset:4px;border-radius:6px}
+html{background:#faf8f4;color:#1f1e1c;font:400 21px/1.62 ${SERIF};-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+main{max-width:720px;margin:0 auto;padding:84px 32px 96px}
+h1{font-size:36px;line-height:1.2;font-weight:700;letter-spacing:-.005em}
+.role{color:#6f6a62;font-style:italic;margin-top:2px}
+.intro{margin-top:28px}
+h2{font-size:21px;font-weight:700;margin:44px 0 10px}
+a,.a{color:#1f1e1c;text-decoration:underline;text-decoration-color:#b9b2a6;text-underline-offset:3px;text-decoration-thickness:1px;font:inherit;background:none;border:0;cursor:pointer;padding:0}
+a:hover,.a:hover{text-decoration-color:#1f1e1c}
+.links{margin-top:18px;color:#6f6a62}
+ul.work{list-style:none;margin-top:6px}
+ul.work li{padding:16px 0;border-top:1px solid #e7e2d9}
+ul.work li:last-child{border-bottom:1px solid #e7e2d9}
+.name{font-weight:700}
+.yr{color:#8d877d;font-size:17px;margin-left:6px}
+ul.work p{color:#4b4740;margin-top:2px}
+.nav{font-size:18px;color:#6f6a62}
+.view>h1{margin-top:36px}
+.sub{font-style:italic;color:#4b4740;margin-top:6px}
+.ways{margin-top:14px;font-size:18px;color:#6f6a62}
+article ul{padding-left:22px}
+article ul li{margin-top:8px}
+.built{margin-top:40px;color:#6f6a62;font-size:18px}
+.pn{display:flex;justify-content:space-between;margin-top:56px;padding-top:18px;border-top:1px solid #e7e2d9}
+footer{margin-top:72px;color:#8d877d;font-size:16px}
+:focus-visible{outline:2px solid #1f1e1c;outline-offset:3px}
 </style></head><body>
-<header><div class="wrap"><span class="brand"><i></i>${esc(C.name)}</span>
-<nav class="top"><button data-go="work">Work</button><button data-go="about">About</button>${C.links.github ? `<a href="${esc(C.links.github)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</nav></div></header>
-<main class="wrap">
+<main>
   <div class="view" data-view="home">
-    <section class="hero"><p class="k">${esc(C.role)}</p><h1>${esc(C.headline || C.name).replace(/(\S+\s+\S+\.?)$/, '<em>$1</em>')}</h1>${C.lead ? `<p class="lead">${esc(C.lead)}</p>` : ''}</section>
-    <section class="list" id="work"><div class="sech"><span class="k">Selected work</span><span class="k">${two(P.length)}</span></div>${P.map(row).join('')}</section>
-    <section class="about" id="about"><span class="k">About</span><div><p>${esc(C.bio)}</p>
-      <div class="contact">${C.email ? `<a class="btn solid" href="mailto:${esc(C.email)}">${esc(C.email)}</a>` : ''}${links.map(([t, u]) => `<a class="btn" href="${esc(u)}" target="_blank" rel="noopener">${esc(t)} ${ARROW}</a>`).join('')}</div></div></section>
+    <h1>${esc(C.name)}</h1>
+    <p class="role">${esc(C.role.replace(/\s*·\s*builder$/i, ''))}</p>
+    <p class="intro">${esc(C.bio)}</p>
+    <p class="links">${links.map(([t, u]) => `<a href="${esc(u)}"${u.startsWith('mailto') ? '' : ' target="_blank" rel="noopener"'}>${esc(t)}</a>`).join(' · ')}</p>
+    <h2>Projects</h2>
+    <ul class="work">${P.map(item).join('')}</ul>
+    <footer>${new Date().getFullYear()}. The sites run on the monitor behind this laptop.</footer>
   </div>
   ${P.map(detail).join('')}
-  <footer><span class="k">© ${new Date().getFullYear()} ${esc(C.name)}</span><span class="k">The sites run on the monitor behind</span></footer>
 </main>
 <script>
   const views = [...document.querySelectorAll('.view')]
-  const show = (name, anchor) => {
-    for (const v of views) v.hidden = v.dataset.view !== name
-    if (anchor) document.getElementById(anchor)?.scrollIntoView({ block: 'start' })
-    else window.scrollTo(0, 0)
-  }
-  // (Escape on a project: back to the work; on the list, the desk's own)
-  window.__back = () => { const v = views.find((x) => !x.hidden); if (!v || v.dataset.view === 'home') return false; show('home', 'work'); return true }
+  const show = (name) => { for (const v of views) v.hidden = v.dataset.view !== name; window.scrollTo(0, 0) }
+  window.__back = () => { const v = views.find((x) => !x.hidden); if (!v || v.dataset.view === 'home') return false; show('home'); return true }
   document.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-open],[data-back],[data-go],[data-site]')
+    const t = e.target.closest('[data-open],[data-back],[data-site]')
     if (!t) return
     if (t.dataset.open) show(t.dataset.open)
-    else if (t.hasAttribute('data-back')) show('home', 'work')
-    else if (t.dataset.go) show('home', t.dataset.go)
+    else if (t.hasAttribute('data-back')) show('home')
     else if (t.dataset.site) parent.postMessage({ desk: 'site', id: t.dataset.site }, '*')
   })
   ${ESC_SCRIPT}

@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1c1a18" />
     <style>
       html,body{height:100%;margin:0;background:#1c1a18 linear-gradient(180deg,#24211e,#171513) fixed}
-      #desk{position:fixed;inset:0;overflow:hidden;background:linear-gradient(180deg,#24211e,#171513)}
+      #desk{position:fixed;inset:0;overflow:hidden;overflow:clip;background:linear-gradient(180deg,#24211e,#171513)}
       /* the loader: the scene's own light grey-blue, a faint grain, an ember, one sentence, one line */
       .ld{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:linear-gradient(180deg,#24211e,#171513);color:#bdb6aa;font:400 11.5px/1.6 ui-monospace,'SF Mono',Menlo,Consolas,monospace;transition:opacity .9s ease}
       .ld::before{content:'';position:absolute;inset:-60px;opacity:.06;mix-blend-mode:screen;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");animation:grain .9s steps(5) infinite}

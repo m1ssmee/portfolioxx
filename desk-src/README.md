@@ -230,17 +230,17 @@ line, and becomes the page's hidden semantic HTML, for search engines and screen
 `vite.config.js` from `src/content/pages.js`).
 
 The laptop holds the portfolio and the GitHub profile, two tabs, nothing else
-(`src/content/homePage.js`). The portfolio: the headline and lead (`headline`, `lead` in
-`portfolio.ts`; the headline's last two words in amber), the work as an index, each row opening the
-project's write-up (what it is, what I built, the stack, what was hard, its live site, its code, the
-previous and next project), then about and contact. "See it on the monitor" takes the view to the
-monitor with that site on it. The GitHub tab lists the repositories: those the portfolio links to
+(`src/content/homePage.js`). The portfolio is a plain page, one serif column: the name, the role,
+the bio, the links, the projects as a list, each opening its write-up (what it is, what I built,
+what was hard, what it is built with, its ways in, the previous and next project). "see it on the
+monitor" takes the view to the monitor with that site on it. The GitHub tab lists the repositories: those the portfolio links to
 at once, then the profile's own list from GitHub's API when it answers. Up close each is a real
 page laid over the screen; from across the room `laptopScreen.js` draws the same layouts
 (`homePage`, `githubPage` there).
 
 The monitor shows only the sites (the projects with a `live` or a `local` address): a tab each, the
-live site itself up close, the screenshot otherwise (`src/assets/sites/<id>.webp`; Meshh, run only
+live site itself up close (an iframe is flat: it lies on the plane of the glass's edges, clipped to
+the curved glass as the camera sees it, shaded darker to its sides), the screenshot otherwise (`src/assets/sites/<id>.webp`; Meshh, run only
 locally, is its screenshot).
 
 Pod OS is the music now, one screen: what plays (its time, previous, play or pause, next), a hint
