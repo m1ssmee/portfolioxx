@@ -1284,6 +1284,14 @@ export function createMusic(ctx, destination) {
       const i = view().i
       go(api.time > 3 ? i : (i + TRACKS.length - 1) % TRACKS.length, 0)
     },
+    /** Track i, from its start (playing on if it was playing). */
+    select(i) {
+      go(clamp(Math.round(+i || 0), 0, TRACKS.length - 1), 0)
+    },
+    /** Every track's { index, title, artist, duration (s) }. */
+    get tracks() {
+      return TRACKS.map((t) => t.info)
+    },
     /** Jump to `seconds` into the current track. */
     seek(seconds) {
       const i = view().i

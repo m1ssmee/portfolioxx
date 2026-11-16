@@ -406,3 +406,106 @@
 .pos.pos-quiet :active {
   transform: none !important;
 }
+
+/* the music: what plays now, its keys, the songs */
+.pos-np {
+  padding: 12px 14px 10px;
+  border-radius: 16px;
+  background: var(--tile);
+}
+.pos-np-t {
+  font-size: 17px;
+  line-height: 22px;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pos-bar {
+  height: 4px;
+  margin: 10px 0 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.pos-bar-f {
+  display: block;
+  height: 4px;
+  width: 0;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.pos-keys {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 4px;
+}
+.pos-key {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--text);
+  transition: transform 120ms ease-out, background-color 120ms ease-out;
+}
+.pos-key .ic {
+  width: 22px;
+  height: 22px;
+}
+.pos-key-main {
+  width: 48px;
+  height: 48px;
+  background: var(--bg);
+}
+.pos-key-main .ic {
+  width: 26px;
+  height: 26px;
+}
+.pos-key:active {
+  transform: scale(0.94);
+  background: var(--press);
+}
+.pos-hint:empty {
+  display: none;
+}
+.pos-hint {
+  margin-top: 6px;
+  text-align: center;
+}
+.pos-songs-h {
+  margin-top: 14px;
+}
+.pos-song {
+  padding: 9px 12px;
+}
+.pos-song .pos-row {
+  align-items: center;
+  justify-content: flex-start;
+}
+.pos-song-n {
+  width: 16px;
+  font-size: 12px;
+}
+.pos-song-on {
+  width: 16px;
+  color: var(--accent);
+  display: grid;
+}
+.pos-song-on[hidden],
+.pos-song-n[hidden] {
+  display: none;
+}
+.pos-song-t {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pos-song-cur .pos-song-t {
+  font-weight: 600;
+  color: var(--accent);
+}

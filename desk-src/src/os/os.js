@@ -1,9 +1,11 @@
 // Pod OS: the player's own operating system, a small portfolio. A DOM app (360 x 383 logical px, the
 // glass's shape) that is both what the visitor uses up close (the DOM itself, laid exactly over the 3D
 // screen in focus mode) and, from across the desk, the screen's texture (paint.js paints that same
-// DOM). One state, one layout: the two can never disagree. Three screens: the projects list (home), a
-// project's page, About & contact.
-//   createPodOS({ content, audio, canvas }) -> { el, canvas, ... } (see the API at the end)
+// DOM). One state, one layout: the two can never disagree. One screen: the music. What plays now (its
+// time, the keys: previous, play or pause, next), a hint when nothing can be heard, and the songs (a
+// tap on one plays it). The projects are on the laptop.
+//   createPodOS({ content, audio, canvas, wantSound }) -> { el, canvas, ... } (see the API at the end)
+//   wantSound(): the sound switched on (a song asked for with the sound off)
 // The texture holds the colours exactly as the page shows them; the scene's shader undoes its tone
 // mapping for them (scene.js), so the lit glass and the DOM agree.
 import css from './os.css?inline'
@@ -11,11 +13,12 @@ import { iconSprite, icon } from './icons.js'
 import { THEMES, wallpaperTile } from './theme.js'
 import { paintDom, paintGlass } from './paint.js'
 import { OS_W, OS_H, TEX_W, TEX_H, GLASS_R, BEZEL } from './size.js'
+import { ARTIST, TRACKS } from '../core/tracks.js'
 
 export { OS_W, OS_H, TEX_W, TEX_H }
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
-export function createPodOS({ content: C, audio, canvas: into = null }) {
+export function createPodOS({ audio, canvas: into = null, wantSound = () => {} }) {
   // ---- the root, its style, the icon sprite
   const style = document.createElement('style')
   style.textContent = css
@@ -38,7 +41,7 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
   const motionQ = matchMedia('(prefers-reduced-motion: reduce)')
   const st = {
     power: 'asleep', // asleep | awake
-    view: 'home', // home | about | project:<id>
+    view: 'home', // (the one screen)
     theme: 'light',
     reduced: motionQ.matches,
     mode: 'texture', // texture | dom
@@ -57,45 +60,31 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
   }
   motionQ.addEventListener('change', onMotion)
 
-  // ---- the markup: the status bar, the projects list, each project's page, About & contact
-  const P = C.projects
-  const tag = (t) => `<span class="pos-tag">${esc(t)}</span>`
-  const backBtn = `<button class="pos-back" data-act="back" aria-label="Back">${icon('back', 20, 'ic')}</button>`
-  const page = (id, title, body) => `<section class="pos-view" data-view="${esc(id)}" hidden aria-label="${esc(title)}"><div class="pos-head">${backBtn}<h1 class="pos-title">${esc(title)}</h1></div><div class="pos-body">${body}</div></section>`
-  const card = (p) =>
-    `<button class="pos-card" data-act="project" data-id="${esc(p.id)}"><span class="pos-row"><span class="pos-strong">${esc(p.name)}</span><span class="sm mute num">${esc(p.year)}</span></span><span class="sm mute" style="display:block;margin-top:2px">${esc(p.oneLiner)}</span><span class="pos-tags">${p.stack.map(tag).join('')}</span></button>`
-  const link = (url, text) => `<a class="pos-btn" href="${esc(url)}" target="_blank" rel="noopener">${icon('out', 16, 'ic')}<span>${esc(text)}</span></a>`
-  const project = (p) => {
-    // (its pictures, if it has any: none, no gallery)
-    const shots = p.screenshots.map((s, i) => `<span class="pos-shot" data-shot="${i}"><img src="${esc(s)}" alt="${esc(p.name)}, screenshot ${i + 1}" decoding="async"></span>`).join('')
-    const links = [p.github && link(p.github, 'GitHub'), p.live && link(p.live, 'Live demo')].filter(Boolean).join('')
-    return page(
-      `project:${p.id}`,
-      p.name,
-      `${shots ? `<div class="pos-shots" role="list">${shots}</div>` : ''}
-      <div class="pos-sec" style="margin-top:${shots ? 14 : 4}px"><h2 class="pos-h">What it is</h2><p>${esc(p.whatItIs)}</p></div>
-      <div class="pos-sec"><h2 class="pos-h">What I built</h2><p>${esc(p.whatIBuilt)}</p></div>
-      <div class="pos-sec"><h2 class="pos-h">Stack</h2><div class="pos-tags">${p.stack.map(tag).join('')}</div></div>
-      <div class="pos-sec"><h2 class="pos-h">Challenges</h2><ul>${p.challenges.map((c) => `<li class="pos-li"><i class="pos-li-b"></i>${esc(c)}</li>`).join('')}</ul></div>
-      ${links ? `<div class="pos-sec"><div class="pos-btns">${links}</div></div>` : ''}`,
-    )
-  }
-  const avatar = C.photo ? `<img src="${esc(C.photo)}" alt="${esc(C.name)}">` : `<span>${esc(C.initials)}</span>`
+  // ---- the markup: the status bar, what plays now and its keys, the songs
+  const mmss = (s) => (s >= 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '–:––')
+  const song = (t, i) =>
+    `<button class="pos-card pos-song" data-act="song" data-i="${i}" aria-label="Play ${esc(t)}"><span class="pos-row"><span class="pos-song-n num mute">${i + 1}</span><span class="pos-song-t">${esc(t)}</span><span class="pos-song-on" hidden>${icon('bars', 16, 'ic')}</span><span class="sm mute num pos-song-d"></span></span></button>`
   el.innerHTML = `
     <div class="pos-status" aria-hidden="true"><span class="pos-st-np" hidden>${icon('bars', 14, 'ic')}</span><span class="pos-st-buds" hidden>${icon('buds', 14, 'ic')}</span><span class="pos-st-time num"></span></div>
-    <section class="pos-view" data-view="home" hidden aria-label="Projects">
-      <div class="pos-head pos-head-home"><h1 class="pos-title">Projects</h1><button class="pos-btn" data-act="about">About</button></div>
-      <div class="pos-body">${P.map(card).join('')}</div>
+    <section class="pos-view" data-view="home" hidden aria-label="Music">
+      <div class="pos-head pos-head-home"><h1 class="pos-title">Music</h1><span class="sm mute">${esc(ARTIST)}</span></div>
+      <div class="pos-body">
+        <div class="pos-np" aria-live="polite">
+          <p class="sm mute pos-np-k">Now playing</p>
+          <p class="pos-strong pos-np-t">${esc(TRACKS[0])}</p>
+          <div class="pos-bar" aria-hidden="true"><i class="pos-bar-f"></i></div>
+          <div class="pos-row sm mute num"><span class="pos-np-at">0:00</span><span class="pos-np-len">–:––</span></div>
+          <div class="pos-keys">
+            <button class="pos-key" data-act="prev" aria-label="Previous song">${icon('prev', 22, 'ic')}</button>
+            <button class="pos-key pos-key-main" data-act="play" aria-label="Play"><span class="pos-k-play">${icon('play', 26, 'ic')}</span><span class="pos-k-pause" hidden>${icon('pause', 26, 'ic')}</span></button>
+            <button class="pos-key" data-act="next" aria-label="Next song">${icon('next', 22, 'ic')}</button>
+          </div>
+          <p class="sm pos-accent pos-hint"></p>
+        </div>
+        <h2 class="pos-h pos-songs-h">Songs</h2>
+        ${TRACKS.map(song).join('')}
+      </div>
     </section>
-    ${P.map(project).join('')}
-    ${page(
-      'about',
-      'About & contact',
-      `<div class="pos-me"><div class="pos-avatar">${avatar}</div><div><p class="pos-strong">${esc(C.name)}</p><p class="sm mute">${esc(C.role)}</p>${C.basedIn ? `<p class="sm mute">${esc(C.basedIn)}</p>` : ''}</div></div>
-      <div class="pos-sec" style="margin-top:14px"><p>${esc(C.bio)}</p></div>
-      <div class="pos-sec"><h2 class="pos-h">Contact</h2>${C.email ? `<div class="pos-mail-row"><span class="pos-mail">${esc(C.email)}</span><button class="pos-btn" data-act="copy" aria-label="Copy email address">${icon('copy', 16, 'ic')}<span class="pos-copy-l">Copy</span></button></div><p class="sm pos-accent pos-copied" aria-live="polite"></p>` : ''}
-      <div class="pos-btns"${C.email ? ' style="margin-top:10px"' : ''}>${[C.links.github && link(C.links.github, 'GitHub'), C.links.linkedin && link(C.links.linkedin, 'LinkedIn'), C.links.x && link(C.links.x, 'X')].filter(Boolean).join('')}</div></div>`,
-    )}
     <i class="pos-cam" aria-hidden="true"><i></i></i>
     <div class="pos-sleep" data-paint="skip"></div>
     <div class="pos-glass" data-paint="skip" aria-hidden="true"></div>`
@@ -199,6 +188,61 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
     }
   }
   audio?.onChange?.(syncStatus)
+  // what plays now: its title, time and length, the play key, the song marked in the list, the hint
+  const np = { i: -1, at: -2, len: -2, on: null, hint: null, lens: false }
+  const setText = (sel, t) => {
+    const n = $(sel)
+    if (n.textContent !== t) {
+      n.textContent = t
+      dirty()
+    }
+  }
+  function syncMusic() {
+    const m = audio?.music
+    const tr = m ? m.track : { index: 0, title: TRACKS[0], duration: -1 }
+    const playing = !!audio?.playing && !!audio?.on
+    if (m && !np.lens) {
+      np.lens = true
+      m.tracks.forEach((t, i) => {
+        const d = el.querySelectorAll('.pos-song-d')[i]
+        if (d) d.textContent = mmss(t.duration)
+      })
+      dirty()
+    }
+    if (tr.index !== np.i) {
+      np.i = tr.index
+      setText('.pos-np-t', tr.title)
+      el.querySelectorAll('.pos-song').forEach((b, i) => {
+        b.classList.toggle('pos-song-cur', i === tr.index)
+        b.querySelector('.pos-song-on').hidden = i !== tr.index
+        b.querySelector('.pos-song-n').hidden = i === tr.index
+      })
+      dirty()
+    }
+    const at = m ? Math.floor(m.time) : 0
+    const len = tr.duration
+    if (at !== np.at || len !== np.len) {
+      np.at = at
+      np.len = len
+      setText('.pos-np-at', mmss(at))
+      setText('.pos-np-len', mmss(len))
+      $('.pos-bar-f').style.width = `${len > 0 ? Math.min(100, (100 * at) / len).toFixed(2) : 0}%`
+      dirty()
+    }
+    if (playing !== np.on) {
+      np.on = playing
+      $('.pos-k-play').hidden = playing
+      $('.pos-k-pause').hidden = !playing
+      $('[data-act="play"]').setAttribute('aria-label', playing ? 'Pause' : 'Play')
+      setText('.pos-np-k', playing ? 'Now playing' : 'Paused')
+      dirty()
+    }
+    const hint = !audio?.on ? 'The sound is off: pick a song to turn it on.' : !audio?.plugged ? 'Plug the earbuds in to hear it.' : ''
+    if (hint !== np.hint) {
+      np.hint = hint
+      setText('.pos-hint', hint)
+    }
+  }
 
   // ---- navigation: home, a project's page or About & contact, and back
   const tick = () => {
@@ -221,78 +265,31 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
   }
   window.addEventListener('keydown', onKeyAny, true)
   window.addEventListener('pointerdown', onPointerAny, true)
-  let cameFrom = null // (the card or button a page was opened from: back returns the focus there)
-  function go(view, fromEl) {
-    if (st.power !== 'awake' || !views.has(view) || st.view === view) return false
-    let from = {}
-    if (fromEl) {
-      const r = fromEl.getBoundingClientRect()
-      const o = el.getBoundingClientRect()
-      const k = o.width / OS_W
-      from = { x: (r.left + r.width / 2 - o.left) / k, y: (r.top + r.height / 2 - o.top) / k }
-    }
-    cameFrom = fromEl ? (fromEl.dataset.act === 'project' ? `[data-act="project"][data-id="${fromEl.dataset.id}"]` : `[data-act="${fromEl.dataset.act}"]`) : null
-    st.view = view
-    render(from)
-    tick()
-    focusFirst()
-    return true
-  }
-  const openProject = (id, fromEl) => P.some((p) => p.id === id) && go(`project:${id}`, fromEl || el.querySelector(`[data-act="project"][data-id="${CSS.escape(id)}"]`))
-  const openAbout = (fromEl) => go('about', fromEl || $('[data-act="about"]'))
-  /** Back to the projects list; false there (the scene then leaves the player). */
+  /** One screen: nothing to go back to (false: the scene then leaves the player). */
   function back() {
-    if (st.power !== 'awake' || st.view === 'home') return false
-    st.view = 'home'
-    render('back')
-    tick()
-    if (keyboard && st.mode === 'dom') (cameFrom && el.querySelector(cameFrom))?.focus({ preventScroll: true })
-    return true
+    return false
   }
   function focusFirst() {
     if (st.mode !== 'dom' || !keyboard) return
-    // (the list: its first project; a page: its first link or button)
-    const v = views.get(st.view)
-    ;(v?.querySelector('.pos-card') || v?.querySelector('button:not(.pos-back), a'))?.focus({ preventScroll: true })
+    // (the song playing, or the first)
+    ;(el.querySelector('.pos-song-cur') || el.querySelector('.pos-song'))?.focus({ preventScroll: true })
   }
   el.addEventListener('pointerdown', () => byKeys(false), { passive: true })
   el.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]')
     if (!b) return
     const act = b.dataset.act
-    if (act === 'project') openProject(b.dataset.id, b)
-    else if (act === 'about') openAbout(b)
-    else if (act === 'back') back()
-    else if (act === 'copy') {
-      tick()
-      copyEmail(b)
-    }
+    tick()
+    if (act === 'song' || (act === 'play' && !audio?.on)) {
+      if (!audio?.on) wantSound()
+      if (act === 'song') audio?.select(+b.dataset.i)
+      else audio?.setPlaying(true)
+    } else if (act === 'play') audio?.setPlaying(!audio.playing)
+    else if (act === 'prev') audio?.prev()
+    else if (act === 'next') audio?.next()
+    syncMusic()
     dirty()
   })
-  // (pressed: a little darker and smaller, from CSS :active; a key press shows it too)
-  async function copyEmail(b) {
-    let ok = false
-    try {
-      await navigator.clipboard.writeText(C.email)
-      ok = true
-    } catch {
-      // (no clipboard here: select the address so it can be copied by hand)
-      const r = document.createRange()
-      r.selectNodeContents($('.pos-mail'))
-      getSelection().removeAllRanges()
-      getSelection().addRange(r)
-    }
-    const msg = $('.pos-copied')
-    msg.textContent = ok ? 'copied' : 'selected: press ⌘C or Ctrl+C'
-    b.querySelector('.pos-copy-l').textContent = ok ? 'Copied' : 'Copy'
-    dirty()
-    setTimeout(() => {
-      msg.textContent = ''
-      b.querySelector('.pos-copy-l').textContent = 'Copy'
-      dirty()
-    }, 1800)
-  }
-
   // ---- the keyboard (up close): the arrows through the items, Enter, Escape or Backspace
   function focusables() {
     const v = views.get(st.view)
@@ -451,6 +448,7 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
   applyLook()
   syncClock()
   render()
+  syncMusic()
 
   return {
     el,
@@ -464,6 +462,7 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
     update(dt) {
       syncClock()
       syncStatus()
+      syncMusic()
       const want = st.power === 'asleep' ? 0 : 1
       if (level !== want) {
         const l2 = level + (want - level) * (1 - Math.exp(-(st.reduced ? 30 : 7) * dt))
@@ -497,13 +496,11 @@ export function createPodOS({ content: C, audio, canvas: into = null }) {
     prepare,
     wake,
     sleep,
-    openProject: (id) => openProject(id),
-    openAbout: () => openAbout(),
     back,
     key,
     onKeyDown,
     setMode,
-    /** The keyboard's way in: the first project (or a page's first link). */
+    /** The keyboard's way in: the song playing (or the first). */
     focusFirst,
     fade,
     placeOver,

@@ -9,6 +9,7 @@
 // Every text is measured where it is laid out (wrapped, or cut with an ellipsis): a fallback font,
 // wider or narrower than Inter, still fits.
 import { SCREEN } from './laptopGeo.js'
+import { heroText } from '../content/homePage.js'
 
 export const CHROME = { h: 110, texW: 2048, texH: 160 } // (its strip: 160 px for 112.5 of the screen's)
 export const PAGE = { w: 1440, h: 1440, texW: 2048, texH: 2048 }
@@ -16,6 +17,7 @@ export const VIEW_H = SCREEN.h - CHROME.h // (the page's window: 826)
 
 // ---- each project's look
 export const THEMES = {
+  home: { dark: false, bg: '#f4f1ec', surface: '#fffdf9', ink: '#16181c', sub: '#555b66', faint: '#8b919b', line: '#e2ddd4', accent: '#2f4a66', accentInk: '#ffffff', soft: '#e8eef5', chip: '#ebe7e0', tag: 'Portfolio', glow: [0.88, 0.86, 0.82] },
   bodymap: { dark: false, bg: '#f6f8fb', surface: '#ffffff', ink: '#0f172a', sub: '#4f5d73', faint: '#8a96a8', line: '#e2e8f0', accent: '#e0464e', accentInk: '#ffffff', soft: '#fdebec', chip: '#eef2f7', tag: 'Health · AI', glow: [0.86, 0.88, 0.92] },
   'codebase-tavern': { dark: true, bg: '#1a120d', surface: '#231812', ink: '#f6e7c9', sub: '#cdb08a', faint: '#8d7559', line: '#3b2b20', accent: '#f0a33a', accentInk: '#1a120d', soft: '#3a2614', chip: '#2c1f17', tag: 'Developer tools · AI', glow: [0.15, 0.11, 0.07] },
   'lunar-rover': { dark: true, bg: '#0d1117', surface: '#161b22', ink: '#e6edf3', sub: '#9198a1', faint: '#6e7681', line: '#30363d', accent: '#4493f8', accentInk: '#ffffff', soft: '#1f2a3a', chip: '#121d2f', tag: 'Robotics', glow: [0.07, 0.08, 0.1], green: '#238636' },
@@ -1275,7 +1277,120 @@ function shotPage(g, shot) {
   return { h, button: null, thumb: dark ? [0.9, 0.93, 0.96, 0.32] : [0.06, 0.09, 0.16, 0.3], glow: shot._glow }
 }
 
+/**
+ * The portfolio's own page (the first tab): the same layout as content/homePage.js's HTML, which
+ * replaces it up close: a header, the headline and lead, the work as cards (three across).
+ */
+function homePage(g, C, T, font) {
+  const W = PAGE.w
+  g.fillStyle = T.bg
+  g.fillRect(0, 0, W, PAGE.h)
+  const x0 = (W - 1180) / 2 + 72
+  const cw = 1036
+  // the header
+  g.fillStyle = T.line
+  g.fillRect(0, 67, W, 1)
+  setFont(g, font, 700, 19)
+  g.fillStyle = T.ink
+  g.fillText(C.name, x0, 41)
+  const nw = g.measureText(C.name).width
+  setFont(g, font, 500, 15)
+  g.fillStyle = T.faint
+  g.fillText(C.role, x0 + nw + 10, 41)
+  g.textAlign = 'right'
+  g.fillStyle = T.sub
+  g.fillText(C.links.github ? 'Work        About        GitHub ↗' : 'Work        About', x0 + cw, 41)
+  g.textAlign = 'left'
+  // the headline and the lead
+  const { h1, lead } = heroText(C)
+  let y = 68 + 72
+  setFont(g, font, 600, 13)
+  track(g, 1)
+  g.fillStyle = T.accent
+  g.fillText(C.role.toUpperCase(), x0, y + 14)
+  track(g, 0)
+  y += 18 + 18
+  setFont(g, font, 800, 62)
+  track(g, -2.2)
+  g.fillStyle = T.ink
+  const hl = wrap(g, h1, 900).slice(0, 3)
+  hl.forEach((l, i) => g.fillText(l, x0, y + 54 + i * 66))
+  track(g, 0)
+  y += hl.length * 66 + 22
+  if (lead) {
+    setFont(g, font, 400, 21)
+    g.fillStyle = T.sub
+    y += para(g, lead, x0, y + 26, 720, 32.5, 4) * 32.5
+  }
+  y += 56
+  // the work
+  g.fillStyle = T.line
+  g.fillRect(x0, y, cw, 1)
+  y += 26
+  setFont(g, font, 700, 28)
+  track(g, -0.6)
+  g.fillStyle = T.ink
+  g.fillText('Selected work', x0, y + 26)
+  track(g, 0)
+  setFont(g, font, 400, 15)
+  g.fillStyle = T.faint
+  g.textAlign = 'right'
+  g.fillText(`${C.projects.length} projects`, x0 + cw, y + 26)
+  g.textAlign = 'left'
+  y += 26 + 22 + 12
+  const gap = 22
+  const w = (cw - 2 * gap) / 3
+  const h = 270
+  C.projects.forEach((p, i) => {
+    const cx = x0 + (i % 3) * (w + gap)
+    const cy = y + Math.floor(i / 3) * (h + gap)
+    if (cy > PAGE.h) return
+    rr(g, cx, cy, w, h, 18)
+    g.fillStyle = T.surface
+    g.fill()
+    g.strokeStyle = T.line
+    g.lineWidth = 1
+    g.stroke()
+    setFont(g, font, 600, 12.5)
+    track(g, 0.8)
+    g.fillStyle = T.faint
+    const k = `${String(i + 1).padStart(2, '0')} · ${p.year}`
+    g.fillText(k, cx + 24, cy + 38)
+    if (p.live) {
+      g.fillStyle = '#2c7a4b'
+      g.fillText(' · LIVE', cx + 24 + g.measureText(k).width, cy + 38)
+    }
+    track(g, 0)
+    setFont(g, font, 700, 25)
+    track(g, -0.5)
+    g.fillStyle = T.ink
+    g.fillText(fit(g, p.name, w - 48), cx + 24, cy + 76)
+    track(g, 0)
+    setFont(g, font, 400, 15.5)
+    g.fillStyle = T.sub
+    para(g, p.oneLiner, cx + 24, cy + 108, w - 48, 24, 3)
+    // its stack, then the way in
+    let chx = cx + 24
+    setFont(g, font, 400, 12.5)
+    for (const t of p.stack.slice(0, 3)) {
+      const tw = g.measureText(t).width + 20
+      if (chx + tw > cx + w - 24) break
+      rr(g, chx, cy + h - 82, tw, 26, 13)
+      g.fillStyle = T.chip
+      g.fill()
+      g.fillStyle = '#454a52'
+      g.fillText(t, chx + 10, cy + h - 64)
+      chx += tw + 6
+    }
+    setFont(g, font, 600, 14)
+    g.fillStyle = T.accent
+    g.fillText('Read more →', cx + 24, cy + h - 26)
+  })
+  return { h: PAGE.h, button: null, thumb: [0.06, 0.09, 0.16, 0.3], glow: T.glow }
+}
+
 export function drawPage(g, p, font, shot) {
+  if (p.home) return homePage(g, p.content, themeOf(p), font)
   if (shot) return shotPage(g, shot)
   const T = themeOf(p)
   let out

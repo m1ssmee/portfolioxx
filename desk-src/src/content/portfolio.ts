@@ -1,8 +1,10 @@
-// Everything Pod OS shows, in one place: edit this file, not the UI code. The same content also
+// Everything the portfolio shows (the laptop's first tab: content/homePage.js), in one place: edit
+// this file, not the UI code. The same content also
 // becomes the page's hidden semantic HTML and the "plain view" page (vite.config.js builds both, so
 // keep this file plain data: no imports). Anything left empty ('' or []) is simply not shown.
 //
-// Pod OS has three screens: the projects list (its home), a project's page, and About & contact.
+// The page: the headline and lead (from the bio), the projects as cards, each one's write-up,
+// about and contact. (Pod OS, on the player, is the music.)
 
 export interface Project {
   /** Short, lowercase, no spaces (it names the project's page). */

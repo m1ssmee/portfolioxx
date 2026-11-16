@@ -11,6 +11,7 @@ export function createAudio() {
   let musicBus = null
   let music = null
   let musicLoading = null
+  let wanted = -1 // (a track asked for before the engine has loaded)
   let crackleT = 0
   const state = { on: false, running: true, plugged: true, playing: true }
   const listeners = new Set()
@@ -36,6 +37,7 @@ export function createAudio() {
     musicLoading = import('./music.js').then(({ createMusic }) => {
       if (!ctx) return
       music = createMusic(ctx, musicBus)
+      if (wanted >= 0) music.select(wanted)
       apply()
       changed()
     })
@@ -154,6 +156,14 @@ export function createAudio() {
     },
     next() {
       music?.next()
+      changed()
+    },
+    /** Track i, from its start, and playing. */
+    select(i) {
+      if (music) music.select(i)
+      else wanted = i
+      state.playing = true
+      apply()
       changed()
     },
     prev() {

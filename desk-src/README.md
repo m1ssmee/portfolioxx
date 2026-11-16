@@ -155,10 +155,11 @@ the physics and the cable's mesh both read it.
 - `src/objects/studio.js`: a studio monitor on a floor stand at each end of the desk, turned in
   towards the chair (a tap closes in; a tap there is the sound's switch), and a small stainless
   steel pedal bin right of the right stand.
-- `src/objects/monitor.js`: a flat 27-inch monitor, landscape, behind the laptop and over its open
+- `src/objects/monitor.js`: a curved 27-inch monitor (1800R), landscape, behind the laptop and over its open
   lid, held on an arm from a pole clamped to the desk's back edge at its left. It shows what the
   laptop's browser has open, bigger: a strip of tabs (a tap on one, up close, switches the laptop
-  too) over the project's page; up close, the live site itself (as on the laptop, below). It hangs
+  too) over the project's page; up close, the live site itself (as on the laptop, below; the page is
+  flat, laid half way into the curve, the picture black under it). It hangs
   off the laptop's left USB-C port: a USB-C to HDMI adapter, then the HDMI cable back to the pole,
   up it and along the arm. The pegboard hangs higher, above the monitor.
 
@@ -219,26 +220,27 @@ not push itself apart; slow contacts rest; after a release the rope is damped ha
 its grip grows; and each frame is drawn between its last two physics steps. The cigarette and the
 lighter are held through the same follower.
 
-## Pod OS (the player's screen)
+## The portfolio (on the laptop) and Pod OS (the music, on the player)
 
-**Your content lives in one file: `src/content/portfolio.ts`:** your name and role, the bio, the four
-projects (BodyMap, Codebase Tavern, the Lunar Habitat Safety Rover, CropScan) and your links.
-Anything left empty is simply not shown: add your email, LinkedIn and X there when you want them on
-the contact page, and a city in `basedIn`. Screenshots and a photo are optional: put the files in
-`public/media/` and list them as `'./media/shot.png'` (they are loaded before entry). Keep the file
-plain data, without imports: the build reads it too. The same file also gives the name and role at
-the top left and the copyright line, and becomes the page's hidden semantic HTML, for search
-engines and screen readers (made by `vite.config.js` from `src/content/pages.js`).
+**Your content lives in one file: `src/content/portfolio.ts`:** your name and role, the bio, the
+projects and your links. Anything left empty is simply not shown: add your email, LinkedIn and X
+there when you want them in the contact section. Keep the file plain data, without imports: the
+build reads it too. The same file also gives the name and role at the top left and the copyright
+line, and becomes the page's hidden semantic HTML, for search engines and screen readers (made by
+`vite.config.js` from `src/content/pages.js`).
 
-Opening a project (a card, or the keys) slides the player to the left, frosts the rest (the frame's
-own present pass blurs an eighth-size copy of the scene and mixes it in with a tint and a soft hole
-round the player: a CSS backdrop-filter over the canvas made the browser blur every pixel itself,
-each frame, and stuttered) and tells
-the project on the right, with a button to its live site (or its code); on a phone it comes up as a
-sheet. Back, Escape, ◀ or a click on the blur closes it.
+The laptop's browser opens on the portfolio itself, its first tab (`src/content/homePage.js`): the
+headline and lead from the bio, the work as cards, each card opening the project's write-up (what
+it is, what I built, the stack, what was hard, its live site, its code, the previous and next
+project), then about and contact. Up close it is a real page, laid over the screen like a live
+site; from across the room `laptopScreen.js` draws the same layout (`homePage` there). The page's
+"Open the live site" switches the browser to that project's tab. The other tabs are the projects'
+own sites, live up close. The monitor behind shows the same tab.
 
-- Three screens: the projects list (home), a project's page, About & contact. One light theme, the
-  scene's own paper and slate, and calmer with reduced motion
+Pod OS is the music now, one screen: what plays (its time, previous, play or pause, next), a hint
+when nothing can be heard (the sound off, the earbuds out), and the four songs (`src/core/tracks.js`
+lists them; `core/music.js` makes them). A song tapped with the sound off turns the sound on.
+
 - `src/os/os.js`: the OS (one DOM, 360 × 383 logical px, the glass's own shape, `will-change:
   transform`: laid over the glass by a matrix that changes every frame of a zoom, it would
   otherwise be rasterized again at each new scale); `os.css` its look
@@ -250,8 +252,9 @@ sheet. Back, Escape, ◀ or a click on the blur closes it.
   something changed), lit by the scene; double-click or tap the player (or tap its screen) and the
   OS's real DOM is laid exactly over the glass, crisp and selectable, then swapped back as the view
   leaves. At home it is live from the start; `P` switches it off and on
-- The player's keys: ◀ back (on Pod OS) or the previous track, ▶ the next item or the next track,
-  the red one select on Pod OS (hold it to play or pause) or play and pause for the music. The keyboard: Tab to "use the
-  player's screen", then arrows, Enter, Escape or Backspace
+- The player's keys: ◀ leaves the player (on Pod OS) or the previous track, ▶ the next song in
+  the list or the next track, the red one plays the song in focus on Pod OS (hold it to play or
+  pause) or plays and pauses the music. The keyboard: Tab to "pick a song", then arrows, Enter,
+  Escape
 - Fonts: Inter, and Caveat for the handwriting on the board, both under the SIL Open Font License
   (`public/fonts/`)

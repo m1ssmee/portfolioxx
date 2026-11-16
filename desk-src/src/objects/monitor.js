@@ -1,8 +1,9 @@
-// A second screen behind the laptop: a 27-inch monitor, landscape, flat, held up over the laptop's
+// A second screen behind the laptop: a 27-inch curved monitor (1800R), landscape, held up over the laptop's
 // lid on an arm from a pole clamped to the desk's back edge at its left (the "side stand"). It
 // shows what the laptop's browser has open, bigger: a strip of tabs (a tap on one switches the
 // laptop too), the project's page under it (up close, the live site itself: scene.js lays it over
-// the page's part of the glass, as for the laptop).
+// the page's part of the glass, as for the laptop: flat, so laid halfway into the curve, a little
+// inside the glass, the page's part of the picture black under it).
 // It is plugged into the laptop: the laptop has only USB-C, so a small aluminium USB-C to HDMI
 // adapter hangs from its left side (a USB-C plug, a short tail, the adapter's block), an HDMI plug
 // in the block, and the HDMI cable over the desk to the pole, up it and along the arm.
@@ -26,12 +27,21 @@ export const MONITOR = {
 }
 const M = MONITOR
 const CY = M.bottom + M.h / 2
+const R = 1800 // (the curve's radius: its sides come towards the viewer)
+/** How far forward a point x from the middle stands. */
+const sag = (x) => R - Math.sqrt(R * R - x * x)
+function bend(g) {
+  const p = g.attributes.position
+  for (let i = 0; i < p.count; i++) p.setZ(i, p.getZ(i) + sag(p.getX(i)))
+  g.computeVertexNormals()
+  return g
+}
 
 /**
  * The picture (1920 x 1080): a tab for each project, the open one's page under them (as the
  * laptop draws it: its screenshot, or drawn). Returns the tabs' rectangles ([x0, x1], px).
  */
-export function drawBrowser(c, projects, tab, font, shots, pageC) {
+export function drawBrowser(c, projects, tab, font, shots, pageC, blank = false) {
   const g = c.getContext('2d')
   const [W, H] = M.tex
   const B = M.bar
@@ -57,7 +67,13 @@ export function drawBrowser(c, projects, tab, font, shots, pageC) {
     g.fillText(t, x + 16, B / 2 + 4)
     rects.push([x, x + tw - 6])
   })
-  // the page: drawn as the laptop draws it (1440 wide), shown 1920 wide from its top
+  // the page: drawn as the laptop draws it (1440 wide), shown 1920 wide from its top (black, while
+  // the live page is laid over it)
+  if (blank) {
+    g.fillStyle = '#000'
+    g.fillRect(0, B, W, H - B)
+    return rects
+  }
   const pg = pageC.getContext('2d')
   pg.setTransform(PAGE.texW / PAGE.w, 0, 0, PAGE.texW / PAGE.w, 0, 0)
   pg.clearRect(0, 0, PAGE.w, PAGE.h)
@@ -149,18 +165,18 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
   // the panel, the bulge of its electronics behind, the mount's plate
   add(
     mergeGeometries([
-      new THREE.BoxGeometry(M.w, M.h, 12).translate(0, CY, -6),
-      new THREE.BoxGeometry(380, 220, 16).translate(0, CY - 10, -20),
+      bend(new THREE.BoxGeometry(M.w, M.h, 12, 32, 1, 1).translate(0, CY, -6)),
+      bend(new THREE.BoxGeometry(380, 220, 16, 16, 1, 1).translate(0, CY - 10, -20)),
       new THREE.BoxGeometry(110, 110, 6).translate(0, CY, -31),
     ]),
     shell,
     'body',
   )
-  const display = add(new THREE.PlaneGeometry(M.glass[0], M.glass[1]).translate(0, CY, 0.3), glass, 'display', false)
+  const display = add(bend(new THREE.PlaneGeometry(M.glass[0], M.glass[1], 48, 1).translate(0, CY, 0.3)), glass, 'display', false)
   // the stand: a clamp on the desk's back edge, a pole up from it, a collar, an arm in two
   // pieces across behind the panel to the plate, a tilt block
   const [px, pz] = M.pole
-  const R = M.poleR
+  const PR = M.poleR
   const armY = CY + 6
   const cyl = (r0, r1, h, x, y, z, seg = 24) => new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z)
   const bar = (a, b, r) => {
@@ -177,9 +193,9 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
       new THREE.BoxGeometry(70, 10, 64).translate(px, 5, pz + 6),
       new THREE.BoxGeometry(70, 70, 10).translate(px, -25, pz - 31),
       new THREE.BoxGeometry(70, 10, 46).translate(px, -55, pz - 10),
-      cyl(R, R, armY + 40, px, (armY + 40) / 2, pz),
-      cyl(R + 6, R + 6, 44, px, armY, pz),
-      cyl(R, R * 0.7, 10, px, armY + 45, pz),
+      cyl(PR, PR, armY + 40, px, (armY + 40) / 2, pz),
+      cyl(PR + 6, PR + 6, 44, px, armY, pz),
+      cyl(PR, PR * 0.7, 10, px, armY + 45, pz),
       bar(new THREE.Vector3(px, armY, pz), elbow, 12),
       cyl(16, 16, 40, elbow.x, elbow.y, elbow.z),
       bar(elbow, new THREE.Vector3(0, CY, -40), 11),
@@ -194,6 +210,7 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
   let blank = 0
   let tab = -1
   let tabs = []
+  let dark = false
   const show = () => (glass.emissiveIntensity = lit && blank <= 0 ? 0.92 : 0)
   const GW = M.glass[0]
   const GH = M.glass[1]
@@ -222,7 +239,15 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     showTab(i) {
       if (i === tab) return false
       tab = i
-      tabs = drawBrowser(canvas, projects, tab, font, shots, pageC)
+      tabs = drawBrowser(canvas, projects, tab, font, shots, pageC, dark)
+      map.needsUpdate = true
+      return true
+    },
+    /** The live page laid over the glass, or not: the picture's page black under it, or drawn. */
+    setLive(on) {
+      if (on === dark) return false
+      dark = on
+      tabs = drawBrowser(canvas, projects, tab, font, shots, pageC, dark)
       map.needsUpdate = true
       return true
     },
@@ -250,12 +275,16 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     pageSize: M.page,
     /** Its corners (world): top left, top right, bottom right, bottom left (out: four vectors). */
     pageCorners(out) {
-      const top = CY + GH / 2 - barMM
-      const bot = CY - GH / 2
-      out[0].set(-GW / 2, top, 0.4)
-      out[1].set(GW / 2, top, 0.4)
-      out[2].set(GW / 2, bot, 0.4)
-      out[3].set(-GW / 2, bot, 0.4)
+      // (flat, through the curve: half way into it, and a little inside the glass every way, so the
+      // straight page stays on the curved glass as the camera sees it close to square on)
+      const top = CY + GH / 2 - barMM - 2.2
+      const bot = CY - GH / 2 + 2.2
+      const x = GW / 2 - 4
+      const z = 0.4 + sag(x) * 0.5
+      out[0].set(-x, top, z)
+      out[1].set(x, top, z)
+      out[2].set(x, bot, z)
+      out[3].set(-x, bot, z)
       for (const v of out) v.applyMatrix4(group.matrixWorld)
       return out
     },
@@ -265,9 +294,9 @@ export function createMonitor({ at, yaw, projects, font, shots = {}, anisotropy 
     cableUp: () =>
       [
         [px + 30, 3.4, pz + 30],
-        [px + 6, 3.4, pz + R + 3],
-        [px + 6, 14, pz + R + 3],
-        [px + 6, armY - 40, pz + R + 3],
+        [px + 6, 3.4, pz + PR + 3],
+        [px + 6, 14, pz + PR + 3],
+        [px + 6, armY - 40, pz + PR + 3],
         [px + 16, armY - 16, pz + 8],
         [px + 80, armY - 14, M.armZ + 8],
         [-120, CY - 40, -30],

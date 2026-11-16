@@ -32,6 +32,7 @@ import { createCan, CAN } from './objects/can.js'
 import { createLamp, LAMP } from './objects/lamp.js'
 import { createStudio, STUDIO } from './objects/studio.js'
 import { createMonitor, createHdmiLink, MONITOR } from './objects/monitor.js'
+import { homeHtml } from './content/homePage.js'
 import caveatUrl from './assets/caveat.woff2?url'
 import { createVisitorsBook } from './visitors/book.js'
 import badgeFaceUrl from './assets/badge-face.webp?url'
@@ -176,7 +177,7 @@ const UI = `<div class="cg-ui">
     <h3 class="cg-cap">Stack</h3><div class="cg-proj-tags" data-p="stack"></div>
   </aside>
   <p class="cg-id cg-cap"><span class="cg-id-name" data-id="name"></span><span class="cg-id-role" data-id="role"></span></p>
-  <button class="cg-os cg-cap" data-act="os">use the player's screen</button>
+  <button class="cg-os cg-cap" data-act="os">pick a song</button>
   <div class="cg-tools">
     <button class="cg-txt cg-cap" data-act="back" hidden><span>&larr; back</span></button>
     <button class="cg-txt cg-cap" data-act="all"><span>step back</span></button>
@@ -1235,7 +1236,9 @@ export function createScene(container, options = {}) {
       }),
     )
     if (destroyed) return
-    const laptop = createLaptop({ shots: siteShots, at: [LAYOUT.DESK.laptop[0], ROOM.deskY, LAYOUT.DESK.laptop[2]], yaw: LAYOUT.PLAYER.yaw + LAYOUT.DESK.laptopTurn, projects: portfolio.projects, font: FONT, anisotropy: aniso, baked: laptopBaked?.tex })
+    // (the browser's tabs: the portfolio's own page first, then each project's site)
+    const lapTabs = [{ id: 'home', name: 'Portfolio', home: true, local: 'localhost:5173', year: '', stack: [], content: portfolio }, ...portfolio.projects]
+    const laptop = createLaptop({ shots: siteShots, at: [LAYOUT.DESK.laptop[0], ROOM.deskY, LAYOUT.DESK.laptop[2]], yaw: LAYOUT.PLAYER.yaw + LAYOUT.DESK.laptopTurn, projects: lapTabs, font: FONT, anisotropy: aniso, baked: laptopBaked?.tex })
     scene.add(laptop.group)
     disposables.push(laptop)
     // (behind the loader the lid is shut: it opens as the visitor comes in, handle.enter)
@@ -1339,7 +1342,7 @@ export function createScene(container, options = {}) {
     // ---- the second screen (objects/monitor.js): landscape, behind the laptop, on an arm from a
     // pole clamped to the desk's back; it shows the laptop's open tab (up close, the live site);
     // plugged into the laptop's left USB-C port through an adapter, by HDMI
-    const monitor = createMonitor({ at: new THREE.Vector3(LAYOUT.DESK.monitor[0], ROOM.deskY, LAYOUT.DESK.monitor[2]), yaw: facing(LAYOUT.DESK.monitorTurn), projects: portfolio.projects, font: FONT, shots: siteShots, anisotropy: aniso })
+    const monitor = createMonitor({ at: new THREE.Vector3(LAYOUT.DESK.monitor[0], ROOM.deskY, LAYOUT.DESK.monitor[2]), yaw: facing(LAYOUT.DESK.monitorTurn), projects: lapTabs, font: FONT, shots: siteShots, anisotropy: aniso })
     monitor.showTab(laptop.tab)
     scene.add(monitor.group)
     for (const m of monitor.materials) withEmber(m)
@@ -2909,12 +2912,29 @@ export function createScene(container, options = {}) {
       siteLoaded = true
       wake()
     })
+    let homePageHtml = ''
+    // (the portfolio's page asks for a project's tab, or for Escape: it is a page of this site)
+    listen(window, 'message', (e) => {
+      if (e.source !== siteFrame.contentWindow || !e.data || typeof e.data !== 'object') return
+      if (e.data.desk === 'tab') {
+        const i = lapTabs.findIndex((t) => t.id === e.data.id)
+        if (i >= 0 && i !== laptop.tab) {
+          laptop.setTab(i)
+          lapAnswer('tab')
+        }
+      } else if (e.data.desk === 'key' && e.data.key === 'Escape' && focus.focused) {
+        siteFrame.blur()
+        focus.back()
+        wake()
+      }
+    })
     const siteQ = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
     const siteP = new Float64Array(8)
     function updateSite() {
       const on = projOpen ? null : focus.focused === 'laptop' ? laptop : focus.focused === 'monitor' && monitor.signal ? monitor : null
-      const p = on ? portfolio.projects[laptop.tab] : null
-      const url = p && p.live ? p.live : ''
+      const p = on ? lapTabs[laptop.tab] : null
+      // (the portfolio's own page, or a project's live site)
+      const url = p && p.home ? 'home' : p && p.live ? p.live : ''
       if (on && on !== siteOn) {
         siteOn = on
         siteFrame.width = String(on.pageSize[0])
@@ -2926,10 +2946,22 @@ export function createScene(container, options = {}) {
       if (url !== siteSrc && (url || !on)) {
         siteSrc = url
         siteLoaded = false
-        siteFrame.src = url || 'about:blank'
+        siteFrame.title = url === 'home' ? `${portfolio.name}: portfolio` : url ? `${p.name}: live site` : 'Live site'
+        if (url === 'home') {
+          siteFrame.removeAttribute('src')
+          siteFrame.srcdoc = homePageHtml || (homePageHtml = homeHtml(portfolio, opts.fontUrl))
+        } else {
+          siteFrame.removeAttribute('srcdoc')
+          siteFrame.src = url || 'about:blank'
+        }
       }
       const show = !!url && siteLoaded && !focus.moving
       siteEl.classList.toggle('on', show)
+      // (the curved monitor's own picture black under it: what the flat page leaves of the glass is dark)
+      if (monitor.setLive(show && siteOn === monitor)) {
+        frameCache.valid = false
+        wake()
+      }
       if (!show) return
       // (the corners on the page, as the camera sees them; then the projective map from the
       // iframe's own rectangle onto them, as a CSS matrix)
@@ -2958,7 +2990,7 @@ export function createScene(container, options = {}) {
       if (xf !== siteXf) siteFrame.style.transform = siteXf = xf
     }
     function updateLive() {
-      const p = (focus.focused === 'laptop' || focus.focused === 'monitor') && !focus.moving && !projOpen ? portfolio.projects[laptop.tab] : null
+      const p = (focus.focused === 'laptop' || focus.focused === 'monitor') && !focus.moving && !projOpen ? lapTabs[laptop.tab] : null
       const href = p ? p.live || p.github || '' : ''
       const key = `${href}|${p && p.live ? 1 : 0}`
       if (key === liveKey) return
@@ -2973,8 +3005,8 @@ export function createScene(container, options = {}) {
     // or at "next"; "end tour", Escape or a press on the scene ends it where it is
     const TOUR = [
       [null, 'The desk', 'Everything here can be clicked, picked up or switched. A quick look round first.'],
-      ['player', 'The player', 'It runs a tiny OS: my projects, what I built in each of them, and how to reach me. Its keys work.'],
-      ['laptop', 'The laptop', 'The projects\u2019 own sites, a tab each. Click the screen to change tabs; the button under it opens the real one.'],
+      ['player', 'The player', 'Four songs on it. Pick one, plug the earbuds in, and its keys play, pause and skip.'],
+      ['laptop', 'The laptop', 'My work: the first tab is the portfolio, every project in it written up; then each project\u2019s own site, live.'],
       ['monitor', 'The second screen', 'The live sites, big. Its tabs switch the laptop too; pull the USB-C plug at the laptop\u2019s side and it loses its signal.'],
       ['board', 'The pegboard', 'A few notes, this month with today ringed, and my badge. Tap a note and it lifts.'],
       ['notebook', 'The visitors\u2019 book', 'Open it and leave a thumbprint. Everyone\u2019s who came before is in there.'],
@@ -3067,19 +3099,20 @@ export function createScene(container, options = {}) {
         else if (b.dataset.act === 'tour-next') tourNext()
         else if (b.dataset.act === 'tour-end') endTour(false)
         else if (b.dataset.act === 'os') {
-          // (into Pod OS: close on the player if the view is elsewhere; there, the first project takes the focus)
+          // (into Pod OS: close on the player if the view is elsewhere; there, the song playing takes the focus)
           if (!podView()) focus.focusOn('player')
           else if (osUp) os.focusFirst()
         } else if (b.dataset.act === 'all') focus.focusOn('all')
         else if (b.dataset.act === 'proj-close') leaveProject()
-        else if (b.dataset.act === 'sound') {
-          const on = b.getAttribute('aria-pressed') !== 'true'
-          b.setAttribute('aria-pressed', String(on))
-          audio.enable(on)
-        }
+        else if (b.dataset.act === 'sound') setSound(b.getAttribute('aria-pressed') !== 'true')
         wake()
       })
 
+    /** The sound switch, and its button. */
+    function setSound(on) {
+      root.querySelector('[data-act="sound"]').setAttribute('aria-pressed', String(on))
+      audio.enable(on)
+    }
     // ---- the loop (the smoke always moves: it runs while the scene is in view)
     let running = true
     let visible = true
@@ -3727,9 +3760,10 @@ export function createScene(container, options = {}) {
       await player.ready
       if (destroyed) return
       os = createPodOS({
-        content: portfolio,
         audio,
         canvas: osCanvas,
+        // (a song asked for with the sound off: the switch turns on)
+        wantSound: () => setSound(true),
       })
       stageEl.after(os.el)
       cleanups.push(() => os.destroy())
