@@ -142,6 +142,10 @@ const CSS = `
 .cg-now-t:empty{display:none}
 .cg-live{position:absolute;left:50%;bottom:max(56px,calc(env(safe-area-inset-bottom) + 44px));transform:translateX(-50%);z-index:2;box-shadow:0 6px 24px rgba(0,0,0,.35)}
 .cg-live[hidden]{display:none}
+.cg-site{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none}
+.cg-site iframe{position:absolute;left:0;top:0;border:0;margin:0;background:#fff;transform-origin:0 0;opacity:0;visibility:hidden;pointer-events:auto;transition:opacity .35s ease,visibility 0s .35s}
+.cg-site.on iframe{opacity:1;visibility:visible;transition:opacity .35s ease}
+.cg-touring .cg-site iframe{pointer-events:none}
 .cg-tour{position:absolute;left:50%;bottom:max(112px,calc(env(safe-area-inset-bottom) + 100px));transform:translateX(-50%);z-index:3;box-sizing:border-box;width:min(460px,calc(100% - 40px));padding:16px 18px 12px;border-radius:14px;background:rgba(24,23,22,.93);border:1px solid var(--rule);box-shadow:0 10px 40px rgba(0,0,0,.4)}
 .cg-tour[hidden]{display:none}
 .cg-tour-k{margin:0 0 7px;color:var(--label)}
@@ -2941,6 +2945,70 @@ export function createScene(container, options = {}) {
     const liveBtn = root.querySelector('[data-live]')
     const liveText = root.querySelector('[data-live-t]')
     let liveKey = ''
+    // ---- the live site on the laptop: up close, a project with a site of its own shows the real
+    // thing, an iframe laid over the page's part of the display (fitted to its four corners as the
+    // camera sees them), to scroll and click. The tabs above it stay the scene's own; the drawn page
+    // stays under it, shown until the site has loaded, and everywhere else. Away from the laptop the
+    // iframe is emptied: nothing runs out of sight
+    const siteEl = document.createElement('div')
+    siteEl.className = 'cg-site'
+    const siteFrame = document.createElement('iframe')
+    siteFrame.title = 'Live site'
+    siteFrame.referrerPolicy = 'no-referrer'
+    siteFrame.width = String(laptop.pageSize[0])
+    siteFrame.height = String(laptop.pageSize[1])
+    siteFrame.style.width = `${laptop.pageSize[0]}px`
+    siteFrame.style.height = `${laptop.pageSize[1]}px`
+    siteEl.appendChild(siteFrame)
+    stageEl.after(siteEl)
+    let siteSrc = ''
+    let siteLoaded = false
+    let siteXf = ''
+    siteFrame.addEventListener('load', () => {
+      if (!siteSrc) return
+      siteLoaded = true
+      wake()
+    })
+    const siteQ = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
+    const siteP = new Float64Array(8)
+    function updateSite() {
+      const near = focus.focused === 'laptop' && !projOpen
+      const p = near ? portfolio.projects[laptop.tab] : null
+      const url = p && p.live ? p.live : ''
+      if (url !== siteSrc && (url || !near)) {
+        siteSrc = url
+        siteLoaded = false
+        siteFrame.src = url || 'about:blank'
+      }
+      const show = !!url && siteLoaded && !focus.moving
+      siteEl.classList.toggle('on', show)
+      if (!show) return
+      // (the corners on the page, as the camera sees them; then the projective map from the
+      // iframe's own rectangle onto them, as a CSS matrix)
+      camera.updateMatrixWorld()
+      laptop.pageCorners(siteQ)
+      const r = root.getBoundingClientRect()
+      const c = canvas.getBoundingClientRect()
+      for (let i = 0; i < 4; i++) {
+        const v = siteQ[i].project(camera)
+        siteP[i * 2] = c.left - r.left + ((v.x + 1) / 2) * c.width
+        siteP[i * 2 + 1] = c.top - r.top + ((1 - v.y) / 2) * c.height
+      }
+      const [x0, y0, x1, y1, x2, y2, x3, y3] = siteP
+      const dx1 = x1 - x2
+      const dx2 = x3 - x2
+      const dx3 = x0 - x1 + x2 - x3
+      const dy1 = y1 - y2
+      const dy2 = y3 - y2
+      const dy3 = y0 - y1 + y2 - y3
+      const den = dx1 * dy2 - dx2 * dy1
+      const g = (dx3 * dy2 - dx2 * dy3) / den
+      const h = (dx1 * dy3 - dx3 * dy1) / den
+      const [W, H] = laptop.pageSize
+      const m = [(x1 - x0 + g * x1) / W, (y1 - y0 + g * y1) / W, 0, g / W, (x3 - x0 + h * x3) / H, (y3 - y0 + h * y3) / H, 0, h / H, 0, 0, 1, 0, x0, y0, 0, 1]
+      const xf = `matrix3d(${m.map((x) => +x.toFixed(9)).join(',')})`
+      if (xf !== siteXf) siteFrame.style.transform = siteXf = xf
+    }
     function updateLive() {
       const p = focus.focused === 'laptop' && !focus.moving && !projOpen ? portfolio.projects[laptop.tab] : null
       const href = p ? p.live || p.github || '' : ''
@@ -3422,6 +3490,7 @@ export function createScene(container, options = {}) {
       stepOS(dt)
       updateNow()
       updateLive()
+      updateSite()
       stepTour(dt)
       player.update(dt)
       keyAnim = Math.max(0, keyAnim - dt)
@@ -3807,7 +3876,7 @@ export function createScene(container, options = {}) {
     }
     if (opts.debug)
       window.__still = {
-        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, masks, portraits, studio, monitor, hdmi, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
+        THREE, scene, camera, renderer, controls, smokeScene, deskMat, MAT_COLORS, cigs, api, handle, flick: () => flick(cigs[cur]), emberWorld, ptr, SU, frameCache, Q, key, rim, fill, trayMat, flags: dbgFlags, homePos: HOME.pos, homeTarget: HOME.target, room, lamp, masks, portraits, studio, monitor, hdmi, portfolio, lampItem, lampHeadItem, setLamp, bounce, badgeSwing, laptop, laptopItem, can, canItem, boardItem, views: { HOME, PLAYERV, BOARDV, LAPTOPV }, pickup, grab, seatPts, traySdfGrad, lighter, lighterItem, badge, notebook, notebookItem, book, cigItems, lightTarget, flameSpot, FLAME_CD, player, earbuds, earbudsLive, audio, focus, physics, jack,
         get cur() {
           return cigs[cur]
         },

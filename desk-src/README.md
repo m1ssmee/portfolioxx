@@ -171,6 +171,13 @@ The laptop's tabs show the sites' own screenshots where a project has one (`src/
 Up close on the laptop a button at the bottom opens the open tab's live site, or its code. "tour"
 (top right) takes the camera from thing to thing with a line about each (`TOUR` in `scene.js`).
 
+Up close on the laptop, a project with a live site shows the real thing: an iframe laid over the
+page's part of the display, fitted to its four corners as the camera sees them
+(`laptop.pageCorners()`, `updateSite()` in `scene.js`), there to scroll and click. The tabs above
+stay the scene's own; the screenshot shows under it until the site has loaded, from further away,
+and for a project with no site. Leaving the laptop empties the iframe. A site that refuses to be
+framed (`X-Frame-Options` or `frame-ancestors`) would show blank there: all three allow it now.
+
 Three pictures hang on the wall (`src/objects/portraits.js`). They are not drawings: each frame is a
 window onto a small lit scene of its own, a life-size bald, gaunt head and shoulders
 (`src/objects/headGeo.js`, a distance field meshed in a worker at 2 mm; `src/objects/headRig.js`

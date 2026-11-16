@@ -808,6 +808,24 @@ export function createLaptop({ at, yaw, projects, font, anisotropy = 4, baked, s
     /** The display's middle (world) and the way it faces (world): they follow the lid. */
     screenCenter: (out) => out.set(0, LID.face - 0.05, LID.s1 - DISP.y - DISP.h / 2).applyMatrix4(lid.matrixWorld),
     screenNormal: (out) => out.set(0, -1, 0).transformDirection(lid.matrixWorld),
+    /** The page's part of the display (under the browser's chrome), in the page's own pixels. */
+    pageSize: [SCREEN.w, VIEW_H],
+    /**
+     * Its four corners (world), as the lid is now: top left, top right, bottom right, bottom left
+     * (out: four vectors).
+     */
+    pageCorners(out) {
+      const x0 = -L.w / 2 + DISP.x
+      const z0 = LID.s1 - DISP.y
+      const t = CHROME.h / SCREEN.h
+      ;[
+        [0, t],
+        [1, t],
+        [1, 1],
+        [0, 1],
+      ].forEach(([u, v], i) => out[i].set(x0 + u * DISP.w, LID.face - 0.05, z0 - v * DISP.h).applyMatrix4(lid.matrixWorld))
+      return out
+    },
     /**
      * The display's middle and the way it faces with the lid fully open, whatever the lid is doing
      * now (a view framed on the lid half way up looked at the desk's underside).
