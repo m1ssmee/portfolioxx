@@ -68,7 +68,7 @@ export const DESK = {
   lampHead: deskAt(-640, -30, 312),
   lampAim: deskAt(-150, 34),
   // the second screen: a 27-inch monitor, landscape, behind the laptop and over its open lid, on an
-  // arm from a pole clamped to the desk's back edge at its left (monitor: on the desk under the
+  // arm from a pole on a weighted base at its left (monitor: on the desk under the
   // middle of its glass). The HDMI cable's way over the desk from the adapter by the laptop's left
   // side: back to the pole's foot (it goes up the pole and along the arm: monitor.js)
   monitor: deskAt(-10, -418),
