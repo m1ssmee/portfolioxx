@@ -45,13 +45,13 @@ export const ROOM = {
   // where the books lying flat start and the plant on them ([x, z out of the wall]), where the
   // row of books starts, the framed print's middle, the calendar's
   board: {
-    u: 356,
+    u: 366,
     y0: 700,
-    w: 680,
+    w: 700,
     h: 330,
     thick: 28,
     deep: 168,
-    badge: [652, -14],
+    badge: [672, -14],
     notes: [
       [334, -0.05],
       [424, 0.04],
@@ -60,8 +60,8 @@ export const ROOM = {
     stack: 22,
     plant: [132, 92],
     books: 264,
-    postcard: 502,
-    calendar: 616,
+    postcard: 488,
+    calendar: 640,
   },
   // the wall's contact shade: where it is baked (the room's frame: x0, y0, x1, y1) and its texels
   wallAO: { rect: [-1200, -40, 1200, 1160], size: [512, 256] },
@@ -877,11 +877,11 @@ export function createRoom({ fwd, right, font, handFont, notes, now = new Date()
   // the print: the postcard in a wide off-white mount, in a thin black frame leaning back on the
   // wall (its mount a card's thickness proud of the print: a shadow line round it)
   {
-    const W = 196
-    const H = 152
+    const W = 172
+    const H = 140
     const bar = 6
     const dp = 16
-    const mount = 26
+    const mount = 22
     const fr = new THREE.Group()
     fr.position.set(B.postcard, TH, 44)
     fr.rotation.x = -0.15
