@@ -118,6 +118,7 @@ export class SmokeHistory {
     this.tex.needsUpdate = true
     this.slot = 0
     this.t = 0
+    this.frac = 0
   }
   /** Fill every slot (at start, or after a long pause). */
   fill(src, alive) {
@@ -158,7 +159,9 @@ export class SmokeHistory {
     // (the current slot always holds the newest state)
     this.write(this.slot, src, alive, ptr, strength, vel, puff)
     if (wrote || strength > 0 || puff > 0) this.tex.needsUpdate = true
-    // (the newest sample is at the head; older ones behind it: never read across the head)
+    // (the newest sample is at the head; older ones behind it: never read across the head. The
+    // shader is given the head and how far the clock is into it: smoke.js's hist())
+    this.frac = this.t
     return this.slot
   }
   dispose() {

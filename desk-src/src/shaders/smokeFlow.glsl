@@ -1,13 +1,20 @@
 uniform float uTime;
 uniform sampler2D uHist;       // rows: 0 emitter (xyz, alive), 1 pointer (xyz, strength), 2 pointer velocity (xyz), puff
-uniform float uHistHead;       // the current slot
+uniform float uHistHead;       // the current slot (the newest state: written every frame)
+uniform float uHistFrac;       // how far into it the 30 Hz clock is (0..1)
 uniform vec3 uViewDir;         // camera forward (for the pointer's swirl axis)
 uniform float uCalm;           // 1, or less when motion is reduced
 #include <smokeNoise>
 
 vec4 hist(float row, float t) {
-  // t: seconds ago; (the history is a ring, read with linear filtering along it)
-  float slot = uHistHead - t * $HZ;
+  // t: seconds ago; (the history is a ring, read with linear filtering along it). The newest slot
+  // is now; the one before it was last written uHistFrac / 30 s ago, and every older one a 30th of
+  // a second before the next: read at the fraction of a slot each moment falls on, so what the
+  // history moves (the ember carried, the pointer's stir, a flick) moves every frame, not in 30 Hz
+  // steps
+  float k = t * $HZ;
+  float f = max(uHistFrac, 1e-3);
+  float slot = k < f ? uHistHead - k / f : uHistHead - 1.0 + f - k;
   return texture2D(uHist, vec2((mod(slot, $HISTORY) + 0.5) / $HISTORY, (row + 0.5) / 3.0));
 }
 // the velocity of smoke at p that left the ember at time tb and is now a seconds old

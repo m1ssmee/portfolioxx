@@ -1403,6 +1403,7 @@ export function createScene(container, options = {}) {
       uTime: U.uTime,
       uHist: { value: history.tex },
       uHistHead: { value: 0 },
+      uHistFrac: { value: 0 },
       uViewDir: { value: new THREE.Vector3() },
       uCalm: { value: reduceMotion ? 0.35 : 1 },
       uLife: { value: 11 },
@@ -3181,7 +3182,8 @@ export function createScene(container, options = {}) {
     function wake() {
       if (!raf && running && loopReady && !destroyed) raf = requestAnimationFrame(frame)
     }
-    const emberFlicker = (t) => 0.82 + 0.1 * Math.sin(t * 1.3) + 0.07 * noise3(t * 2.7, 0.5, 0.5) + 0.05 * noise3(t * 9, 3.1, 0.2)
+    // (an ember breathes slowly; its fastest part, at 9 a second, read as a shiver at the smoke's foot: now half as fast and half as much)
+    const emberFlicker = (t) => 0.83 + 0.1 * Math.sin(t * 1.3) + 0.07 * noise3(t * 2.7, 0.5, 0.5) + 0.025 * noise3(t * 4.5, 3.1, 0.2)
     // the flame's light (core/emberlight.js): full = FLAME_CD candela, at the bright middle of the flame
     const FLAME_CD = 9000
     const flamePos = new THREE.Vector3()
@@ -3253,10 +3255,9 @@ export function createScene(container, options = {}) {
     //             the frames keep up; where they start coming late, by the refresh instead (every
     //             refresh; on a fast screen every other one), trying the faster rate again three
     //             seconds later
-    //   at rest:  only the smoke and the ember moving and nobody has touched anything for eight
-    //             seconds: 30 (they are reading; slow smoke looks the same, and the GPU cools)
-    //   behind a project or the visitors' book: 20 (the browser works the blur out again each time
-    //             the scene under it changes)
+    //   at rest:  the same pace (the smoke never stops; at 30 a second it visibly stepped)
+    //   behind the visitors' book: 20 (the browser works the blur out again each time the scene
+    //             under it changes)
     let lastDrawn = 0
     let wasStill = false
     let veilMoving = false
@@ -3273,11 +3274,14 @@ export function createScene(container, options = {}) {
     let lastKind = 0
     cleanups.push(() => clearTimeout(timer))
     const overGap = () => 1000 / (1000 / pace.refresh + ABOVE)
-    /** The least time between frames now: 0 while live (the pace's own), 30 or 48 when calm. */
-    function calmGap(now) {
+    /**
+     * The least time between frames now: 0 (the screen's own pace), or 48 while the visitors' book
+     * covers the scene. (Not slower when the desk is left alone: the smoke is always moving, and at
+     * a frame every 30 ms or more it visibly stepped. A hidden tab draws nothing at all)
+     */
+    function calmGap() {
       const calm = !focus.moving && !grab.held
       if (book.isOpen && calm && !veilMoving) return 48
-      if (wasStill && calm && now - inputAt > 8000) return 30
       return 0
     }
     /** The timer's frame: drawn, the next one due a period after this one was. */
@@ -3292,16 +3296,12 @@ export function createScene(container, options = {}) {
       if (overAt < t) overAt = t
       timer = setTimeout(overTick, overAt - t)
     }
-    let inputAt = 0
-    const touched = () => (inputAt = performance.now())
     // (the camera in motion, by a glide, the wheel, a drag or its coasting: its frames are drawn
     // by the browser's own frame callback, one a refresh, each with that refresh's time. Drawn by
     // the timer instead, a little faster than the screen shows them, every few frames one is
     // dropped and the motion stutters)
     let camMovedAt = -1e9
     const camLive = (now) => focus.moving || zoom.on || !!dragFrom || now - camMovedAt < 300
-    for (const t of ['pointerdown', 'wheel', 'keydown', 'touchstart']) listen(window, t, touched, { passive: true })
-    listen(window, 'pointermove', (e) => e.buttons && touched(), { passive: true })
     function frame(now) {
       raf = 0
       if (!running || destroyed) return
@@ -3509,6 +3509,7 @@ export function createScene(container, options = {}) {
       velArr[2] = ptr.vel.z
       const alive = c.state === 'leaving' || c.state === 'waiting' ? 0 : glowAmt * c.fade
       SU.uHistHead.value = history.advance(dt, srcArr, alive, ptrArr, ptr.strength, velArr, puff)
+      SU.uHistFrac.value = history.frac
       SU.uEmberPos.value.copy(emberWorld)
       SU.uEmberI.value = U.uEmber.value * alive
       camera.getWorldDirection(SU.uViewDir.value)

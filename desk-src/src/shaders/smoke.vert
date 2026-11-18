@@ -32,8 +32,20 @@
         // a thread at first (always facing the eye), then a sheet that turns as it rises: seen
         // edge-on it is narrower and denser, which is what makes smoke look like smoke
         float twist = smoothstep(0.8, 2.6, age);
-        vec3 face = normalize(cross(T, view) + vec3(1e-5));
         float tw = aSeed * 6.2832 + age * 0.85 + 0.8 * sin(tb * 0.37 + aSeed * 4.0);
+        // (facing the eye: across both the strand and the line of sight. Where the smoke comes
+        // straight at the eye, or goes straight away, that is undefined: the least change in its
+        // direction would spin the ribbon, frame to frame (the rattle seen from above). There a
+        // steady direction of the strand's own takes over, turning only as slowly as its twist;
+        // the usual one is turned to agree with it, so the two never cancel)
+        vec3 c = cross(T, view);
+        float cl = length(c);
+        vec3 hd = vec3(cos(tw), 0.0, sin(tw));
+        vec3 a1 = cross(view, hd);
+        vec3 alt = normalize(a1 + cross(view, vec3(0.0, 0.0, 1.0)) * (1.0 - smoothstep(0.2, 0.5, length(a1))) + vec3(1e-5));
+        c *= sign(dot(c, alt) + 1e-6);
+        float k = 1.0 - smoothstep(0.06, 0.4, cl);
+        vec3 face = normalize(c / max(cl, 1e-5) * (1.0 - k) + alt * k);
         vec3 sheet = normalize(cross(T, vec3(cos(tw), 0.31, sin(tw))) + vec3(1e-5));
         sheet *= sign(dot(sheet, face) + 1e-4);
         vec3 across = normalize(mix(face, sheet, 0.8 * twist));
